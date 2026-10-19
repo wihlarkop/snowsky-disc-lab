@@ -1,10 +1,10 @@
 # SNOWSKY DISC Lab — Detailed Roadmap
 
-**Status:** planning; no implementation or Lab-verified firmware/UI combination yet.  
-**Last reviewed against upstream documentation:** 2026-10-19.  
+**Status:** M0 implementation and handoff design combined in a [final integration candidate](M0-FINAL-INTEGRATION.md). Approval, integration and exact combined-tree CI gate closure. No Lab-verified firmware/UI combination yet.
+**Last reviewed against pinned handoff sources/documentation:** 2026-10-20.
 **Device scope:** FiiO / SNOWSKY **DISC** only.  
 **Companion UI:** **Sorane**, in a separate repository to be created later.  
-**Development baseline:** Windows 11 + WSL2/Docker as the primary *target* host, with a Linux CI/native execution path. Windows success is not yet claimed.
+**Development baseline:** Windows 11 + WSL2/Docker as the primary *target* runtime host, with a Linux CI/native path. Windows/Linux firmware-free CLI evidence does not establish emulator runtime success.
 
 > This document is a plan, **not evidence that features are already shipped**. A completed milestone needs observable artifacts, reproducible commands, tests and a recorded exact commit; a checkbox in a planning document is not a compatibility claim.
 
@@ -78,16 +78,18 @@ Registry and safety scaffolding start in M0; M5 makes them complete and publicly
 **Goal:** a safe, understandable empty framework before any firmware execution.
 
 - [x] **M0-00** Create initial README and detailed project planning documentation.
-- [ ] **M0-01** Establish `src/` or `lab/` package, CLI entry point, dependency policy, supported host matrix, and ignored local cache/work directories.
-- [ ] **M0-02** Define `upstreams.lock.yaml` schema with immutable commits/tags **resolved to commits**, verified artifact checksums, source license metadata and auditable update procedure.
-- [ ] **M0-03** Define `lab-ui/v1` manifest and `lab-firmware/v1` profile schemas with JSON Schema/strict validation and explicit versioning/deprecation rules.
-- [ ] **M0-04** Implement firmware-free `disc-lab doctor` checking architecture, Docker Engine/Compose, WSL2 when applicable, toolchain prerequisites, disk space and path/permission issues. **Never write to USB.**
-- [ ] **M0-05** Implement `disc-lab sources list|sync|verify`: cache pinned public sources read-only for consumers; refuse dirty/unrecognized checkout in reproducible mode; offline operation when already cached.
-- [ ] **M0-06** Add minimal CI for lint/types/schema/fixtures, test contracts and source provenance without proprietary firmware, privileged runners or secrets.
-- [ ] **M0-07** Define written trust boundaries, SPDX/license inventory plan, safe temp directory lifecycle and API/CLI versioning policy.
-- [ ] **M0-08** Publish a precise design/ADR for external UI injection, including whether QEMU's stock warm-start approach can be adapted without risking playback behavior.
+- [x] **M0-01** Establish `src/` or `lab/` package, CLI entry point, dependency policy, supported host matrix, and ignored local cache/work directories.
+- [x] **M0-02** Define `upstreams.lock.yaml` schema with immutable commits/tags **resolved to commits**, verified artifact checksums, source license metadata and auditable update procedure. Source-only scope: Git blob integrity and selected license SHA-256 values; no release/build artifacts are selected.
+- [x] **M0-03** Define `lab-ui/v1` manifest and `lab-firmware/v1` profile schemas with JSON Schema/strict validation and explicit versioning/deprecation rules.
+- [x] **M0-04** Implement firmware-free `disc-lab doctor` checking architecture, Docker Engine/Compose, WSL2 when applicable, toolchain prerequisites, disk space and path/permission issues. **Never write to USB.** Default checks remain metadata/version-only; daemon contact is explicit opt-in and runtime readiness stays unverified.
+- [x] **M0-05** Implement `disc-lab sources list|sync|verify`: cache pinned public source projections read-only for consumers; refuse dirty/unrecognized checkout in reproducible mode; offline operation when already cached.
+- [x] **M0-06** Add minimal CI for lint/types/schema/fixtures, test contracts and source provenance without proprietary firmware, privileged runners or secrets. PR #4's exact baseline passed all four Linux/Windows Python jobs; later/integrated heads need their own CI evidence.
+- [x] **M0-07** Define written trust boundaries, initial SPDX/license inventory and remaining review plan, safe temp directory lifecycle and API/CLI versioning policy. This baseline does not clear pending component rights or choose the Lab core license.
+- [x] **M0-08** Publish a precise design/ADR for external UI injection: [ADR 0001](adr/0001-external-ui-handoff.md) records pinned historical evidence, stock player ownership, initial cold-session strategy and deferred exact-combination warm handoff. Design deliverable only; runtime assumptions remain NOT RUN and the ADR is proposed for review.
 
 **Exit gate:** clean clone + documented tooling runs `doctor`, manifest/schema validation and source-lock verification on a supported host; no firmware required; no device access; CI green. `README` does not claim an implemented emulator yet.
+
+Issue #1 delivers M0-01/M0-03 and the initial workflow. M0-02/M0-05 add immutable source projections and offline integrity checks; see [source verification](M0-SOURCES-VERIFICATION.md). M0-04 reports host/tool/cache observations; M0-07 records [trust boundaries](TRUST-BOUNDARIES.md) and [initial license evidence](LICENSE-INVENTORY.md). See [preflight/trust verification](M0-PREFLIGHT-VERIFICATION.md). M0-08 now supplies the handoff design. [Integration readiness](M0-INTEGRATION-READINESS.md) records exact PR #4 CI success and recommends PR #2 → #3 → #4 → M0-08 integration, followed by final-head CI. **M0 is not closed while that review/integration gate remains open.** Runtime/ACL/virtualization and complete redistribution clearance remain unverified; M1 execution needs its own preparation and authorization.
 
 ### M1 — Reproducible stock V2.57 QEMU
 **Goal:** prove the underlying emulator works on *our* supported host before introducing custom UIs.
@@ -106,10 +108,10 @@ Registry and safety scaffolding start in M0; M5 makes them complete and publicly
 ### M2 — Generic external UI adapter and launcher
 **Goal:** run a non-stock `mq_ui` without hardcoding a particular UI fork.
 
-- [ ] **M2-01** Define UI adapter interface for `build`, `inspect`, `prepare`, `launch`, `stop`, `collect`, and `report`; keep public API narrow/versioned.
+- [ ] **M2-01** Version and implement UI adapter interface for `inspect`, `build`, `preflight`, `launch`, `stop`, `collect`, `report`. Preparation is internal to `launch`; follow [ADR 0001](adr/0001-external-ui-handoff.md) after stock M1 acceptance.
 - [ ] **M2-02** Accept **local binary mode**: inspect static/dynamic ELF, MIPS32-LE ABI, soft/hard float expectations, library dependencies, size, hashes and required filesystem paths before attempting execution.
 - [ ] **M2-03** Define **source mode**: local path or exact Git URL + immutable commit, trusted/pinned build recipe, output fingerprint, reproducible build record; no arbitrary auto-build on privileged guest.
-- [ ] **M2-04** Implement UI guest handoff/supervision without editing stock `mq_player`. Handle process naming, stdout/stderr, QEMU argv, mqueues, framebuffer, touch and startup ordering. Keep warm/cold boot behavior distinct.
+- [ ] **M2-04** Implement cold-session UI handoff/supervision without UI-specific edits to stock `mq_player`. Own both UI/backend lifetimes, identity/readiness, private mqueues/framebuffer/touch and bounded cleanup. Warm replacement stays deferred until an exact-combination adapter has dedicated evidence; no automatic fallback.
 - [ ] **M2-05** Add adapter capability declarations and `unsupported`/graceful-skip semantics; never silently emulate a missing command as a success.
 - [ ] **M2-06** Build a tiny synthetic/demo UI contract fixture with no proprietary dependencies and verify input + framebuffer + clean exit.
 - [ ] **M2-07** Add `disc-lab ui inspect`, `run --firmware 2.57 --ui <local binary>` and `test --suite ui-smoke`.
@@ -229,11 +231,13 @@ Registry and safety scaffolding start in M0; M5 makes them complete and publicly
 
 **Exit gate:** an unaffiliated contributor can add or update a UI adapter through a reviewable PR without private firmware or access to maintainer secrets.
 
-## 5. Proposed commands (design sketch; not implemented)
+## 5. Command direction (runtime commands remain design sketches)
+
+`doctor` and source commands are implemented in M0; the remaining commands below are future work. See [CONTRACTS.md](CONTRACTS.md) and [SOURCES.md](SOURCES.md) for current syntax and behavior.
 
 ```sh
 disc-lab doctor
-disc-lab sources sync --locked
+disc-lab sources sync                # implemented; lock is always enforced
 disc-lab firmware inventory --archive /path/to/official-v257.zip
 disc-lab firmware profiles
 disc-lab ui inspect ./build/mq_ui
@@ -290,7 +294,7 @@ For a milestone to be marked complete, record:
 - rollback strategy for core dependency/profile promotions;
 - security and licensing review for any new execution/distribution boundary.
 
-**Suggested first PR after this documentation:** **M0-01 + M0-03** only: create CLI/manifest/schema skeleton and focused firmware-free tests. Avoid scaffolding all milestones or integrating device flash code prematurely.
+**Suggested first M1 task after M0 integration:** **stock V2.57 QEMU runtime preparation**: pin runner/container/toolchain/patches and review lawful local firmware identity/authenticity, isolation, cleanup and export policy before implementing intake or executing firmware. Establish the stock baseline before M2 external UI adapters; do not add flashing.
 
 **Additional design:** [Firmware updates, compatibility orchestration and safe update paths](UPDATE_MANAGER.md). This deliberately separates read-only OTA detection, verified Lab runtime upgrades, owner-signed UI-only SD packages and high-risk official device firmware changes.
 

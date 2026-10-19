@@ -1,6 +1,8 @@
 # Architecture & UI Integration (proposed)
 
-**State:** design specification only; interfaces, commands, directories and YAML keys on this page have **not been implemented**.
+**State:** overall design specification. M0 implements host preflight, schema-only manifests and immutable source caching, with a [trust baseline](TRUST-BOUNDARIES.md) and [initial license inventory](LICENSE-INVENTORY.md). [CONTRACTS.md](CONTRACTS.md), [SOURCES.md](SOURCES.md), [HOST-PREFLIGHT.md](HOST-PREFLIGHT.md) and the published JSON schemas define current behavior. Remaining interfaces, runtime commands, directories and illustrative YAML below are proposals.
+
+[ADR 0001](adr/0001-external-ui-handoff.md) selects the initial cold-session external UI strategy, subject to M1/M2 validation. [Integration readiness](M0-INTEGRATION-READINESS.md) records outstanding closure gates. No runtime is implemented.
 
 ## 1. Scope, product boundaries
 
@@ -94,7 +96,7 @@ Nontracked user cache (example, not committed):
 └── evidence/local/<run-id>/
 ```
 
-The choice between shallow source checkouts vs submodules remains an **implementation ADR**. Current proposal: a lockfile resolver for *optional* UI forks, because Git submodules cannot scale cleanly to arbitrary external repositories. Use a single checked-out pinned QEMU repo as a cache dependency rather than duplicating its code.
+The M0 source resolver uses immutable lock entries and separate cached projections, with Git blobless fetches and explicitly selected paths. This supports future UI forks through the same contract and avoids downloading upstream flash payloads or recursively resolving submodules. Cache identity includes commit and projection; build/runtime adapters must consume verified sources read-only and use separate working state. See [the implementation decision and upgrade procedure](SOURCES.md). No upstream code is vendored into the Lab tree.
 
 ## 3. Artifact flow and execution boundaries
 
@@ -113,8 +115,8 @@ The choice between shallow source checkouts vs submodules remains an **implement
 
 **Emulated runtime**
 1. Pick the specific reviewed firmware profile and compatible **pinned runner**, never implicitly the most recent.
-2. Start isolated guest state, checked stock `mq_player`, audio device shims, framebuffer/touch input adapters and allowed virtual SD fixtures.
-3. Inject UI through a narrowly defined, version-appropriate handoff. The current upstream [historical diskOS preview](https://github.com/eudj1n/snowsky-disc-qemu/blob/2.x/experiments/diskos/docs/preview.md) used a *warm-player* handoff plus framebuffer `ioctl` adapter; it is **not** a reusable generic solution without fresh testing.
+2. Prepare isolated state, checked stock backend inputs, audio device shims, framebuffer/touch adapters and allowed virtual SD fixtures; no guest process starts yet.
+3. Start external UI only through the reviewed lifecycle in [ADR 0001](adr/0001-external-ui-handoff.md): initial M2 starts UI before stock player in a fresh cold session, after M1 stock acceptance. The pinned historical V2.40 warm-player preview is not V2.57 evidence. Warm replacement is deferred pending exact-combination validation.
 4. Collect frame states, crash/stdout/stderr, IPC health and sample-validated PCM for applicable scenarios.
 5. Stop guest processes and retain only safe local evidence; restore no shared mutable volume implicitly.
 
@@ -125,30 +127,27 @@ The choice between shallow source checkouts vs submodules remains an **implement
 
 ## 4. External UI contract proposal: `lab-ui/v1`
 
-A manifest is optional for **binary inspection mode** but required for automation of **source builds**. Draft example:
+A future **binary inspection mode** may accept an ELF directly without a manifest. That is a separate input path, not an exception to required fields when a manifest is supplied. Source automation requires a manifest plus a separately reviewed recipe. Current valid schema example (data validation only, no builder or runner):
 
 ```yaml
-# snowsky-lab.yaml — DESIGN ONLY, not implemented
+# snowsky-lab.yaml — current data shape; execution is not implemented
 apiVersion: lab-ui/v1
 kind: UI
 metadata:
   name: example-fork
   upstream: https://github.com/example/fork
 source:
-  revision: "FULL_GIT_COMMIT_SHA" # immutable
+  revision: "0123456789abcdef0123456789abcdef01234567" # synthetic; not an approved source
 build:
-  preset: diskos-musl          # known/pinned recipe, not arbitrary host shell
+  preset: diskos-musl          # data identifier only; no approved recipe shipped
   output: ui/mq_ui
 runtime:
   target: snowsky-disc
   architecture: mipsel
   display: [360, 360]
   ipc: fiio-posix-mqueue
-  launchProfile: auto          # adapter resolves only reviewed choices
 claims:
   firmware: ["2.57"]          # contributor claim, NOT a Lab verification
-tests:
-  suites: ["ui-smoke"]
 ```
 
 Contract requirements:
@@ -162,19 +161,19 @@ Contract requirements:
 - Binary inspection checks MIPS endianness, ELF load type, float ABI, necessary libs and device syscall assumptions; some ABI properties need target-hardware acceptance.
 - The contract does not authorize access to the user's host, network, USB devices, signing keys or firmware archive.
 
-### Adapter interface v1 (behavioral)
+### Proposed adapter interface (behavioral, not yet a published SDK)
 
 | Operation | Inputs | Output / refusal |
 | --- | --- | --- |
 | `inspect` | source manifest or `mq_ui` path | artifact identity, ABI report, dependencies |
 | `build` | immutable source + trusted preset | compiled output, build provenance, logs |
 | `preflight` | firmware profile + UI artifact + runner | reviewed capability/launch contract or explicit refusal |
-| `launch` | isolated guest state + validated tuple | UI PID/health + frame readiness |
-| `stop` | run ID | confined UI shutdown with collected exit reason |
+| `launch` | approved plan + validated tuple | bounded private-state preparation, owned UI/player session and readiness evidence |
+| `stop` | run ID | confined whole-session shutdown with collected exit reason |
 | `collect` | run ID | frames, logs, PCM, test observations |
 | `report` | evidence set | versioned machine/human reports |
 
-Adapters may declare different framebuffer/handoff requirements without exporting an arbitrary code execution interface. The first externally authored example UI should function without any source changes to core adapter logic.
+Preparation is internal to `launch`, not a separate public `prepare` operation. Adapters may declare different framebuffer/handoff requirements without exporting an arbitrary code execution interface. [ADR 0001](adr/0001-external-ui-handoff.md) defines ownership, deadlines, refusal, stop/restart and warm-mode gates. The first externally authored example UI should function without any source changes to core adapter logic.
 
 ## 5. Stable vs changing surfaces
 
@@ -227,16 +226,12 @@ Host mounts default read-only where possible; test reports may only publish **al
 - [diskOS UI](https://github.com/b0hemia/diskos/blob/main/ui/README.md): GPL-3.0-or-later; upstream installer/tooling has separately identified MIT licensing.
 - [Disco! UI](https://github.com/zmd22/diskos-disco/blob/main/ui/README.md): GPL-3.0-or-later; repo tooling and docs may have different terms.
 
-The Lab *intends* permissive licensing only for its original standalone glue code; do not label third-party or GPL derivative code as MIT. A final LICENSE/NOTICE strategy and per-file audit are required before shipping code. Sorane stays outside this repository and follows its own derivative UI license obligations. Do not redistribute custom firmware images containing FiiO rootfs.
+The Lab *intends* permissive licensing only for its original standalone glue code; do not label third-party or GPL derivative code as MIT. The M0-07 [initial inventory](LICENSE-INVENTORY.md) records component-specific evidence and pending review; the Lab's core license remains unset. A final owner-approved LICENSE/NOTICE strategy and relevant per-file audit are required before shipping code. Sorane stays outside this repository and follows its own derivative UI license obligations. Do not redistribute custom firmware images containing FiiO rootfs.
 
-## 9. Architecture decision records to make during M0–M2
+## 9. Decisions and remaining design work
 
-- **ADR-001:** Python CLI vs other implementation language, packaging and Windows support.
-- **ADR-002:** checked-out cached upstream lock vs submodules for baseline QEMU; isolation of arbitrary UI forks.
-- **ADR-003:** schema and semver support guarantees for `lab-ui/v1`.
-- **ADR-004:** two-stage untrusted build vs trusted QEMU runtime execution/security.
-- **ADR-005:** guest handoff semantics (cold init / warm handoff) and stock `mq_player` lifecycle.
-- **ADR-006:** per-firmware runner/overlay selection, retention, and stale/unsupported states.
-- **ADR-007:** evidence schema, screenshot baselines, privacy/retention and release publishing.
+- [ADR 0001: external UI handoff](adr/0001-external-ui-handoff.md): proposed for review; no runtime implemented.
+- Existing M0 decisions live in [TECH_STACK.md](TECH_STACK.md), [SOURCES.md](SOURCES.md), [CONTRACTS.md](CONTRACTS.md) and [TRUST-BOUNDARIES.md](TRUST-BOUNDARIES.md). They are not separately numbered ADR files.
+- Future decisions: exact M1 runner/toolchain/container and firmware gates; versioned adapter plan/SDK; per-firmware retained runners; evidence schema, privacy/retention and release publication. Assign new numbers when actual ADR records are written.
 
 See [the roadmap](ROADMAP.md) for implementation priority and [compatibility policy](COMPATIBILITY.md) for promotion gates.

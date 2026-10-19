@@ -1,0 +1,9 @@
+apiVersion: lab-firmware/v1
+kind: Firmware
+device: snowsky-disc
+firmware:
+  main: "2.57"
+  recovery: "18"
+  rootfsSha256: guessed-from-version
+runtime:
+  runnerId: qemu-disc-v257

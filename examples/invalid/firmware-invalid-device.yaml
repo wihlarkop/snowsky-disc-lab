@@ -1,0 +1,8 @@
+apiVersion: lab-firmware/v1
+kind: Firmware
+device: snowsky-echo
+firmware:
+  main: "2.57"
+  recovery: "18"
+runtime:
+  runnerId: qemu-disc-v257
