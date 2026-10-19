@@ -138,6 +138,8 @@ The upstream [QEMU OTA research](https://github.com/eudj1n/snowsky-disc-qemu/blo
 
 Upstream's current single-active-firmware policy is intentionally **not inherited** by our registry; that difference carries a permanent testing and maintenance cost.
 
+For end-to-end future vendor update detection, all **registered/opt-in** UI compatibility checks, and distinct Lab versus physical-device update paths, see [Update Manager design](UPDATE_MANAGER.md). **Unregistered forks are not automatically run or implied compatible**. New vendor firmware must first pass a trusted stock runtime baseline; later UI compatibility is assessed separately.
+
 ## 7. UI fork intake and reporting
 
 A community UI can enter via:
