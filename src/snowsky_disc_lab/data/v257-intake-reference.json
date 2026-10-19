@@ -1,0 +1,64 @@
+{
+  "referenceVersion": 1,
+  "claimStatus": "upstream-claim-only",
+  "authenticityStatus": "unverified",
+  "upstream": {
+    "repository": "https://github.com/eudj1n/snowsky-disc-qemu.git",
+    "commit": "85ab00deb08ac112066377fd8083cc8727ed859a"
+  },
+  "profileSource": {
+    "path": "firmware/v2.57.json",
+    "gitBlob": "6ff5fb7c2371fac8b5f4cddc12dc0e6d47b9d3ca",
+    "sha256": "e0bb2613eff334e3550f41a992b4b10c0bff151ddcb0c64d128eef77ec6606a9"
+  },
+  "parserSource": {
+    "path": "firmware/tools/firmware_inventory.py",
+    "gitBlob": "c59e4b27709b1c08a638ca95c6d34ec701c58245",
+    "sha256": "da3d4f9582f9699b030ed86c4ccc607213f591e59cd0b14a28adaf9c0e327e0a"
+  },
+  "firmwareClaims": {
+    "version": "2.57",
+    "product": "SNOWSKY_DISC",
+    "mainOsVersion": 257,
+    "recoveryOsVersion": 18,
+    "rootfsChunks": 77,
+    "rootfsBytes": 80596992,
+    "rootfsSha256": "111e4dd7ee3d7ff91ba7e61181690be7ffd22bd1bbd13ad513f5f015ffb302ae",
+    "originalBinaries": [
+      {
+        "path": "usr/bin/mq_player",
+        "sha256": "a5a6740435758bb3f3d008a4306c93a463c6634318957bbf32086bd7b00fabbc"
+      },
+      {
+        "path": "usr/bin/mq_ui",
+        "sha256": "f9b40d825f96906146c31b56a420ab90e6f685f6e2c4761bf867989e12b04226"
+      },
+      {
+        "path": "bin/busybox",
+        "sha256": "7517d039b15a2828125da29644e4a9b6ff45ceb6854e52d300c87d6a202d7c9b"
+      },
+      {
+        "path": "lib/ld-2.29.so",
+        "sha256": "0c37c07942b176a223b5fd4e1bcd0b7e5ebdf6205bce727ee0f895dd22caf0e2"
+      },
+      {
+        "path": "lib/libc-2.29.so",
+        "sha256": "fb2c85aa7e6933d9ce92530427b8272a9dbfad300696e995b542b93f5fb228b6"
+      },
+      {
+        "path": "usr/lib/libtinyalsa.so.1.1.1",
+        "sha256": "5d94f6b00d3c4cbd7e4a0141a3e566054eee4ce857c93cb6742a323be3da5b96"
+      }
+    ]
+  },
+  "parserGrammar": {
+    "matchingMode": "fullmatch",
+    "chunkFilenameRegex": "rootfs\\.squashfs\\.(\\d{4})\\.([a-f0-9]{64})\\.enc",
+    "manifestEntryRegex": "SHA256\\(ota/(rootfs\\.squashfs\\.\\d{4}\\.[a-f0-9]{64}\\.enc)\\)= ([a-f0-9]{64})",
+    "otaConfigVersionKeys": [
+      "current_version",
+      "recovery_version"
+    ],
+    "otaConfigVersionValueRegex": "[1-9]\\d{0,5}"
+  }
+}

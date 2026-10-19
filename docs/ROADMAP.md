@@ -97,6 +97,7 @@ Issue #1 delivers M0-01/M0-03 and the initial workflow. M0-02/M0-05 add immutabl
 - [ ] **M1-01** Pin reviewed QEMU `2.x` commit, Docker image/tool dependencies, official V2.57 rootfs metadata and guest shims. Record known limitations.
   - [Preparation evidence](M1-01-RUNTIME-PREPARATION.md) records immutable source/base-image/recipe/patch identities and upstream firmware references after PR #6's exact integrated-main CI passed. Built runtime/toolchain/shim identities and execution gates remain unresolved; this item is not fully closed.
 - [ ] **M1-02** Add an explicit, safe local official firmware intake path: ZIP/OTA folder selection, size/contiguity/hash checks, optional verified vendor signature when trust chain is reviewed; fail closed for unknown firmware.
+  - [Safe intake foundation](FIRMWARE-INTAKE.md) implements bounded offline ZIP/package inspection, strict V2.57 structure and main-manifest ciphertext checks, and versioned receipts with no extraction/execution authority. Synthetic acceptance only; product/plaintext identity, vendor trust chain and actual-package acceptance remain unverified. Full M1-02 stays open.
 - [ ] **M1-03** Extract into per-firmware, per-run isolated ignored volumes; never upload firmware or mount real devices.
 - [ ] **M1-04** Boot V2.57 stock `mq_ui` + `mq_player`; capture actual framebuffer, log and a reproducible screenshot fixture.
 - [ ] **M1-05** Test touches/swipes/physical key model, SD import/index, local PCM output and WAV fixture comparisons.

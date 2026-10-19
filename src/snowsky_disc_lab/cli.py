@@ -10,6 +10,7 @@ from rich.text import Text
 
 from snowsky_disc_lab.contracts import load_manifest
 from snowsky_disc_lab.doctor import collect_diagnostics
+from snowsky_disc_lab.firmware_intake import inspect_firmware
 from snowsky_disc_lab.source_lock import SourcePin, load_source_lock
 from snowsky_disc_lab.sources import (
     DEFAULT_CACHE_DIR,
@@ -23,7 +24,9 @@ app = typer.Typer(
     help="Firmware-free SNOWSKY DISC Lab diagnostics and schema validation.", add_completion=False
 )
 ui_app = typer.Typer(help="Validate UI manifest data; no builds or execution.")
-firmware_app = typer.Typer(help="Validate firmware profile data; no firmware access.")
+firmware_app = typer.Typer(
+    help="Validate profiles or inspect local candidate inputs; no extraction."
+)
 sources_app = typer.Typer(help="Resolve exact source pins into an isolated source-only cache.")
 app.add_typer(ui_app, name="ui")
 app.add_typer(firmware_app, name="firmware")
@@ -92,6 +95,31 @@ def ui_validate(manifest: Path) -> None:
 def firmware_validate(profile: Path) -> None:
     """Validate a lab-firmware/v1 YAML profile as data only."""
     validate(profile, "firmware")
+
+
+@firmware_app.command("inspect")
+def firmware_inspect(
+    candidate: Path,
+    output_format: Annotated[Literal["text", "json"], typer.Option("--format")] = "text",
+) -> None:
+    """Inspect a local ZIP or package directory offline, without extracting or decrypting."""
+    receipt = inspect_firmware(candidate)
+    if output_format == "json":
+        typer.echo(receipt.model_dump_json(indent=2))
+    else:
+        console.print(f"Candidate structure: {receipt.status.upper()}", markup=False)
+        console.print(
+            f"Input format: {receipt.input_format}; rootfs chunks: {receipt.chunk_count}/77"
+        )
+        for condition in receipt.conditions:
+            console.print(f"{condition.check}: {condition.status} ({condition.code})", markup=False)
+        console.print(
+            "Structural acceptance only. Vendor authenticity/product/plaintext identity and "
+            "compatibility: UNVERIFIED. Extraction/execution: NOT AUTHORIZED.",
+            markup=False,
+        )
+    if receipt.status == "refused":
+        raise typer.Exit(code=2)
 
 
 def source_inputs(lock: Path, cache_dir: str, source: str | None) -> tuple[list[SourcePin], Path]:

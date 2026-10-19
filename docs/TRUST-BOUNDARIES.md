@@ -2,6 +2,8 @@
 
 This is the required baseline for designing M1. It documents enforced M0 behavior and the gates that later execution code must implement. It does not authorize firmware acquisition, builds, privileged containers, device access, or runtime execution. A passed doctor or source check never grants those permissions.
 
+M1-02's [intake foundation](FIRMWARE-INTAKE.md) adds bounded offline candidate inspection and stdout receipts, verified only with synthetic samples. This is a read-only data boundary: no payload extraction/decryption, subprocess/network access, firmware modification, cleanup or runtime execution. Accepted structure is not authenticated firmware and never grants next-stage authority. The M0 behavior and future execution gates below remain applicable; source locks/cache identities are preserved.
+
 ## Trust domains
 
 | Domain | M0 authority and permitted behavior | Boundary before later execution |
