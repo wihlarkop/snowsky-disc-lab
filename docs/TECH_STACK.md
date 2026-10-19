@@ -13,7 +13,7 @@ Build **SNOWSKY DISC Lab** as a local-first, community-friendly emulator develop
 | Python dependencies and virtual environments | **uv**, `pyproject.toml`, committed `uv.lock` | M0 |
 | Python lint/format | **Ruff** | M0 |
 | Python static type checking | **Astral ty** (`ty check`) | M0 |
-| Python tests | **pytest** (focused contracts, integration/regression first) | M0 |
+| Python tests | **pytest** for CLI/contract integration and regression checks only; **no TDD or required unit tests** | M0 |
 | MIPS32 little-endian CPU execution | **Pinned upstream QEMU TCG user-mode** | M1 |
 | Emulator hardware / native shims | **C**, selected version-pinned patches/overlays to upstream | M1–M3 |
 | UI binary target / local previews | **C + LVGL 9.2.2 as vendored/pinned by upstream UI** | M2–M6 |
@@ -66,9 +66,13 @@ Upstream reports that the viewer samples framebuffer at `STREAM_FPS=12` by defau
 - Frontend is **deferred**. When added, use Svelte 5 + TypeScript + Vite + Bun + Oxc. The studio must consume the same core capabilities as `disc-lab`, not duplicate orchestration or bypass safety checks.
 - Windows is a development target; WSL2/Docker compatibility and resource requirements need **actual** validation, not assumed success.
 
+## Testing philosophy: no TDD, integration/regression only
+
+Use **implementation-first development** with targeted CLI smoke tests, contract/integration tests and risk-driven regression tests. **Do not require TDD, per-function unit tests, mock-heavy test suites or coverage targets.** A missing frontend does not eliminate the need to verify executable CLI commands and manifest rejection paths. When QEMU exists, prefer end-to-end emulator scenarios with observable playback/input/frame results. Avoid redundant tests and do not add a UI/browser test stack until a frontend exists.
+
 ## Test and security approach
 
-1. **Firmware-free M0:** schema validation, source lock, CLI `doctor` read-only behavior, good/bad manifest examples, deterministic diagnostic messages and safe path handling.
+1. **Firmware-free M0:** CLI-level integration/contract smoke tests for schema validation, source lock, `doctor` read-only behavior, good/bad manifest examples, deterministic diagnostics and safe path handling. No mandatory unit tests.
 2. **M1 stock emulator:** trusted official FiiO firmware intake and exact fingerprint checks; boot, touch, SD indexing, byte-verified PCM and process lifecycle; preserve local artifacts only.
 3. **M2–M3 external UIs:** source/binary verification; build sandbox separate from privileged trusted emulator runner; IPC, framebuffer, gesture, playback and restart regressions.
 4. **Multi-version matrix:** per firmware **and exact runner/UI hashes** with `PASS`/`FAIL`/`NOT RUN`/`UNSUPPORTED`, no automatic cross-version inheritance.
