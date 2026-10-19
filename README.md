@@ -21,6 +21,8 @@ The initial and only committed device scope is **SNOWSKY DISC (Ingenic X2000)**.
 | --- | --- |
 | [Detailed roadmap](docs/ROADMAP.md) | Milestones, task breakdown, acceptance criteria, dependencies, risks and priorities |
 | [Architecture & UI integration](docs/ARCHITECTURE.md) | Dependency strategy, adapters, plugin manifest proposal, CLI and trust boundaries |
+| [External UI handoff ADR](docs/adr/0001-external-ui-handoff.md) | Pinned historical evidence, cold-first lifecycle and M1/M2 boundaries |
+| [M0 integration readiness](docs/M0-INTEGRATION-READINESS.md) | Stack order, verification evidence, closure and release gates |
 | [Compatibility & validation policy](docs/COMPATIBILITY.md) | Firmware profiles, support states, CI matrix, OTA intake and evidence rules |
 | [Contributing](CONTRIBUTING.md) | How community developers can eventually add UI forks, firmware evidence and emulator fixes |
 | [Technology stack](docs/TECH_STACK.md) | Python 3.12+, uv, Ruff, Astral ty, QEMU/C, LVGL and future Svelte Developer Studio |
@@ -58,7 +60,7 @@ Upstream details: [diskOS install](https://github.com/b0hemia/diskos/blob/main/d
 Install Python 3.12+ and [uv](https://docs.astral.sh/uv/), then from a clean clone:
 
 ```sh
-uv sync --dev
+uv sync --locked --dev
 uv run disc-lab --help
 uv run disc-lab doctor
 uv run disc-lab ui validate examples/ui-valid.yaml
@@ -114,4 +116,4 @@ External Git sources will require an explicit immutable ref, safe checkout, revi
 
 ## Immediate next step
 
-Review **M0-08's focused external-UI handoff ADR**, integrate the stacked M0 PRs with exact-head CI evidence, and resolve the licensing gates relevant to any planned distribution before **M1 stock V2.57** integration. The [trust baseline](docs/TRUST-BOUNDARIES.md) and [initial license inventory](docs/LICENSE-INVENTORY.md) keep unresolved rights explicit; the Lab's root license is still unset. Older versions require separate reviewed profiles.
+Review [M0-08's external-UI handoff ADR](docs/adr/0001-external-ui-handoff.md), then integrate PR #2 → #3 → #4 → this documentation successor with final integrated-head CI evidence before closing M0. See [integration readiness](docs/M0-INTEGRATION-READINESS.md). The first M1 task is **stock V2.57 QEMU runtime preparation**, followed by stock acceptance before custom UI execution in M2. The [trust baseline](docs/TRUST-BOUNDARIES.md) and [initial license inventory](docs/LICENSE-INVENTORY.md) keep unresolved build/distribution rights explicit; the Lab's root license is still unset. Older versions and warm UI replacement require separate reviewed evidence.

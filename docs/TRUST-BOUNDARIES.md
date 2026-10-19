@@ -54,8 +54,8 @@ Source pin/projection format, URL and hash validation, snapshot identity and sou
 ## Gates before M1 execution
 
 1. Review and integrate the stacked M0 PRs and obtain firmware-free CI evidence on the exact integrated head. Local green tests are distinct from hosted/other-platform success.
-2. Complete M0-08's narrow external-UI handoff ADR: stock `mq_player` ownership/startup order, cold versus warm start, immutable binary/patch anchors, private IPC/framebuffer paths, stop/failure behavior, and evidence needed to evaluate warm-start adaptation. This is a design review, not permission to implement the UI launcher.
+2. Review M0-08's [external-UI handoff ADR](adr/0001-external-ui-handoff.md): stock player ownership/startup order, cold-first sessions, deferred warm handoff, immutable binary/patch anchors, private IPC/framebuffer paths and bounded stop/failure behavior. This design deliverable is not permission to implement or execute a UI launcher.
 3. Before adding intake/runtime code, review exact M1 runner/toolchain/container pins, local firmware identity/authenticity checks, isolation/mount/network decisions, temporary-state ownership and export allowlists. Keep host readiness, source integrity and firmware/runtime compatibility separate.
 4. Close license/attribution unknowns for the precise code/assets to be built or redistributed. Initial inventory does not clear every file or authorize bundling the vendor image. Resolve Lab core licensing before its packaged release.
 
-M0-04 and the M0-07 baseline can be complete while M0-08, integrated CI, platform runtime evidence and distribution clearance remain open. No compatibility state is promoted by this document.
+M0's scoped deliverables, including the proposed handoff ADR, are ready for review; [stacked integration and exact integrated-head CI](M0-INTEGRATION-READINESS.md) still gate closure. Platform runtime evidence and relevant build/distribution clearance remain later execution/release gates. No compatibility state is promoted by this document.

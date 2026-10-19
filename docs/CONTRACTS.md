@@ -2,7 +2,7 @@
 
 `schemas/lab-ui-v1.schema.json` and `schemas/lab-firmware-v1.schema.json` are generated from `snowsky_disc_lab.contracts`. Tests compare them to the models and validate the synthetic fixtures against JSON Schema. YAML is input data only: custom tags, duplicate keys, anchors/aliases, malformed UTF-8, oversized inputs and unknown fields fail closed. The input limit is 64 KiB; nesting is capped at 64 levels.
 
-Only the exact `lab-ui/v1` and `lab-firmware/v1` API versions are accepted. Breaking changes require a new major contract; existing v1 fields will not silently change meaning or disappear. Future deprecation requires documentation and a migration example before removal. CLI 0.1 is experimental: the three implemented command paths and exit codes below are the M0 contract; future commands require their own review.
+Only the exact `lab-ui/v1` and `lab-firmware/v1` API versions are accepted. Breaking changes require a new major contract; existing v1 fields will not silently change meaning or disappear. Future deprecation requires documentation and a migration example before removal. CLI 0.1 is experimental: the implemented command families and exit codes below, together with [source commands](SOURCES.md), are the M0 contract; future commands require their own review.
 
 ## UI manifests
 
