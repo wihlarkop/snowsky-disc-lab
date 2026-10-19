@@ -2,7 +2,7 @@
 
 **A proposed community development, emulation, and compatibility lab for the FiiO / SNOWSKY DISC.**
 
-> **Project status: planning / documentation only.** This repository does not yet contain a working emulator, CLI, adapter SDK, verified compatibility results, or a flashing tool. Commands below are targets, **not runnable instructions**. Do not interpret upstream test results as tests performed by this repository.
+> **Project status: M0 firmware-free foundation.** The CLI provides host diagnostics and strict UI/firmware manifest validation. Emulator execution, source fetching, builds, adapter SDK and device flashing are not implemented. No firmware/UI combination is Lab-verified. Commands in the planned experience section remain design targets.
 
 SNOWSKY DISC Lab aims to provide one reproducible workflow for:
 
@@ -41,7 +41,7 @@ The initial and only committed device scope is **SNOWSKY DISC (Ingenic X2000)**.
 
 ## What is supported today?
 
-**Nothing has been validated by SNOWSKY DISC Lab yet.** The table summarizes *upstream evidence as of 2026-10-19* to determine initial work, not a promise about our runtime.
+**No firmware/runtime combination has been validated by SNOWSKY DISC Lab yet.** The table summarizes *upstream evidence as of 2026-10-19* to determine initial work, not a promise about our runtime.
 
 | FiiO stock firmware | diskOS 1.2.1 installer | Disco! 2.5.6 | Upstream QEMU stock runtime | Lab validation |
 | --- | --- | --- | --- | --- |
@@ -53,10 +53,34 @@ The initial and only committed device scope is **SNOWSKY DISC (Ingenic X2000)**.
 
 Upstream details: [diskOS install](https://github.com/b0hemia/diskos/blob/main/docs/INSTALL.md), [Disco! README](https://github.com/zmd22/diskos-disco), [QEMU firmware profiles](https://github.com/eudj1n/snowsky-disc-qemu/blob/2.x/firmware/docs/firmware-profiles.md), [QEMU limits](https://github.com/eudj1n/snowsky-disc-qemu/blob/2.x/emulator/docs/limits.md).
 
+## Runnable M0 CLI
+
+Install Python 3.12+ and [uv](https://docs.astral.sh/uv/), then from a clean clone:
+
+```sh
+uv sync --dev
+uv run disc-lab --help
+uv run disc-lab doctor
+uv run disc-lab ui validate examples/ui-valid.yaml
+uv run disc-lab firmware validate examples/firmware-valid.yaml
+```
+
+`doctor` reports OS, architecture, Python and installed Docker/Compose versions. On Windows it queries the WSL component version; on Linux it identifies WSL from the kernel release. It does not start distributions or a daemon, probe devices, download anything, or contact the network. Missing optional tools are `UNAVAILABLE`; a completed diagnostic returns 0 even if Docker is absent. This does not certify a working Docker daemon or WSL2 runtime.
+
+Validation reads YAML only. Exit 0 means the **schema passed**, never binary compatibility, vendor authenticity or firmware support. Invalid input, missing files and unsupported API versions return 2. See [public contracts](docs/CONTRACTS.md), [JSON schemas](schemas/) and [verification scope](docs/M0-VERIFICATION.md).
+
+```sh
+uv run ruff check .
+uv run ruff format --check .
+uv run ty check
+uv run pytest
+```
+
+The lockfile pins all Python tools and dependencies. Firmware-free CI checks Linux and Windows on Python 3.12 and 3.14 without secrets, firmware, privileged containers or devices. Core M0 host targets are native Linux and Windows Python; WSL2/Docker emulator integration is pending M1 validation. Other hosts are unverified.
+
 ## Planned developer experience (not implemented)
 
 ```sh
-disc-lab doctor
 disc-lab firmware inventory --version 2.57 --archive /path/to/official.zip
 disc-lab ui build --source /path/to/my-ui --ref <immutable-commit>
 disc-lab run --firmware 2.57 --ui /path/to/mq_ui
@@ -79,4 +103,4 @@ External Git sources will require an explicit immutable ref, safe checkout, revi
 
 ## Immediate next step
 
-Implement **M0** from the [roadmap](docs/ROADMAP.md): repository scaffolding, pinned dependency manifest, the versioned UI adapter contract, firmware-free checks and a safe `doctor` command. The first firmware runtime target is **stock V2.57**; older versions follow as separate reviewed profiles, never by silently reusing V2.57 binary addresses.
+Implement **M0-02 + M0-05** from the [roadmap](docs/ROADMAP.md): immutable upstream locks and offline source-cache verification. The first firmware runtime target after those foundations is **stock V2.57**; older versions follow as separate reviewed profiles, never by silently reusing V2.57 binary addresses.

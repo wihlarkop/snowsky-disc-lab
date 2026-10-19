@@ -1,0 +1,17 @@
+apiVersion: lab-ui/v1
+apiVersion: lab-ui/v1
+kind: UI
+metadata:
+  name: example-fork
+source:
+  revision: 0123456789abcdef0123456789abcdef01234567
+build:
+  preset: synthetic
+  output: ui/mq_ui
+runtime:
+  target: snowsky-disc
+  architecture: mipsel
+  display: [360, 360]
+  ipc: fiio-posix-mqueue
+claims:
+  firmware: []

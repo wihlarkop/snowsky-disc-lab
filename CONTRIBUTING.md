@@ -1,6 +1,6 @@
 # Contributing to SNOWSKY DISC Lab
 
-Welcome! **SNOWSKY DISC Lab is currently in the documentation/planning stage.** There is no usable CLI, UI SDK, emulator integration or firmware release from this repository yet. Please start with [ROADMAP](docs/ROADMAP.md), [ARCHITECTURE](docs/ARCHITECTURE.md) and [COMPATIBILITY](docs/COMPATIBILITY.md). Contributions and feedback are welcome, but status claims must be backed by real test evidence.
+Welcome! **SNOWSKY DISC Lab has an M0 firmware-free CLI and manifest contracts.** UI SDK, emulator integration and firmware releases remain future work. Start with the [README setup](README.md#runnable-m0-cli), [contracts](docs/CONTRACTS.md), [ROADMAP](docs/ROADMAP.md), [ARCHITECTURE](docs/ARCHITECTURE.md) and [COMPATIBILITY](docs/COMPATIBILITY.md). Contributions and feedback are welcome, but status claims must be backed by real test evidence.
 
 This is an **independent SNOWSKY DISC-specific** project. Do not infer support for SNOWSKY Echo or other products from the shared brand.
 

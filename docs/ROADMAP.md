@@ -1,6 +1,6 @@
 # SNOWSKY DISC Lab — Detailed Roadmap
 
-**Status:** planning; no implementation or Lab-verified firmware/UI combination yet.  
+**Status:** M0 CLI and manifest foundation implemented; no Lab-verified firmware/UI combination yet.
 **Last reviewed against upstream documentation:** 2026-10-19.  
 **Device scope:** FiiO / SNOWSKY **DISC** only.  
 **Companion UI:** **Sorane**, in a separate repository to be created later.  
@@ -78,9 +78,9 @@ Registry and safety scaffolding start in M0; M5 makes them complete and publicly
 **Goal:** a safe, understandable empty framework before any firmware execution.
 
 - [x] **M0-00** Create initial README and detailed project planning documentation.
-- [ ] **M0-01** Establish `src/` or `lab/` package, CLI entry point, dependency policy, supported host matrix, and ignored local cache/work directories.
+- [x] **M0-01** Establish `src/` or `lab/` package, CLI entry point, dependency policy, supported host matrix, and ignored local cache/work directories.
 - [ ] **M0-02** Define `upstreams.lock.yaml` schema with immutable commits/tags **resolved to commits**, verified artifact checksums, source license metadata and auditable update procedure.
-- [ ] **M0-03** Define `lab-ui/v1` manifest and `lab-firmware/v1` profile schemas with JSON Schema/strict validation and explicit versioning/deprecation rules.
+- [x] **M0-03** Define `lab-ui/v1` manifest and `lab-firmware/v1` profile schemas with JSON Schema/strict validation and explicit versioning/deprecation rules.
 - [ ] **M0-04** Implement firmware-free `disc-lab doctor` checking architecture, Docker Engine/Compose, WSL2 when applicable, toolchain prerequisites, disk space and path/permission issues. **Never write to USB.**
 - [ ] **M0-05** Implement `disc-lab sources list|sync|verify`: cache pinned public sources read-only for consumers; refuse dirty/unrecognized checkout in reproducible mode; offline operation when already cached.
 - [ ] **M0-06** Add minimal CI for lint/types/schema/fixtures, test contracts and source provenance without proprietary firmware, privileged runners or secrets.
@@ -88,6 +88,8 @@ Registry and safety scaffolding start in M0; M5 makes them complete and publicly
 - [ ] **M0-08** Publish a precise design/ADR for external UI injection, including whether QEMU's stock warm-start approach can be adapted without risking playback behavior.
 
 **Exit gate:** clean clone + documented tooling runs `doctor`, manifest/schema validation and source-lock verification on a supported host; no firmware required; no device access; CI green. `README` does not claim an implemented emulator yet.
+
+Issue #1 delivers M0-01/M0-03 and a minimal M0-06 workflow. M0-04 remains partial: read-only host/tool version reporting is implemented, while disk/path/permission and runtime readiness checks remain pending. M0-06 remains open for source provenance checks after M0-02/M0-05. M0-07 remains open for the full license/SPDX and lifecycle audit. See [M0 verification](M0-VERIFICATION.md). The overall M0 exit gate is not complete.
 
 ### M1 — Reproducible stock V2.57 QEMU
 **Goal:** prove the underlying emulator works on *our* supported host before introducing custom UIs.

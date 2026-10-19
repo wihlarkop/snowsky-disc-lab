@@ -1,6 +1,6 @@
 # Architecture & UI Integration (proposed)
 
-**State:** design specification only; interfaces, commands, directories and YAML keys on this page have **not been implemented**.
+**State:** overall design specification. M0 implements only CLI diagnostics and schema-only manifests; [CONTRACTS.md](CONTRACTS.md) and the published JSON schemas define the executable contract. Remaining interfaces, runtime commands, directories and illustrative YAML below are proposals.
 
 ## 1. Scope, product boundaries
 

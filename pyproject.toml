@@ -1,0 +1,28 @@
+[project]
+name = "snowsky-disc-lab"
+version = "0.1.0"
+description = "Firmware-free contracts and diagnostics for SNOWSKY DISC Lab"
+readme = "README.md"
+requires-python = ">=3.12"
+dependencies = ["typer>=0.16", "rich>=14", "pydantic>=2.11,<3", "pyyaml>=6"]
+
+[project.scripts]
+disc-lab = "snowsky_disc_lab.cli:app"
+
+[build-system]
+requires = ["hatchling>=1.27"]
+build-backend = "hatchling.build"
+
+[dependency-groups]
+dev = ["pytest>=8", "ruff>=0.12", "ty>=0.0.1", "jsonschema>=4.24", "types-pyyaml>=6"]
+
+[tool.ruff]
+target-version = "py312"
+line-length = 100
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "UP", "B"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+addopts = "--basetemp=.cache/pytest"

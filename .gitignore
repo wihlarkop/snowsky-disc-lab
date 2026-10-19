@@ -1,0 +1,21 @@
+.venv/
+.cache/
+__pycache__/
+.pytest_cache/
+.ruff_cache/
+*.egg-info/
+dist/
+build/
+# Local inputs and generated state must never be published.
+.lab/
+firmware/
+vendor/
+cache/
+work/
+evidence/local/
+*.zip
+*.img
+*.bin
+*.pem
+*.key
+.env
