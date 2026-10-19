@@ -22,6 +22,12 @@ def test_reference_matches_preparation_and_is_not_an_executable_source_projectio
     for identity in [reference.metadata.profile_source, reference.metadata.parser_source]:
         assert identity.git_blob == evidence[identity.path]["gitBlob"]
         assert identity.sha256 == evidence[identity.path]["sha256"]
+    active_version = evidence["firmware/active-version"]
+    assert active_version["origin"] == "separate-public-source-review"
+    assert active_version["gitBlob"] == "7521537d96663385b29fcf2863ca2d8b2a4d601c"
+    assert active_version["sha256"] == (
+        "614c56cf1dbf19349b8e7fd1fc7efdd918e1aa382b8faf6a55b83e220157bdfb"
+    )
     assert reference.metadata.upstream.commit == preparation["integrationSource"]["commit"]
     claims = reference.metadata.firmware_claims
     previous = preparation["firmwareReference"]

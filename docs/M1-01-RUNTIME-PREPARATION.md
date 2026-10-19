@@ -12,7 +12,7 @@ The companion [JSON record](m1-01-runtime-preparation.json) contains SHA-256 and
 
 All three M0 source projections passed current offline `sources verify`. QEMU integration source remains `85ab00deb08ac112066377fd8083cc8727ed859a` from `eudj1n/snowsky-disc-qemu`, projection `ef1f0b45f86d4724a7359694b2c3bc4c`. The `2.x` branch label is discovery context only. Neither source pins nor include paths changed.
 
-Five excluded public text files were read separately through GitHub's contents API at that commit: `firmware/v2.57.json`, `firmware/profile.py`, `firmware/tools/firmware_extract.py`, `firmware/tools/firmware_inventory.py` and `firmware/docs/firmware-profiles.md`. Decoded bytes were checked against their Git blob IDs and hashed. This did not fetch firmware or add files to the managed cache. Local review text remains in ignored `.cache/m1-01-review/`.
+Six excluded public files were reviewed separately at that commit: `firmware/active-version`, `firmware/v2.57.json`, `firmware/profile.py`, `firmware/tools/firmware_extract.py`, `firmware/tools/firmware_inventory.py` and `firmware/docs/firmware-profiles.md`. Their decoded bytes are recorded with Git blob IDs and SHA-256 values in the evidence list below; `active-version` was fetched as the five-byte value `2.57\n` and independently hashed. This did not fetch firmware or add files to the managed cache. The five source-text files remain in ignored `.cache/m1-01-review/`.
 
 The following links identify primary source evidence at the locked commit:
 
@@ -124,7 +124,7 @@ Local Windows/Python 3.14 checks on this documentation-only change:
 - `uv sync --locked --dev --offline` with repository-local `UV_CACHE_DIR`: passed.
 - Ruff lint/format and `ty check`: passed; existing suite: **142 passed, 1 skipped**. The first restricted-sandbox run failed seven synthetic local-Git fetch cases; the full rerun outside that sandbox passed. No product fix or contract change was made to obtain that result.
 - Actual CLI source verification and offline sync of all three existing projections, plus valid UI/firmware manifest validation: passed. Source IDs and runtime disclaimers retained.
-- Independent recomputation of all 57 source SHA-256/Git blob identities, comparison to the unchanged source lock and exact profile metadata, registry index digest comparison, JSON parse and local-link checks: passed. For excluded source evidence, retrieve only the five named text files at the immutable commit and decode the contents API's base64 bytes before hashing; do not hash newline-normalized shell output.
+- Independent recomputation of the source SHA-256/Git blob identities, comparison to the unchanged source lock and exact profile metadata, registry index digest comparison, JSON parse and local-link checks: passed. For excluded source evidence, retrieve only the named public files at the immutable commit and decode contents API base64 bytes before hashing; do not hash newline-normalized shell output. `firmware/active-version` is recorded as a separate public-source identity because `profile.py` reads it at import time.
 - `git diff --check` and comparison against integrated main for `src/`, `schemas/`, `tests/`, `upstreams.lock.yaml`, dependency files and CI: unchanged/passed. The PR's hosted checks provide separate exact-head evidence.
 
 No runtime/container/toolchain build, proprietary firmware access, extraction, decryption, QEMU invocation, external UI, physical device or performance test was performed. Metadata retrieval and local source hashing do not close those gates.

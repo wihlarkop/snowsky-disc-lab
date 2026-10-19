@@ -563,6 +563,13 @@
       "url": "https://github.com/eudj1n/snowsky-disc-qemu/blob/85ab00deb08ac112066377fd8083cc8727ed859a/emulator/shims/tinyshim.c"
     },
     {
+      "path": "firmware/active-version",
+      "origin": "separate-public-source-review",
+      "gitBlob": "7521537d96663385b29fcf2863ca2d8b2a4d601c",
+      "sha256": "614c56cf1dbf19349b8e7fd1fc7efdd918e1aa382b8faf6a55b83e220157bdfb",
+      "url": "https://github.com/eudj1n/snowsky-disc-qemu/blob/85ab00deb08ac112066377fd8083cc8727ed859a/firmware/active-version"
+    },
+    {
       "path": "firmware/docs/firmware-profiles.md",
       "origin": "separate-public-source-review",
       "gitBlob": "0f3d65a3d0bf5796c591d214ce2cb2795559b0c2",
