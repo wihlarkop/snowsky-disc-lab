@@ -622,8 +622,9 @@ def test_firmware_inspect_crosschecks_eocd_count_against_central_directory(
     archive = _zip_package(package, tmp_path / "count-crosscheck.zip")
     real_preflight = firmware_intake._zip_preflight
 
-    def mismatched_count(stream: Any, size: int) -> int:
-        return real_preflight(stream, size) + 1
+    def mismatched_count(stream: Any, size: int) -> tuple[int, int]:
+        count, offset = real_preflight(stream, size)
+        return count + 1, offset
 
     monkeypatch.setattr(firmware_intake, "_zip_preflight", mismatched_count)
 

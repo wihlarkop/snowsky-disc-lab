@@ -277,7 +277,7 @@ class _Inspection:
             self.metadata[name] = bytes(captured)
 
 
-def _zip_preflight(stream: IO[bytes], size: int) -> int:
+def _zip_preflight(stream: IO[bytes], size: int) -> tuple[int, int]:
     _require(22 <= size <= MAX_ARCHIVE_BYTES, "archive_size_limit")
     stream.seek(max(0, size - 65557))
     tail = stream.read(65557)
@@ -299,12 +299,12 @@ def _zip_preflight(stream: IO[bytes], size: int) -> int:
     stream.seek(0)
     _require(stream.read(4) == b"PK\x03\x04", "zip_prefix_unsupported")
     stream.seek(0)
-    return entries
+    return entries, cd_offset
 
 
 def _inspect_zip(path: Path, info: os.stat_result, work: _Inspection) -> str:
     with _open_regular(path, info) as stream:
-        entry_count = _zip_preflight(stream, info.st_size)
+        entry_count, central_offset = _zip_preflight(stream, info.st_size)
         digest = hashlib.sha256()
         hashed = 0
         while block := stream.read(BLOCK_BYTES):
@@ -353,7 +353,9 @@ def _inspect_zip(path: Path, info: os.stat_result, work: _Inspection) -> str:
                         "invalid_directory_member",
                     )
                 planned.append((member, name))
-            # zipfile checks local header names, overlapping entries and stream CRCs.
+            # Every byte before the central directory must belong to one indexed
+            # local record. No padding, hidden local records or overlapping aliases.
+            spans: list[tuple[int, int]] = []
             for member, name in planned:
                 stream.seek(member.header_offset)
                 header = stream.read(30)
@@ -369,6 +371,9 @@ def _inspect_zip(path: Path, info: os.stat_result, work: _Inspection) -> str:
                     name_bytes <= MAX_PATH_BYTES and extra_bytes == 0,
                     "zip_extra_fields_unsupported",
                 )
+                end = member.header_offset + 30 + name_bytes + member.compress_size
+                _require(0 <= member.header_offset < end <= central_offset, "unindexed_zip_bytes")
+                spans.append((member.header_offset, end))
                 encoding = "utf-8" if flags & 0x800 else "cp437"
                 _require(
                     stream.read(name_bytes).decode(encoding) == member.filename,
@@ -384,6 +389,11 @@ def _inspect_zip(path: Path, info: os.stat_result, work: _Inspection) -> str:
                         _require(content.read(1) == b"", "invalid_directory_member")
                     else:
                         work.consume(name, content, member.file_size)
+            offset = 0
+            for start, end in sorted(spans):
+                _require(start == offset, "unindexed_zip_bytes")
+                offset = end
+            _require(offset == central_offset, "unindexed_zip_bytes")
         # Detect content changes even if the writer restored timestamps. A hostile
         # owner racing/restoring bytes between observations remains outside this boundary.
         stream.seek(0)

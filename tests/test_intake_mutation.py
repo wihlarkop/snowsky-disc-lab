@@ -2,8 +2,11 @@
 
 from __future__ import annotations
 
+import io
 import os
 import runpy
+import struct
+import zipfile
 from pathlib import Path
 from typing import IO
 
@@ -52,3 +55,28 @@ def test_unc_input_is_refused_without_filesystem_probe(monkeypatch: pytest.Monke
     receipt = firmware_intake.inspect_firmware(Path("//not-a-real-server/synthetic.zip"))
     assert receipt.status == "refused"
     assert any(condition.code == "nonlocal_input_unsupported" for condition in receipt.conditions)
+
+
+@pytest.mark.parametrize("hidden_record", [False, True])
+def test_zip_refuses_unindexed_bytes_or_local_records(tmp_path: Path, hidden_record: bool) -> None:
+    helpers = runpy.run_path(str(Path(__file__).with_name("test_firmware_intake.py")))
+    package, _ = helpers["_make_package"](tmp_path / "synthetic-package")
+    archive = helpers["_zip_package"](package, tmp_path / "unindexed.zip")
+    raw = archive.read_bytes()
+    eocd = raw.rfind(b"PK\x05\x06")
+    central = struct.unpack_from("<I", raw, eocd + 16)[0]
+    hidden = b"synthetic unindexed gap"
+    if hidden_record:
+        buffer = io.BytesIO()
+        with zipfile.ZipFile(buffer, "w") as output:
+            output.writestr("../unindexed-synthetic-member", b"synthetic only")
+        isolated = buffer.getvalue()
+        isolated_eocd = isolated.rfind(b"PK\x05\x06")
+        isolated_central = struct.unpack_from("<I", isolated, isolated_eocd + 16)[0]
+        hidden = isolated[:isolated_central]
+    modified = bytearray(raw[:central] + hidden + raw[central:])
+    struct.pack_into("<I", modified, eocd + len(hidden) + 16, central + len(hidden))
+    archive.write_bytes(modified)
+    receipt = firmware_intake.inspect_firmware(archive)
+    assert receipt.status == "refused"
+    assert any(condition.code == "unindexed_zip_bytes" for condition in receipt.conditions)
