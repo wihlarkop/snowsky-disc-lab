@@ -103,19 +103,19 @@ Retain verified source snapshots and original firmware inputs by default; no aut
 
 Public export remains explicit and allowlisted: reviewed source identities and checksums, sanitized command/result metadata, and generated synthetic media only where content rights are clear. Vendor UI screenshots can contain proprietary art and need review. Do not upload rootfs, ZIP/chunks, stock or patched ELF/shims bundled with firmware, userdata, personal media, raw logs, memory dumps, signing material, or full work/cache directories. Revalidate the selected path and content at export; hashes do not grant redistribution rights.
 
-## Blockers and M1-02 handoff
+## Blockers and M1 follow-up gates
 
 | Gate | Current evidence and required next step |
 | --- | --- |
 | Dependency/build identity | Base/index/platform digest, recipe/context hashes, dated repositories, QEMU version and descriptor archive checksums recorded. Resolve authenticated full package BOM and compiler/sysroot identity; build only under a separately reviewed recipe/environment. |
 | Runtime outputs | Final image, QEMU executable, shim and patched-player hashes absent. They must be measured and recorded before any launch; repeat-build comparison NOT RUN. |
-| Source availability | M0 projection intentionally excludes required firmware Python/profile source. Review narrow source-only availability/import closure in M1-02 without mutating existing caches or contracts. |
-| Firmware provenance | Upstream reference rootfs/six ELF identities known; no local archive hash or measurements, no authenticated vendor trust anchor. Define policy and concrete intake bounds/refusal behavior. |
-| Isolation/runtime | Dedicated VM, privilege and resource plan specified only. Mount/network/cleanup acceptance and Windows WSL2/Docker acceptance NOT RUN. No safe launch recipe claimed. |
+| Source availability | The independently pinned data-only V2.57 reference is consumed without widening the existing M0 source projection/cache. The upstream firmware parser/tooling remains excluded and is not imported or executed. |
+| Firmware provenance | Upstream reference rootfs/six ELF identities known; no actual local archive hash or measurements and no authenticated vendor trust anchor. M1-02 defines bounded synthetic-tested intake/refusal behavior; M1-03 binds accepted structure to a private digest-checked snapshot. Neither establishes vendor authenticity. |
+| Isolation/runtime | M1-03 implements local per-session staging, ownership checks, quotas, no-replace publication and quarantine. Dedicated VM, runtime privilege policy, guest mount/network acceptance and Windows WSL2/Docker acceptance remain NOT RUN. No safe launch recipe is claimed. |
 | Licensing | Integration MIT evidence does not clear external QEMU/patch provenance, QEMU corresponding-source obligations, static library dependencies or Debian/toolchain redistribution notices. Review exact components before affected builds/distributions. Vendor rights and Lab root LICENSE/NOTICE remain unresolved; no license selected here. UI/font gates remain as in the existing inventory. |
 | Compatibility | All stock boot/input/media/PCM/restart/concurrency/hardware scenarios NOT RUN. Keep combinations `unknown`; no emulator/device support promotion. |
 
-**M1-02 is ready for a narrowly scoped implementation proposal and firmware-free intake development**, using synthetic archives/directories and explicit refusals. It must resolve source availability, finite limits and provenance semantics before accepting real user firmware. M1-03 extraction and M1-04 boot require their own reviewed gates; preparation completion does not authorize them. M1-01's evidence/preparation slice is reviewable, but the roadmap's full runtime-pin acceptance remains open until the missing artifact identities and relevant gates are closed.
+**Current handoff:** M1-02's offline structural intake and M1-03's private snapshot foundation are implemented in the stacked Draft series and verified with synthetic samples only. M1-03 remains open because no extractor, decryptor, rootfs mount or extracted artifact exists. M1-04 boot and all runtime steps require their own reviewed gates; preparation completion does not authorize them. M1-01's evidence/preparation slice remains distinct from full runtime-pin acceptance, which stays open until the missing artifact identities and relevant build, licensing, provenance and isolation gates are closed.
 
 ## Preparation verification
 

@@ -84,13 +84,53 @@ The upstream profile declares product `SNOWSKY_DISC`, main/recovery 257/18, 77 r
 | `rootfs_reference_*` | Upstream reference only, not a measured plaintext rootfs identity. |
 | `may_proceed` / authorization fields | Always false; future stage/compatibility approval is not implemented. |
 
+## M1-03 — private workspace preparation
+
+The separate `disc-lab firmware workspace` group creates a bounded, ignored local snapshot after a fresh M1-02 inspection. It keeps inspection separate from extraction:
+
+```sh
+uv run disc-lab firmware workspace stage /local/private/candidate.zip --format json
+uv run disc-lab firmware workspace finalize <workspace-id> --format json
+uv run disc-lab firmware workspace prepare /local/private/package --format json
+uv run disc-lab firmware workspace verify <workspace-id> --format json
+uv run disc-lab firmware workspace list --format json
+```
+
+`stage` creates an exclusive random session under the default `.lab/firmware-workspaces` store, copies the original ZIP bytes or the selected OTA directory into a private `inputs/` snapshot, rechecks the original after copying, and independently inspects the snapshot. `finalize` rechecks the snapshot and atomically publishes it under `workspaces/sha256-<package-digest>/<session-id>`. `prepare` performs both steps. The separate `intermediate/`, `extraction/`, and `diagnostics/` directories are empty reserved areas; no command writes extracted firmware, mounts a rootfs, or runs tools. Each session has its own directories. Sessions for matching package identities do not share mutable state.
+
+Snapshots preserve source bytes; the selected candidate is opened read-only and never modified. ZIP snapshots remain ZIP files; directory snapshots are bounded copies whose sorted path/size/content-hash inventory must match the intake package identity. A mismatch, interruption observed by the process, incomplete publication, or unsafe workspace state is refused and retained under `quarantine/`. Atomic publication uses same-volume no-replace rename semantics on Windows and Linux; unsupported Linux kernels/filesystems fail closed. A process killed without cleanup can leave a `staging` or `publishing` session; `list` reports it and an explicit `quarantine` operation retains it for review. There is no automatic deletion or stale-PID decision.
+
+The versioned [`lab-firmware-workspace/v1` receipt schema](../schemas/lab-firmware-workspace-v1.schema.json) stores the nested pathless intake receipt, package digest, session/firmware IDs, snapshot count/bytes, condition statuses, and fixed authority fields. Reports do not contain local paths or arbitrary metadata. They do contain firmware/package/chunk hashes and should remain private. `operation_status: accepted` and `state: finalized` mean only that this local snapshot matched the structural intake identity. `may_proceed`, `extraction_authorized`, and `execution_authorized` remain `false`; compatibility and vendor authenticity remain `unverified`. The synthetic test fixtures do not grant permission to process real firmware.
+
+### M1-03/V2.57 workspace limits
+
+These local workspace policy limits are distinct from and do not widen the M1-02 intake limits above. They are not universal firmware limits.
+
+| Resource | Limit |
+| --- | --- |
+| Snapshot input | 2 GiB, also bounded by the stricter M1-02 archive/member/total limits |
+| Single workspace file | 256 MiB for directory members and future work artifacts; the retained original ZIP is capped at 1 GiB by M1-02 |
+| Session storage, including inputs and future work areas | 4 GiB |
+| Entire workspace store | 8 GiB |
+| Retained sessions across staging, finalized and quarantine | 32 |
+| Entries in the entire store | 65,536 |
+| Internal workspace receipt/owner metadata file | 256 KiB |
+| Workspace-relative path | 768 UTF-8 bytes, 16 components |
+| Copy/store inventory budget | 300 seconds, checked cooperatively |
+
+The snapshot remains bounded to the M1-02/V2.57 inspection policy; the larger session/store quotas reserve bounded space for future reviewed intermediate products. The manager remeasures before publication and each later verification. There is no extraction writer yet, so a future extractor must enforce the same quotas while producing output, not rely only on post-write detection.
+
+Linux directories are created with owner-only permissions and snapshot files are made read-only. On Windows the store uses the selected parent directory's inherited ACL; select a location private to the current account. The implementation does not rewrite or independently audit Windows ACLs. The supported local threat model assumes a trusted, quiescent filesystem owner; same-user replacement races and administrator access are outside the protection boundary. No mounts, USB, subprocesses, network requests, elevated privilege, Docker or QEMU are used.
+
+`quarantine` retains the selected session and its bytes. `cleanup` can remove only an explicitly selected empty staging skeleton; it refuses any session retaining input bytes, every finalized session, and quarantine. Completed sessions and quarantines have no automatic retention expiry. Their local ignored store consumes the documented quota until a separately reviewed retention policy exists.
+
 Receipts contain no local paths, original filenames outside the constrained chunk identity, arbitrary metadata values, raw exceptions, archive comments, signature bytes or payload content. They may contain firmware/package fingerprints; keep them local by default and review before sharing. No automatic export, report persistence, cleanup or upload exists. Rejected inputs stay untouched. File atime may change through normal OS reads; source contents are not written.
 
 ## Remaining gates and next milestone
 
 Vendor authenticity remains **unverified**, including when manifest checks pass or a signature file is present. Trust-anchor provenance, exact signed bytes/scope, rotation/revocation and policy are unresolved. There is no trusted full ZIP checksum, no reviewed actual-vendor-package acceptance and no plaintext/binary/product verification. M1-01's image/toolchain/shim/build, relevant licensing/redistribution, dedicated-VM and Windows runtime gates remain open.
 
-Next: a narrowly scoped **M1-03 isolated extraction preparation** design, first proving synthetic per-run ownership, immutable input binding, no-replace private staging, quotas, path/link confinement, interruption quarantine and bounded cleanup. Separately review a pinned decryptor/SquashFS toolchain and vendor provenance policy before any real decryption/extraction. Recheck ciphertext identity at that stage, then verify the reconstructed image and stock binaries against references before any further action. No QEMU, mounting, player patch or device operation is implied by this foundation.
+M1-03 now supplies the synthetic-only private snapshot, ownership, quota, verification, quarantine and limited cleanup foundation. The milestone remains open: no extractor, decrypted image, rootfs mount, or output artifact has been implemented. The next narrow step is a synthetic-only extractor harness that consumes a reviewed input/output interface and proves nonprivileged, no-network, per-session confinement, output quotas, interruption quarantine and no-replace publication without a real decryptor. Separately review a pinned decryptor/SquashFS toolchain, vendor authenticity policy and exact licensing before any real decryption/extraction. Recheck ciphertext identity at that stage, then verify the reconstructed image and stock binaries against references before any further action. No QEMU, mounting, player patch or device operation is implied by this foundation.
 
 ## Verification recorded for this foundation
 

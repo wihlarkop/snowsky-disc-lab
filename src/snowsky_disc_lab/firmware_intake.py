@@ -417,7 +417,7 @@ def _inspect_directory(path: Path, work: _Inspection) -> None:
         work.tick()
         _require(_identity(_components(directory)) == _identity(expected), "input_changed")
         states.append((directory, expected))
-        with os.scandir(directory) as entries:
+        with os.scandir(os.fspath(directory)) as entries:
             for entry in entries:
                 work.tick()
                 # Windows DirEntry.stat may omit st_dev/st_ino; use full lstat IDs.
