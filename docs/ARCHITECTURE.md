@@ -1,6 +1,6 @@
 # Architecture & UI Integration (proposed)
 
-**State:** overall design specification. M0 implements CLI diagnostics, schema-only manifests and immutable source caching; [CONTRACTS.md](CONTRACTS.md), [SOURCES.md](SOURCES.md) and the published JSON schemas define the executable contracts. Remaining interfaces, runtime commands, directories and illustrative YAML below are proposals.
+**State:** overall design specification. M0 implements host preflight, schema-only manifests and immutable source caching, with a [trust baseline](TRUST-BOUNDARIES.md) and [initial license inventory](LICENSE-INVENTORY.md). [CONTRACTS.md](CONTRACTS.md), [SOURCES.md](SOURCES.md), [HOST-PREFLIGHT.md](HOST-PREFLIGHT.md) and the published JSON schemas define current behavior. Remaining interfaces, runtime commands, directories and illustrative YAML below are proposals.
 
 ## 1. Scope, product boundaries
 
@@ -227,7 +227,7 @@ Host mounts default read-only where possible; test reports may only publish **al
 - [diskOS UI](https://github.com/b0hemia/diskos/blob/main/ui/README.md): GPL-3.0-or-later; upstream installer/tooling has separately identified MIT licensing.
 - [Disco! UI](https://github.com/zmd22/diskos-disco/blob/main/ui/README.md): GPL-3.0-or-later; repo tooling and docs may have different terms.
 
-The Lab *intends* permissive licensing only for its original standalone glue code; do not label third-party or GPL derivative code as MIT. A final LICENSE/NOTICE strategy and per-file audit are required before shipping code. Sorane stays outside this repository and follows its own derivative UI license obligations. Do not redistribute custom firmware images containing FiiO rootfs.
+The Lab *intends* permissive licensing only for its original standalone glue code; do not label third-party or GPL derivative code as MIT. The M0-07 [initial inventory](LICENSE-INVENTORY.md) records component-specific evidence and pending review; the Lab's core license remains unset. A final owner-approved LICENSE/NOTICE strategy and relevant per-file audit are required before shipping code. Sorane stays outside this repository and follows its own derivative UI license obligations. Do not redistribute custom firmware images containing FiiO rootfs.
 
 ## 9. Architecture decision records to make during M0–M2
 

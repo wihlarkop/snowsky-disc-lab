@@ -18,12 +18,12 @@ Use [the synthetic firmware example](../examples/firmware-valid.yaml). Required 
 
 ## CLI and trust boundaries
 
-- `disc-lab doctor`: fixed host/version diagnostics, exit 0 when reporting completes. Missing dependencies are statuses, not exceptions. Docker daemon connectivity and WSL distribution configuration are not queried.
+- `disc-lab doctor`: fixed host/version and cache metadata diagnostics, exit 0 when reporting completes. Missing dependencies are statuses, not exceptions. Default checks do not contact the Docker daemon. Explicit `--docker-daemon` queries its server version only and may contact a remote context. WSL distribution configuration and runtime compatibility remain unverified.
 - `disc-lab ui validate FILE` and `disc-lab firmware validate FILE`: exit 0 on schema success, 2 on invalid data or IO failure. Diagnostics identify the field/error without printing manifest values or Python tracebacks.
 - YAML cannot provide subprocess commands, environment settings, downloads or arbitrary build scripts. No code invokes a manifest field as a command.
 
 Validation uses no temporary work directories and performs no artifact writes. uv/pytest use ignored local tooling directories. `.lab/`, caches, firmware, vendor inputs, working state and local evidence remain ignored. Do not put personal media or proprietary inputs elsewhere in the repository. Future extraction/cache workflows must define their own safe temporary directory ownership and cleanup policy before implementation.
 
-This first-party implementation copies no upstream code or assets. A final core LICENSE/NOTICE decision and dependency/SPDX inventory are still pending M0-07; this Draft implementation does not relicense any third-party source or authorize firmware redistribution. No package publication or release workflow is included.
+This first-party implementation copies no upstream code or assets. M0-07's [initial inventory](LICENSE-INVENTORY.md) and [trust/versioning baseline](TRUST-BOUNDARIES.md) record known evidence and remaining distribution gates. The core LICENSE/NOTICE decision and complete relevant per-file clearance remain pending; this Draft implementation does not relicense third-party source or authorize firmware redistribution. No package publication or release workflow is included.
 
 The separate `lab-upstreams/v1` lock contract and source cache commands are documented in [SOURCES.md](SOURCES.md). They reuse the bounded YAML loader while keeping source resolution independent of manifests and future emulator adapters.

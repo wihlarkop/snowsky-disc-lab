@@ -1,17 +1,23 @@
 """Public M0 command surface. Validation never executes manifest data."""
 
-import re
 from pathlib import Path
 from typing import Annotated, Literal
 
 import typer
 from rich.console import Console
 from rich.table import Table
+from rich.text import Text
 
 from snowsky_disc_lab.contracts import load_manifest
 from snowsky_disc_lab.doctor import collect_diagnostics
 from snowsky_disc_lab.source_lock import SourcePin, load_source_lock
-from snowsky_disc_lab.sources import source_path, sync_source, verify_source
+from snowsky_disc_lab.sources import (
+    DEFAULT_CACHE_DIR,
+    source_cache_root,
+    source_path,
+    sync_source,
+    verify_source,
+)
 
 app = typer.Typer(
     help="Firmware-free SNOWSKY DISC Lab diagnostics and schema validation.", add_completion=False
@@ -29,13 +35,30 @@ LockOption = Annotated[Path, typer.Option(help="Versioned source lock YAML.")]
 
 
 @app.command()
-def doctor() -> None:
+def doctor(
+    lock: LockOption = DEFAULT_SOURCE_LOCK,
+    cache_dir: str = typer.Option(DEFAULT_CACHE_DIR, help="Relative to the lock file's folder."),
+    docker_daemon: bool = typer.Option(
+        False, help="Opt in to contacting the configured Docker daemon/context (possibly remote)."
+    ),
+) -> None:
     """Report host and tool availability without changing host settings."""
-    table = Table("Check", "Status", "Detail")
-    for row in collect_diagnostics():
-        table.add_row(row.name, row.status, row.detail)
+    try:
+        root = source_cache_root(lock, cache_dir)
+    except ValueError as error:
+        errors.print(str(error), markup=False)
+        raise typer.Exit(code=2) from None
+    table = Table()
+    table.add_column("Check", overflow="fold")
+    table.add_column("Status", overflow="fold")
+    table.add_column("Observation / next step", overflow="fold")
+    for row in collect_diagnostics(root, docker_daemon=docker_daemon):
+        detail = row.detail + (f"\nAction: {row.remediation}" if row.remediation else "")
+        table.add_row(*(Text(value, overflow="fold") for value in (row.name, row.status, detail)))
     console.print(table)
-    console.print("Read-only checks complete. Docker daemon and runtime compatibility: NOT RUN.")
+    console.print("Read-only checks complete. QEMU/runtime compatibility: NOT VERIFIED.")
+    if not docker_daemon:
+        console.print("Docker daemon contact: NOT RUN (opt in with --docker-daemon).")
 
 
 def validate(path: Path, kind: Literal["ui", "firmware"]) -> None:
@@ -72,25 +95,14 @@ def firmware_validate(profile: Path) -> None:
 
 
 def source_inputs(lock: Path, cache_dir: str, source: str | None) -> tuple[list[SourcePin], Path]:
-    if (
-        not cache_dir
-        or re.fullmatch(r"[A-Za-z0-9_.-]+(?:/[A-Za-z0-9_.-]+)*", cache_dir) is None
-        or "\\" in cache_dir
-        or ":" in cache_dir
-        or any(
-            part.rstrip(" .") in {"", ".", "..", ".git"} for part in cache_dir.lower().split("/")
-        )
-    ):
-        raise ValueError(
-            "Cache directory must be a safe relative POSIX path within the lock folder."
-        )
+    root = source_cache_root(lock, cache_dir)
     pins = load_source_lock(lock).sources
     if source is not None:
         pins = [pin for pin in pins if pin.id == source]
         if not pins:
             raise ValueError("Unknown source identifier; run sources list.")
     # Keep lexical paths intact: the manager checks every cache component for links.
-    return pins, lock.absolute().parent / cache_dir
+    return pins, root
 
 
 def source_command(
@@ -127,7 +139,7 @@ def source_command(
 @sources_app.command("list")
 def sources_list(
     lock: LockOption = DEFAULT_SOURCE_LOCK,
-    cache_dir: str = typer.Option(".lab/sources", help="Relative to the lock file's folder."),
+    cache_dir: str = typer.Option(DEFAULT_CACHE_DIR, help="Relative to the lock file's folder."),
     source: str | None = typer.Option(None, help="Select one locked source identifier."),
 ) -> None:
     """List immutable identities without accessing the network or changing the cache."""
@@ -137,7 +149,7 @@ def sources_list(
 @sources_app.command("sync")
 def sources_sync(
     lock: LockOption = DEFAULT_SOURCE_LOCK,
-    cache_dir: str = typer.Option(".lab/sources", help="Relative to the lock file's folder."),
+    cache_dir: str = typer.Option(DEFAULT_CACHE_DIR, help="Relative to the lock file's folder."),
     source: str | None = typer.Option(None, help="Select one locked source identifier."),
     offline: bool = typer.Option(False, help="Require existing valid cached sources; never fetch."),
 ) -> None:
@@ -148,7 +160,7 @@ def sources_sync(
 @sources_app.command("verify")
 def sources_verify(
     lock: LockOption = DEFAULT_SOURCE_LOCK,
-    cache_dir: str = typer.Option(".lab/sources", help="Relative to the lock file's folder."),
+    cache_dir: str = typer.Option(DEFAULT_CACHE_DIR, help="Relative to the lock file's folder."),
     source: str | None = typer.Option(None, help="Select one locked source identifier."),
 ) -> None:
     """Verify cached source identity and bytes entirely offline, without repairs."""

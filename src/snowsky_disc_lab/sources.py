@@ -26,6 +26,22 @@ _REPOSITORY = re.compile(
 _COMMIT = re.compile(r"^[0-9a-f]{40}$")
 _SHA256 = re.compile(r"^[0-9a-f]{64}$")
 _MAX_TREE_PATH_BYTES = 4096
+DEFAULT_CACHE_DIR = ".lab/sources"
+
+
+def source_cache_root(lock: Path, cache_dir: str = DEFAULT_CACHE_DIR) -> Path:
+    """Resolve the shared CLI cache setting without loading a lock or creating paths."""
+    if (
+        not cache_dir
+        or re.fullmatch(r"[A-Za-z0-9_.-]+(?:/[A-Za-z0-9_.-]+)*", cache_dir) is None
+        or any(
+            part.rstrip(" .") in {"", ".", "..", ".git"} for part in cache_dir.lower().split("/")
+        )
+    ):
+        raise ValueError(
+            "Cache directory must be a safe relative POSIX path within the lock folder."
+        )
+    return lock.absolute().parent / cache_dir
 
 
 class SourceError(ValueError):

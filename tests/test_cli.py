@@ -48,6 +48,8 @@ def test_doctor_only_fixed_read_only_queries(monkeypatch: pytest.MonkeyPatch) ->
     monkeypatch.setattr("snowsky_disc_lab.doctor.subprocess.run", run)
     assert all(row.status != "UNAVAILABLE" for row in collect_diagnostics())
     assert calls == [
+        ["/tools/git", "--version"],
+        ["/tools/uv", "--version"],
         ["/tools/docker", "--version"],
         ["/tools/docker", "compose", "version"],
         ["/tools/wsl", "--version"],

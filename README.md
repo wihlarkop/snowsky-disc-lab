@@ -66,7 +66,7 @@ uv run disc-lab firmware validate examples/firmware-valid.yaml
 uv run disc-lab sources list
 ```
 
-`doctor` reports OS, architecture, Python and installed Docker/Compose versions. On Windows it queries the WSL component version; on Linux it identifies WSL from the kernel release. It does not start distributions or a daemon, probe devices, download anything, or contact the network. Missing optional tools are `UNAVAILABLE`; a completed diagnostic returns 0 even if Docker is absent. This does not certify a working Docker daemon or WSL2 runtime.
+`doctor` reports host/architecture, Python/Git/uv, Docker/Compose versions, WSL evidence, source-cache location, disk space and permission/path warnings. Default behavior is read-only and does not contact the daemon/network, start/configure services or distributions, probe devices, download or write files. Missing tools and limited evidence produce actionable `UNAVAILABLE`, `WARNING` or `NOT VERIFIED` rows; a completed diagnostic returns 0. An explicit `--docker-daemon` permits a fixed server-version query against the configured context, which may be remote. Neither mode proves WSL2/Docker/QEMU runtime compatibility. See [host preflight](docs/HOST-PREFLIGHT.md).
 
 Validation reads YAML only. Exit 0 means the **schema passed**, never binary compatibility, vendor authenticity or firmware support. Invalid input, missing files and unsupported API versions return 2. See [public contracts](docs/CONTRACTS.md), [JSON schemas](schemas/) and [verification scope](docs/M0-VERIFICATION.md).
 
@@ -114,4 +114,4 @@ External Git sources will require an explicit immutable ref, safe checkout, revi
 
 ## Immediate next step
 
-Complete the remaining **M0 host preflight and trust/license baseline** from the [roadmap](docs/ROADMAP.md) before **M1 stock V2.57** runtime work. Older versions follow as separate reviewed profiles, never by silently reusing V2.57 binary addresses.
+Review **M0-08's focused external-UI handoff ADR**, integrate the stacked M0 PRs with exact-head CI evidence, and resolve the licensing gates relevant to any planned distribution before **M1 stock V2.57** integration. The [trust baseline](docs/TRUST-BOUNDARIES.md) and [initial license inventory](docs/LICENSE-INVENTORY.md) keep unresolved rights explicit; the Lab's root license is still unset. Older versions require separate reviewed profiles.

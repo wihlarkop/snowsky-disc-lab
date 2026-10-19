@@ -69,9 +69,9 @@ Do not claim broad compatibility based on a successful menu screenshot, an archi
 
 ## Licenses and attribution
 
-- [QEMU code](https://github.com/eudj1n/snowsky-disc-qemu/blob/2.x/LICENSE) is MIT.
+- The [DISC emulator integration repository](https://github.com/eudj1n/snowsky-disc-qemu/blob/2.x/LICENSE) declares MIT. This notice does not clear the separate QEMU emulator distribution or copied patch code; review its exact version/provenance separately.
 - [diskOS UI](https://github.com/b0hemia/diskos/blob/main/ui/README.md) and [Disco! UI](https://github.com/zmd22/diskos-disco/blob/main/ui/README.md) identify GPL-3.0-or-later obligations; their tooling/other components may have distinct licenses.
-- Lab original core-code licensing is **not finalized until a LICENSE/NOTICE audit**. Do not simply relabel copied GPL or third-party code.
+- Lab original core-code licensing is **not finalized until an owner-approved LICENSE/NOTICE decision and distribution audit**. The [initial source inventory](docs/LICENSE-INVENTORY.md) identifies component evidence and unresolved gates; it does not choose the Lab license or clear every file. Do not relabel copied GPL or third-party code.
 - Sorane will be a **separate UI repo** with its own source history and appropriate derivative licensing if based on diskOS/Disco!.
 - The original FiiO firmware and generated rootfs image are not distributable project assets.
 
