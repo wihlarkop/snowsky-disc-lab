@@ -1,6 +1,7 @@
-"""Private, quota-bounded firmware input workspaces.
+"""Private, quota-bounded firmware workspaces and a fixed synthetic output harness.
 
-This module snapshots and revalidates intake candidates. It does not extract,
+The synthetic harness recognizes one first-party fixture by content digest and
+writes only fixed synthetic files. It does not extract proprietary firmware,
 decrypt, mount, patch, or execute firmware.
 """
 
@@ -54,6 +55,26 @@ MAX_WORKSPACE_PATH_BYTES = 768
 MAX_WORKSPACE_PATH_DEPTH = 16
 MAX_IO_SECONDS = 300
 COPY_BLOCK_BYTES = 64 * 1024
+MAX_SYNTHETIC_OUTPUT_FILES = 2
+MAX_SYNTHETIC_OUTPUT_FILE_BYTES = 8 * 1024
+MAX_SYNTHETIC_OUTPUT_BYTES = 16 * 1024
+SYNTHETIC_RECEIPT_RESERVE_BYTES = 16 * 1024
+SYNTHETIC_FIXTURE_PACKAGE_SHA256 = (
+    "21ae742cbc9cf0e191b818e9558109360f9aa4a3fdea1a16bb4ebe5f0c05644b"
+)
+SYNTHETIC_EXTRACTION_API_VERSION = "lab-firmware-synthetic-extraction/v1"
+SYNTHETIC_EXTRACTION_OPERATION = "synthetic_fixture_materialization_v1"
+_SYNTHETIC_OUTPUT_PATHS = ("synthetic-fixture.json", "synthetic-payload.bin")
+_QUOTA_FAILURE_CODES = frozenset(
+    {
+        "workspace_quota_exceeded",
+        "workspace_store_quota_exceeded",
+        "workspace_session_quota_exceeded",
+        "workspace_entry_limit",
+        "workspace_store_entry_limit",
+        "workspace_file_limit",
+    }
+)
 
 _SHA256 = Annotated[str, StringConstraints(pattern=r"^[0-9a-f]{64}$")]
 _SESSION_ID = Annotated[
@@ -62,6 +83,7 @@ _SESSION_ID = Annotated[
 ]
 _SESSION_ID_PATTERN = re.compile(r"^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$")
 _FIRMWARE_ID = Annotated[str, StringConstraints(pattern=r"^sha256-[0-9a-f]{64}$")]
+_ConditionStatus = Literal["verified", "unverified", "unsupported", "rejected"]
 _ROOT_LAYOUT = ("staging", "workspaces", "quarantine")
 _SAFE_WORKSPACE_COMPONENTS = re.compile(r"^[A-Za-z0-9_-][A-Za-z0-9_.-]*$")
 
@@ -89,6 +111,53 @@ class WorkspaceReceipt(_FrozenModel):
     store_quota_bytes: int = MAX_STORE_BYTES
     created_at_utc: datetime = Field(default_factory=lambda: datetime.now(UTC))
     conditions: list[Condition] = Field(default_factory=list)
+    may_proceed: Literal[False] = False
+    extraction_authorized: Literal[False] = False
+    execution_authorized: Literal[False] = False
+    compatibility: Literal["unverified"] = "unverified"
+    vendor_authenticity: Literal["unverified"] = "unverified"
+
+
+class SyntheticOutputIdentity(_FrozenModel):
+    """Content identity for one deterministic harness output."""
+
+    path: Annotated[str, StringConstraints(min_length=1, max_length=MAX_WORKSPACE_PATH_BYTES)]
+    size: int = Field(ge=0, le=MAX_SYNTHETIC_OUTPUT_FILE_BYTES)
+    sha256: _SHA256
+
+
+class SyntheticExtractionReceipt(_FrozenModel):
+    """Pathless receipt for one fixed, first-party synthetic output operation."""
+
+    api_version: Literal["lab-firmware-synthetic-extraction/v1"] = SYNTHETIC_EXTRACTION_API_VERSION
+    operation_status: Literal["accepted", "refused"]
+    state: Literal["refused", "incomplete", "published"]
+    workspace_id: _SESSION_ID | None = None
+    firmware_id: _FIRMWARE_ID | None = None
+    input_digest: _SHA256 | None = None
+    operation: Literal["synthetic_fixture_materialization_v1"] = SYNTHETIC_EXTRACTION_OPERATION
+    operation_id: _SESSION_ID | None = None
+    expected_output_manifest: list[SyntheticOutputIdentity] = Field(default_factory=list)
+    output_manifest: list[SyntheticOutputIdentity] = Field(default_factory=list)
+    output_file_count: int = Field(default=0, ge=0, le=MAX_SYNTHETIC_OUTPUT_FILES)
+    output_bytes: int = Field(default=0, ge=0, le=MAX_SYNTHETIC_OUTPUT_BYTES)
+    session_bytes_before: int | None = Field(default=None, ge=0, le=MAX_SESSION_BYTES)
+    session_bytes_after: int | None = Field(default=None, ge=0, le=MAX_SESSION_BYTES)
+    store_bytes_before: int | None = Field(default=None, ge=0, le=MAX_STORE_BYTES)
+    store_bytes_after: int | None = Field(default=None, ge=0, le=MAX_STORE_BYTES)
+    session_entries_before: int | None = Field(default=None, ge=0)
+    session_entries_after: int | None = Field(default=None, ge=0)
+    store_entries_before: int | None = Field(default=None, ge=0)
+    store_entries_after: int | None = Field(default=None, ge=0)
+    session_quota_bytes: int = MAX_SESSION_BYTES
+    store_quota_bytes: int = MAX_STORE_BYTES
+    publication_status: Literal["not_published", "published"] = "not_published"
+    failure_code: Annotated[
+        str | None,
+        StringConstraints(pattern=r"^[a-z][a-z0-9_]{0,63}$"),
+    ] = None
+    conditions: list[Condition] = Field(default_factory=list)
+    synthetic_only: Literal[True] = True
     may_proceed: Literal[False] = False
     extraction_authorized: Literal[False] = False
     execution_authorized: Literal[False] = False
@@ -1010,6 +1079,341 @@ def _verify_snapshot(workspace: Path, receipt: WorkspaceReceipt) -> IntakeReceip
     return observed
 
 
+def _synthetic_output_files(input_digest: str) -> tuple[tuple[str, bytes], ...]:
+    """Return the fixed output bytes for the one pinned synthetic package."""
+    summary = (
+        json.dumps(
+            {
+                "api_version": "snowsky-disc-lab-synthetic-fixture/v1",
+                "fixture": "first-party-synthetic-only",
+                "input_package_sha256": input_digest,
+                "rootfs_chunk_count": 77,
+            },
+            ensure_ascii=True,
+            sort_keys=True,
+            separators=(",", ":"),
+        ).encode("ascii")
+        + b"\n"
+    )
+    payload = b"SNOWSKY-DISC-LAB SYNTHETIC PAYLOAD V1\n" + bytes.fromhex(input_digest)
+    content = (summary, payload)
+    return tuple((name, content[index]) for index, name in enumerate(_SYNTHETIC_OUTPUT_PATHS))
+
+
+def _synthetic_manifest(
+    output_files: tuple[tuple[str, bytes], ...],
+) -> list[SyntheticOutputIdentity]:
+    return [
+        SyntheticOutputIdentity(
+            path=name, size=len(content), sha256=hashlib.sha256(content).hexdigest()
+        )
+        for name, content in sorted(output_files)
+    ]
+
+
+def _validate_synthetic_output_files(
+    output_files: tuple[tuple[str, bytes], ...],
+) -> tuple[int, int]:
+    names: set[str] = set()
+    total_bytes = 0
+    for name, content in output_files:
+        if not isinstance(name, str):
+            raise WorkspaceError("synthetic_output_spec_invalid")
+        try:
+            _safe_workspace_name(name, directory=False)
+        except (ValueError, UnicodeError):
+            raise WorkspaceError("unsafe_synthetic_output_path") from None
+        normalized = name.casefold()
+        if normalized in names:
+            raise WorkspaceError("synthetic_output_path_collision")
+        names.add(normalized)
+        if len(content) > MAX_SYNTHETIC_OUTPUT_FILE_BYTES:
+            raise WorkspaceError("synthetic_output_file_limit")
+        total_bytes += len(content)
+    if len(output_files) != MAX_SYNTHETIC_OUTPUT_FILES:
+        raise WorkspaceError("synthetic_output_spec_invalid")
+    if total_bytes > MAX_SYNTHETIC_OUTPUT_BYTES:
+        raise WorkspaceError("synthetic_output_total_limit")
+    return len(output_files), total_bytes
+
+
+def _write_synthetic_output(
+    output_root: Path,
+    relative: str,
+    content: bytes,
+    *,
+    expected_device: int,
+) -> SyntheticOutputIdentity:
+    """Create one fixed output below a checked, owned extraction directory."""
+    try:
+        _safe_workspace_name(relative, directory=False)
+    except (ValueError, UnicodeError):
+        raise WorkspaceError("unsafe_synthetic_output_path") from None
+    if len(content) > MAX_SYNTHETIC_OUTPUT_FILE_BYTES:
+        raise WorkspaceError("synthetic_output_file_limit")
+    root_info = _check_directory(output_root)
+    if root_info.st_dev != expected_device:
+        raise WorkspaceError("workspace_mount_boundary")
+    parts = relative.split("/")
+    parent = output_root
+    for part in parts[:-1]:
+        parent = parent / part
+        try:
+            parent_info = parent.lstat()
+        except FileNotFoundError:
+            _ensure_directory(parent)
+            parent_info = parent.lstat()
+        except OSError:
+            raise WorkspaceError("synthetic_output_parent_unavailable") from None
+        if _linked(parent_info) or not stat.S_ISDIR(parent_info.st_mode):
+            raise WorkspaceError("unsafe_synthetic_output_parent")
+        if parent_info.st_dev != expected_device:
+            raise WorkspaceError("workspace_mount_boundary")
+    destination = parent / parts[-1]
+    flags = os.O_CREAT | os.O_EXCL | os.O_WRONLY
+    flags |= getattr(os, "O_BINARY", 0) | getattr(os, "O_NOFOLLOW", 0)
+    try:
+        descriptor = os.open(destination, flags, 0o600)
+    except FileExistsError:
+        raise WorkspaceError("synthetic_output_already_exists") from None
+    except OSError:
+        raise WorkspaceError("synthetic_output_create_failed") from None
+    try:
+        _write_all(descriptor, content)
+        os.fsync(descriptor)
+    except BaseException:
+        os.close(descriptor)
+        raise
+    else:
+        os.close(descriptor)
+    try:
+        destination.chmod(0o400)
+        _sync_directory(parent)
+    except OSError:
+        raise WorkspaceError("synthetic_output_permissions_failed") from None
+    return SyntheticOutputIdentity(
+        path=relative,
+        size=len(content),
+        sha256=hashlib.sha256(content).hexdigest(),
+    )
+
+
+def _verify_synthetic_output_tree(
+    output_root: Path,
+    expected_files: tuple[tuple[str, bytes], ...],
+    *,
+    expected_device: int,
+) -> list[SyntheticOutputIdentity]:
+    """Read back and compare the complete fixed output tree before publication."""
+    expected_by_name = dict(expected_files)
+    try:
+        entries = _directory_entries(output_root, deadline=time.monotonic() + MAX_IO_SECONDS)
+        observed_names = {name for name, _path, _info in entries}
+        if observed_names != set(expected_by_name):
+            if observed_names < set(expected_by_name):
+                raise WorkspaceError("synthetic_output_missing")
+            raise WorkspaceError("synthetic_output_path_mismatch")
+        directory_entries, total_bytes = _safe_tree(
+            output_root,
+            deadline=time.monotonic() + MAX_IO_SECONDS,
+            max_entries=MAX_SYNTHETIC_OUTPUT_FILES + MAX_WORKSPACE_PATH_DEPTH,
+            max_bytes=MAX_SYNTHETIC_OUTPUT_BYTES,
+            expected_device=expected_device,
+        )
+        expected_directories = {
+            "/".join(name.split("/")[:index])
+            for name in expected_by_name
+            for index in range(1, len(name.split("/")))
+        }
+        if directory_entries != len(expected_by_name) + len(expected_directories):
+            raise WorkspaceError("synthetic_output_path_mismatch")
+        if total_bytes > MAX_SYNTHETIC_OUTPUT_BYTES:
+            raise WorkspaceError("synthetic_output_total_limit")
+        records: list[SyntheticOutputIdentity] = []
+        for name in sorted(expected_by_name):
+            path = output_root.joinpath(*name.split("/"))
+            content = _read_regular(path, maximum=MAX_SYNTHETIC_OUTPUT_FILE_BYTES)
+            if content != expected_by_name[name]:
+                raise WorkspaceError("synthetic_output_digest_mismatch")
+            records.append(
+                SyntheticOutputIdentity(
+                    path=name,
+                    size=len(content),
+                    sha256=hashlib.sha256(content).hexdigest(),
+                )
+            )
+        return records
+    except WorkspaceError:
+        raise
+    except (OSError, ValueError, UnicodeError):
+        raise WorkspaceError("synthetic_output_verification_failed") from None
+
+
+def _observe_synthetic_output_tree(
+    output_root: Path,
+    *,
+    expected_device: int,
+) -> list[SyntheticOutputIdentity]:
+    """Hash bounded files left by a failed write for the incomplete receipt."""
+    root_info = _check_directory(output_root)
+    if root_info.st_dev != expected_device:
+        raise WorkspaceError("workspace_mount_boundary")
+    entries = _directory_entries(output_root, deadline=time.monotonic() + MAX_IO_SECONDS)
+    if len(entries) > MAX_SYNTHETIC_OUTPUT_FILES:
+        raise WorkspaceError("synthetic_output_file_count_limit")
+    records: list[SyntheticOutputIdentity] = []
+    total_bytes = 0
+    for name, path, _info in entries:
+        content = _read_regular(path, maximum=MAX_SYNTHETIC_OUTPUT_FILE_BYTES)
+        total_bytes += len(content)
+        if total_bytes > MAX_SYNTHETIC_OUTPUT_BYTES:
+            raise WorkspaceError("synthetic_output_total_limit")
+        records.append(
+            SyntheticOutputIdentity(
+                path=name,
+                size=len(content),
+                sha256=hashlib.sha256(content).hexdigest(),
+            )
+        )
+    return records
+
+
+def _synthetic_conditions(
+    *,
+    ownership: _ConditionStatus = "unverified",
+    snapshot: _ConditionStatus = "unverified",
+    fixture: _ConditionStatus = "unverified",
+    output_paths: _ConditionStatus = "unverified",
+    output: _ConditionStatus = "unverified",
+    quota: _ConditionStatus = "unverified",
+    publication: _ConditionStatus = "unverified",
+) -> list[Condition]:
+    return [
+        Condition(
+            check="workspace_ownership",
+            status=ownership,
+            code="owned_session" if ownership == "verified" else "ownership_not_established",
+        ),
+        Condition(
+            check="input_snapshot",
+            status=snapshot,
+            code="content_digest_match" if snapshot == "verified" else "snapshot_not_verified",
+        ),
+        Condition(
+            check="synthetic_fixture_identity",
+            status=fixture,
+            code="pinned_first_party_fixture"
+            if fixture == "verified"
+            else "synthetic_fixture_identity_mismatch"
+            if fixture == "rejected"
+            else "fixture_identity_not_verified",
+        ),
+        Condition(
+            check="output_path_safety",
+            status=output_paths,
+            code="fixed_safe_output_paths"
+            if output_paths == "verified"
+            else "unsafe_output_path"
+            if output_paths == "rejected"
+            else "output_paths_not_verified",
+        ),
+        Condition(
+            check="output_integrity",
+            status=output,
+            code="output_hashes_match"
+            if output == "verified"
+            else "output_integrity_failed"
+            if output == "rejected"
+            else "output_not_verified",
+        ),
+        Condition(
+            check="workspace_quota",
+            status=quota,
+            code="bounded_store_measurement"
+            if quota == "verified"
+            else "workspace_quota_refused"
+            if quota == "rejected"
+            else "workspace_quota_not_measured",
+        ),
+        Condition(
+            check="output_publication",
+            status=publication,
+            code="no_replace_publish"
+            if publication == "verified"
+            else "publication_refused"
+            if publication == "rejected"
+            else "not_published",
+        ),
+        Condition(check="vendor_authenticity", status="unverified", code="no_reviewed_trust_chain"),
+        Condition(check="compatibility", status="unverified", code="runtime_not_tested"),
+        Condition(
+            check="real_firmware_extraction", status="unsupported", code="synthetic_harness_only"
+        ),
+        Condition(check="execution", status="unsupported", code="not_implemented"),
+    ]
+
+
+def _synthetic_refusal(
+    code: str,
+    *,
+    workspace_id: str | None = None,
+    firmware_id: str | None = None,
+    input_digest: str | None = None,
+    operation_id: str | None = None,
+    expected_output_manifest: list[SyntheticOutputIdentity] | None = None,
+    output_manifest: list[SyntheticOutputIdentity] | None = None,
+    session_bytes_before: int | None = None,
+    session_bytes_after: int | None = None,
+    store_bytes_before: int | None = None,
+    store_bytes_after: int | None = None,
+    session_entries_before: int | None = None,
+    session_entries_after: int | None = None,
+    store_entries_before: int | None = None,
+    store_entries_after: int | None = None,
+    ownership: _ConditionStatus = "unverified",
+    snapshot: _ConditionStatus = "unverified",
+    fixture: _ConditionStatus = "unverified",
+    output_paths: _ConditionStatus = "unverified",
+    output: _ConditionStatus = "unverified",
+    quota: _ConditionStatus = "unverified",
+    publication: _ConditionStatus = "rejected",
+    state: Literal["refused", "incomplete", "published"] = "refused",
+    publication_status: Literal["not_published", "published"] = "not_published",
+) -> SyntheticExtractionReceipt:
+    observed_outputs = output_manifest or []
+    return SyntheticExtractionReceipt(
+        operation_status="refused",
+        state=state,
+        workspace_id=workspace_id,
+        firmware_id=firmware_id,
+        input_digest=input_digest,
+        operation_id=operation_id,
+        expected_output_manifest=expected_output_manifest or [],
+        output_manifest=observed_outputs,
+        output_file_count=len(observed_outputs),
+        output_bytes=sum(item.size for item in observed_outputs),
+        session_bytes_before=session_bytes_before,
+        session_bytes_after=session_bytes_after,
+        store_bytes_before=store_bytes_before,
+        store_bytes_after=store_bytes_after,
+        session_entries_before=session_entries_before,
+        session_entries_after=session_entries_after,
+        store_entries_before=store_entries_before,
+        store_entries_after=store_entries_after,
+        publication_status=publication_status,
+        failure_code=code,
+        conditions=_synthetic_conditions(
+            ownership=ownership,
+            snapshot=snapshot,
+            fixture=fixture,
+            output_paths=output_paths,
+            output=output,
+            quota=quota,
+            publication=publication,
+        ),
+    )
+
+
 def _empty_staging_workspace(workspace: Path) -> bool:
     entries = _scan_entries(workspace, maximum=16, code="workspace_enumeration_failed")
     expected_files = {"owner.json", "workspace.json"}
@@ -1244,6 +1648,640 @@ class FirmwareWorkspaceManager:
             error = sys.exc_info()[1]
             code = _identity_code(error) if error is not None else "workspace_verify_failed"
             return self._quarantine_existing(session_id, code)
+
+    def _persist_synthetic_receipt(
+        self,
+        receipt_path: Path,
+        workspace: Path,
+        receipt: SyntheticExtractionReceipt,
+    ) -> SyntheticExtractionReceipt:
+        """Persist a receipt until its measured session/store byte counts stabilize."""
+        candidate = receipt
+        for _attempt in range(5):
+            payload = (candidate.model_dump_json(indent=2) + "\n").encode("utf-8")
+            if len(payload) > SYNTHETIC_RECEIPT_RESERVE_BYTES:
+                raise WorkspaceError("synthetic_receipt_limit")
+            _atomic_json(receipt_path, candidate, replace=os.path.lexists(receipt_path))
+            session_entries, session_bytes = self._measure_workspace(workspace)
+            _sessions, store_entries, store_bytes = _measure_store(
+                self.root, deadline=time.monotonic() + MAX_IO_SECONDS
+            )
+            updated = candidate.model_copy(
+                update={
+                    "session_bytes_after": session_bytes,
+                    "store_bytes_after": store_bytes,
+                    "session_entries_after": session_entries,
+                    "store_entries_after": store_entries,
+                }
+            )
+            if updated == candidate:
+                return candidate
+            candidate = updated
+        raise WorkspaceError("synthetic_quota_measurement_unstable")
+
+    def _retain_synthetic_incomplete(
+        self,
+        *,
+        artifact: Path,
+        workspace: Path,
+        operation_id: str,
+        receipt: SyntheticExtractionReceipt,
+        failure_code: str,
+    ) -> SyntheticExtractionReceipt:
+        """Retain observed partial outputs under an explicit incomplete identity."""
+        output_manifest = receipt.output_manifest
+        outputs_root = artifact / "outputs"
+        try:
+            output_manifest = _observe_synthetic_output_tree(
+                outputs_root,
+                expected_device=_check_directory(self.root).st_dev,
+            )
+        except (WorkspaceError, OSError, ValueError, RuntimeError):
+            pass
+        incomplete = receipt.model_copy(
+            update={
+                "operation_status": "refused",
+                "state": "incomplete",
+                "publication_status": "not_published",
+                "failure_code": failure_code,
+                "output_manifest": output_manifest,
+                "output_file_count": len(output_manifest),
+                "output_bytes": sum(item.size for item in output_manifest),
+                "conditions": _synthetic_conditions(
+                    ownership="verified",
+                    snapshot="verified",
+                    fixture="verified",
+                    output_paths="verified",
+                    output="unverified",
+                    quota="unverified",
+                    publication="rejected",
+                ),
+            }
+        )
+        receipt_path = artifact / "operation.json"
+        try:
+            incomplete = self._persist_synthetic_receipt(receipt_path, workspace, incomplete)
+        except (WorkspaceError, OSError, ValueError, RuntimeError):
+            # The directory name remains an explicit incomplete marker if receipt
+            # repair cannot finish, including after a hard process interruption.
+            pass
+        destination = artifact.parent / f"incomplete-{operation_id}"
+        try:
+            _safe_components(artifact.parent)
+            if os.path.lexists(artifact) and not os.path.lexists(destination):
+                _publish_no_replace(artifact, destination)
+        except (WorkspaceError, OSError, ValueError, RuntimeError):
+            pass
+        return incomplete
+
+    def extract_synthetic(self, session_id: str) -> SyntheticExtractionReceipt:
+        """Materialize fixed synthetic files for the one content-pinned test fixture."""
+        normalized_id: str | None = None
+        owned_receipt: WorkspaceReceipt | None = None
+        snapshot_verified = False
+        fixture_status = "unverified"
+        output_path_status = "unverified"
+        quota_status = "unverified"
+        session_entries_before: int | None = None
+        session_bytes_before: int | None = None
+        store_entries_before: int | None = None
+        store_bytes_before: int | None = None
+        expected_manifest: list[SyntheticOutputIdentity] | None = None
+        workspace: Path | None = None
+        operation_id: str | None = None
+        artifact: Path | None = None
+        active_receipt: SyntheticExtractionReceipt | None = None
+        try:
+            normalized_id = _check_id(session_id)
+            self._prepare_store()
+            with _store_lock(self.root):
+                state, workspace, workspace_info, owned_receipt = _owned_workspace(
+                    self.root, normalized_id
+                )
+                if state != "finalized" or owned_receipt.state != "finalized":
+                    raise WorkspaceError("workspace_not_finalized")
+                observed = _verify_snapshot(workspace, owned_receipt)
+                snapshot_verified = True
+                input_digest = observed.package_sha256
+                if input_digest is None:
+                    raise WorkspaceError("workspace_snapshot_identity_missing")
+                sessions, store_entries, store_bytes = _measure_store(
+                    self.root, deadline=time.monotonic() + MAX_IO_SECONDS
+                )
+                session_entries, session_bytes = self._measure_workspace(workspace)
+                store_entries_before = store_entries
+                store_bytes_before = store_bytes
+                session_entries_before = session_entries
+                session_bytes_before = session_bytes
+                quota_status = "verified"
+                if workspace_info.st_dev != _check_directory(self.root).st_dev:
+                    raise WorkspaceError("workspace_mount_boundary")
+                if input_digest != SYNTHETIC_FIXTURE_PACKAGE_SHA256:
+                    fixture_status = "rejected"
+                    return _synthetic_refusal(
+                        "synthetic_fixture_identity_mismatch",
+                        workspace_id=normalized_id,
+                        firmware_id=owned_receipt.firmware_id,
+                        input_digest=input_digest,
+                        session_bytes_before=session_bytes,
+                        session_bytes_after=session_bytes,
+                        store_bytes_before=store_bytes,
+                        store_bytes_after=store_bytes,
+                        session_entries_before=session_entries,
+                        session_entries_after=session_entries,
+                        store_entries_before=store_entries,
+                        store_entries_after=store_entries,
+                        ownership="verified",
+                        snapshot="verified",
+                        fixture=fixture_status,
+                        quota=quota_status,
+                    )
+                fixture_status = "verified"
+                output_files = _synthetic_output_files(input_digest)
+                try:
+                    output_file_count, output_bytes = _validate_synthetic_output_files(output_files)
+                except WorkspaceError as error:
+                    if error.code in {
+                        "unsafe_synthetic_output_path",
+                        "synthetic_output_path_collision",
+                    }:
+                        output_path_status = "rejected"
+                    raise
+                output_path_status = "verified"
+                expected_manifest = _synthetic_manifest(output_files)
+                extraction_root = workspace / "extraction"
+                _safe_components(extraction_root)
+                extraction_info = _check_directory(extraction_root)
+                if extraction_info.st_dev != workspace_info.st_dev:
+                    raise WorkspaceError("workspace_mount_boundary")
+                final_output = extraction_root / "synthetic-v1"
+                entries = _scan_entries(
+                    extraction_root,
+                    maximum=MAX_ENTRIES + 16,
+                    code="workspace_enumeration_failed",
+                )
+                if any(entry.name == "synthetic-v1" for entry in entries):
+                    raise WorkspaceError("synthetic_output_already_exists")
+                if any(entry.name.startswith(("staging-", "incomplete-")) for entry in entries):
+                    raise WorkspaceError("synthetic_output_incomplete_exists")
+                if entries:
+                    raise WorkspaceError("synthetic_output_area_not_empty")
+                staging_entry_count = (
+                    1
+                    + 1
+                    + output_file_count
+                    + 1
+                    + 1
+                    + len(
+                        {
+                            "/".join(name.split("/")[:index])
+                            for name, _content in output_files
+                            for index in range(1, len(name.split("/")))
+                        }
+                    )
+                )
+                reserved_bytes = output_bytes + 2 * SYNTHETIC_RECEIPT_RESERVE_BYTES
+                if session_bytes + reserved_bytes > MAX_SESSION_BYTES:
+                    quota_status = "rejected"
+                    raise WorkspaceError("workspace_session_quota_exceeded")
+                if store_bytes + reserved_bytes > MAX_STORE_BYTES:
+                    quota_status = "rejected"
+                    raise WorkspaceError("workspace_store_quota_exceeded")
+                if session_entries + staging_entry_count > MAX_ENTRIES + 16:
+                    quota_status = "rejected"
+                    raise WorkspaceError("workspace_entry_limit")
+                if store_entries + staging_entry_count > MAX_STORE_ENTRIES:
+                    quota_status = "rejected"
+                    raise WorkspaceError("workspace_store_entry_limit")
+
+                operation_id = str(uuid.uuid4())
+                artifact = extraction_root / f"staging-{operation_id}"
+                artifact.mkdir(mode=0o700)
+                initial_receipt = _synthetic_refusal(
+                    "operation_incomplete",
+                    workspace_id=normalized_id,
+                    firmware_id=owned_receipt.firmware_id,
+                    input_digest=input_digest,
+                    operation_id=operation_id,
+                    expected_output_manifest=expected_manifest,
+                    session_bytes_before=session_bytes,
+                    store_bytes_before=store_bytes,
+                    session_entries_before=session_entries,
+                    store_entries_before=store_entries,
+                    ownership="verified",
+                    snapshot="verified",
+                    fixture="verified",
+                    output_paths="verified",
+                    quota="verified",
+                    publication="unverified",
+                    state="incomplete",
+                )
+                active_receipt = initial_receipt
+                try:
+                    _atomic_json(artifact / "operation.json", initial_receipt, replace=False)
+                    outputs_root = artifact / "outputs"
+                    _ensure_directory(outputs_root)
+                    observed_outputs: list[SyntheticOutputIdentity] = []
+                    deadline = time.monotonic() + MAX_IO_SECONDS
+                    for index, (relative, content) in enumerate(output_files):
+                        if time.monotonic() > deadline:
+                            raise WorkspaceError("workspace_time_limit")
+                        current_session_entries, current_session_bytes = self._measure_workspace(
+                            workspace
+                        )
+                        _current_sessions, current_store_entries, current_store_bytes = (
+                            _measure_store(self.root, deadline=time.monotonic() + MAX_IO_SECONDS)
+                        )
+                        remaining_bytes = sum(
+                            len(remaining_content)
+                            for _remaining_name, remaining_content in output_files[index:]
+                        )
+                        remaining_files = len(output_files) - index
+                        if (
+                            current_session_bytes
+                            + remaining_bytes
+                            + SYNTHETIC_RECEIPT_RESERVE_BYTES
+                            > MAX_SESSION_BYTES
+                        ):
+                            quota_status = "rejected"
+                            raise WorkspaceError("workspace_session_quota_exceeded")
+                        if (
+                            current_store_bytes + remaining_bytes + SYNTHETIC_RECEIPT_RESERVE_BYTES
+                            > MAX_STORE_BYTES
+                        ):
+                            quota_status = "rejected"
+                            raise WorkspaceError("workspace_store_quota_exceeded")
+                        if current_session_entries + remaining_files + 1 > MAX_ENTRIES + 16:
+                            quota_status = "rejected"
+                            raise WorkspaceError("workspace_entry_limit")
+                        if current_store_entries + remaining_files + 1 > MAX_STORE_ENTRIES:
+                            quota_status = "rejected"
+                            raise WorkspaceError("workspace_store_entry_limit")
+                        observed_outputs.append(
+                            _write_synthetic_output(
+                                outputs_root,
+                                relative,
+                                content,
+                                expected_device=workspace_info.st_dev,
+                            )
+                        )
+                        active_receipt = active_receipt.model_copy(
+                            update={
+                                "output_manifest": list(observed_outputs),
+                                "output_file_count": len(observed_outputs),
+                                "output_bytes": sum(item.size for item in observed_outputs),
+                            }
+                        )
+                        active_receipt = self._persist_synthetic_receipt(
+                            artifact / "operation.json", workspace, active_receipt
+                        )
+                    verified_manifest = _verify_synthetic_output_tree(
+                        outputs_root,
+                        output_files,
+                        expected_device=workspace_info.st_dev,
+                    )
+                    if verified_manifest != expected_manifest:
+                        raise WorkspaceError("synthetic_output_digest_mismatch")
+                    active_receipt = active_receipt.model_copy(
+                        update={
+                            "output_manifest": verified_manifest,
+                            "output_file_count": len(verified_manifest),
+                            "output_bytes": sum(item.size for item in verified_manifest),
+                            "conditions": _synthetic_conditions(
+                                ownership="verified",
+                                snapshot="verified",
+                                fixture="verified",
+                                output_paths="verified",
+                                output="verified",
+                                quota="verified",
+                                publication="unverified",
+                            ),
+                        }
+                    )
+                    active_receipt = self._persist_synthetic_receipt(
+                        artifact / "operation.json", workspace, active_receipt
+                    )
+                    _publish_no_replace(artifact, final_output)
+                    artifact = final_output
+                    published = active_receipt.model_copy(
+                        update={
+                            "operation_status": "accepted",
+                            "state": "published",
+                            "publication_status": "published",
+                            "failure_code": None,
+                            "conditions": _synthetic_conditions(
+                                ownership="verified",
+                                snapshot="verified",
+                                fixture="verified",
+                                output_paths="verified",
+                                output="verified",
+                                quota="verified",
+                                publication="verified",
+                            ),
+                        }
+                    )
+                    published = self._persist_synthetic_receipt(
+                        final_output / "operation.json", workspace, published
+                    )
+                    return published
+                except KeyboardInterrupt:
+                    return self._retain_synthetic_incomplete(
+                        artifact=artifact,
+                        workspace=workspace,
+                        operation_id=operation_id,
+                        receipt=active_receipt,
+                        failure_code="operation_interrupted",
+                    )
+                except (WorkspaceError, OSError, ValueError, RuntimeError):
+                    error = sys.exc_info()[1]
+                    failure_code = (
+                        error.code
+                        if isinstance(error, WorkspaceError)
+                        else "synthetic_output_write_failed"
+                    )
+                    return self._retain_synthetic_incomplete(
+                        artifact=artifact,
+                        workspace=workspace,
+                        operation_id=operation_id,
+                        receipt=active_receipt,
+                        failure_code=failure_code,
+                    )
+        except KeyboardInterrupt:
+            return _synthetic_refusal(
+                "operation_interrupted",
+                workspace_id=normalized_id,
+                ownership="verified" if owned_receipt is not None else "unverified",
+                snapshot="verified" if snapshot_verified else "unverified",
+                fixture=fixture_status,
+                output_paths=output_path_status,
+                quota=quota_status,
+                expected_output_manifest=expected_manifest,
+                session_bytes_before=session_bytes_before,
+                session_bytes_after=session_bytes_before,
+                store_bytes_before=store_bytes_before,
+                store_bytes_after=store_bytes_before,
+                session_entries_before=session_entries_before,
+                session_entries_after=session_entries_before,
+                store_entries_before=store_entries_before,
+                store_entries_after=store_entries_before,
+            )
+        except (WorkspaceError, OSError, ValueError, RuntimeError):
+            error = sys.exc_info()[1]
+            code = (
+                error.code if isinstance(error, WorkspaceError) else "synthetic_extraction_refused"
+            )
+            return _synthetic_refusal(
+                code,
+                workspace_id=normalized_id,
+                firmware_id=owned_receipt.firmware_id if owned_receipt is not None else None,
+                input_digest=owned_receipt.input_digest if owned_receipt is not None else None,
+                ownership="verified" if owned_receipt is not None else "unverified",
+                snapshot="verified" if snapshot_verified else "unverified",
+                fixture=fixture_status,
+                output_paths=(
+                    "rejected"
+                    if code in {"unsafe_synthetic_output_path", "synthetic_output_path_collision"}
+                    else output_path_status
+                ),
+                quota="rejected" if code in _QUOTA_FAILURE_CODES else quota_status,
+                expected_output_manifest=expected_manifest,
+                session_bytes_before=session_bytes_before,
+                session_bytes_after=session_bytes_before,
+                store_bytes_before=store_bytes_before,
+                store_bytes_after=store_bytes_before,
+                session_entries_before=session_entries_before,
+                session_entries_after=session_entries_before,
+                store_entries_before=store_entries_before,
+                store_entries_after=store_entries_before,
+            )
+
+    def verify_synthetic_extraction(self, session_id: str) -> SyntheticExtractionReceipt:
+        """Independently recheck a published synthetic output receipt and every file hash."""
+        normalized_id: str | None = None
+        owned_receipt: WorkspaceReceipt | None = None
+        persisted_receipt: SyntheticExtractionReceipt | None = None
+        published_output_exists = False
+        quota_measured = False
+        try:
+            normalized_id = _check_id(session_id)
+            self._prepare_store()
+            with _store_lock(self.root):
+                state, workspace, workspace_info, owned_receipt = _owned_workspace(
+                    self.root, normalized_id
+                )
+                if state != "finalized" or owned_receipt.state != "finalized":
+                    raise WorkspaceError("workspace_not_finalized")
+                observed = _verify_snapshot(workspace, owned_receipt)
+                input_digest = observed.package_sha256
+                if input_digest != SYNTHETIC_FIXTURE_PACKAGE_SHA256:
+                    return _synthetic_refusal(
+                        "synthetic_fixture_identity_mismatch",
+                        workspace_id=normalized_id,
+                        firmware_id=owned_receipt.firmware_id,
+                        input_digest=input_digest,
+                        ownership="verified",
+                        snapshot="verified",
+                        fixture="rejected",
+                    )
+                _session_entries, _session_bytes = self._measure_workspace(workspace)
+                _sessions, _store_entries, _store_bytes = _measure_store(
+                    self.root, deadline=time.monotonic() + MAX_IO_SECONDS
+                )
+                quota_measured = True
+                extraction_root = workspace / "extraction"
+                _safe_components(extraction_root)
+                final_output = extraction_root / "synthetic-v1"
+                try:
+                    final_info = final_output.lstat()
+                except FileNotFoundError:
+                    entries = _scan_entries(
+                        extraction_root,
+                        maximum=MAX_ENTRIES + 16,
+                        code="workspace_enumeration_failed",
+                    )
+                    incomplete_entry = next(
+                        (
+                            entry
+                            for entry in entries
+                            if entry.name.startswith(("staging-", "incomplete-"))
+                        ),
+                        None,
+                    )
+                    if incomplete_entry is not None:
+                        suffix = incomplete_entry.name.removeprefix("staging-").removeprefix(
+                            "incomplete-"
+                        )
+                        try:
+                            operation_id = _check_id(suffix)
+                        except WorkspaceError:
+                            raise WorkspaceError("synthetic_output_incomplete_exists") from None
+                        try:
+                            incomplete = SyntheticExtractionReceipt.model_validate_json(
+                                _read_regular(
+                                    Path(incomplete_entry.path) / "operation.json",
+                                    maximum=SYNTHETIC_RECEIPT_RESERVE_BYTES,
+                                )
+                            )
+                        except (WorkspaceError, ValidationError):
+                            return _synthetic_refusal(
+                                "synthetic_output_incomplete_exists",
+                                workspace_id=normalized_id,
+                                firmware_id=owned_receipt.firmware_id,
+                                input_digest=input_digest,
+                                operation_id=operation_id,
+                                ownership="verified",
+                                snapshot="verified",
+                                fixture="verified",
+                                quota="verified",
+                                output="unverified",
+                                publication="unverified",
+                                state="incomplete",
+                            )
+                        expected_files = _synthetic_output_files(input_digest)
+                        expected_manifest = _synthetic_manifest(expected_files)
+                        if (
+                            incomplete.state != "incomplete"
+                            or incomplete.operation_status != "refused"
+                            or incomplete.publication_status != "not_published"
+                            or incomplete.operation_id != operation_id
+                            or incomplete.workspace_id != normalized_id
+                            or incomplete.firmware_id != owned_receipt.firmware_id
+                            or incomplete.input_digest != input_digest
+                            or incomplete.operation != SYNTHETIC_EXTRACTION_OPERATION
+                            or incomplete.expected_output_manifest != expected_manifest
+                        ):
+                            raise WorkspaceError("synthetic_output_incomplete_exists") from None
+                        return incomplete.model_copy(
+                            update={
+                                "conditions": _synthetic_conditions(
+                                    ownership="verified",
+                                    snapshot="verified",
+                                    fixture="verified",
+                                    output_paths="verified",
+                                    output="unverified",
+                                    quota="verified",
+                                    publication="unverified",
+                                )
+                            }
+                        )
+                    raise WorkspaceError("synthetic_output_not_found") from None
+                except OSError:
+                    raise WorkspaceError("synthetic_output_unavailable") from None
+                if (
+                    _linked(final_info)
+                    or not stat.S_ISDIR(final_info.st_mode)
+                    or final_info.st_dev != workspace_info.st_dev
+                ):
+                    raise WorkspaceError("unsafe_synthetic_output_directory")
+                published_output_exists = True
+                receipt_path = final_output / "operation.json"
+                try:
+                    persisted_receipt = SyntheticExtractionReceipt.model_validate_json(
+                        _read_regular(receipt_path, maximum=SYNTHETIC_RECEIPT_RESERVE_BYTES)
+                    )
+                except ValidationError:
+                    raise WorkspaceError("synthetic_receipt_invalid") from None
+                if (
+                    persisted_receipt.operation_status != "accepted"
+                    or persisted_receipt.state != "published"
+                    or persisted_receipt.publication_status != "published"
+                    or persisted_receipt.failure_code is not None
+                    or persisted_receipt.operation_id is None
+                    or persisted_receipt.workspace_id != normalized_id
+                    or persisted_receipt.firmware_id != owned_receipt.firmware_id
+                    or persisted_receipt.input_digest != input_digest
+                ):
+                    return _synthetic_refusal(
+                        "synthetic_output_incomplete_exists",
+                        workspace_id=normalized_id,
+                        firmware_id=owned_receipt.firmware_id,
+                        input_digest=input_digest,
+                        operation_id=persisted_receipt.operation_id,
+                        expected_output_manifest=persisted_receipt.expected_output_manifest,
+                        output_manifest=persisted_receipt.output_manifest,
+                        ownership="verified",
+                        snapshot="verified",
+                        fixture="verified",
+                        quota="verified",
+                        publication="unverified",
+                        state="incomplete",
+                    )
+                output_files = _synthetic_output_files(input_digest)
+                _validate_synthetic_output_files(output_files)
+                expected_manifest = _synthetic_manifest(output_files)
+                observed_manifest = _verify_synthetic_output_tree(
+                    final_output / "outputs",
+                    output_files,
+                    expected_device=workspace_info.st_dev,
+                )
+                if (
+                    persisted_receipt.operation != SYNTHETIC_EXTRACTION_OPERATION
+                    or persisted_receipt.expected_output_manifest != expected_manifest
+                    or persisted_receipt.output_manifest != observed_manifest
+                    or persisted_receipt.output_file_count != len(observed_manifest)
+                    or persisted_receipt.output_bytes
+                    != sum(item.size for item in observed_manifest)
+                ):
+                    raise WorkspaceError("synthetic_output_digest_mismatch")
+                return persisted_receipt.model_copy(
+                    update={
+                        "conditions": _synthetic_conditions(
+                            ownership="verified",
+                            snapshot="verified",
+                            fixture="verified",
+                            output_paths="verified",
+                            output="verified",
+                            quota="verified",
+                            publication="verified",
+                        )
+                    }
+                )
+        except KeyboardInterrupt:
+            return _synthetic_refusal(
+                "operation_interrupted",
+                workspace_id=normalized_id,
+                ownership="verified" if owned_receipt is not None else "unverified",
+                snapshot="unverified",
+            )
+        except (WorkspaceError, OSError, ValueError, RuntimeError):
+            error = sys.exc_info()[1]
+            code = (
+                error.code
+                if isinstance(error, WorkspaceError)
+                else "synthetic_verification_refused"
+            )
+            return _synthetic_refusal(
+                code,
+                workspace_id=normalized_id,
+                firmware_id=owned_receipt.firmware_id if owned_receipt is not None else None,
+                input_digest=owned_receipt.input_digest if owned_receipt is not None else None,
+                operation_id=(
+                    persisted_receipt.operation_id if persisted_receipt is not None else None
+                ),
+                expected_output_manifest=(
+                    persisted_receipt.expected_output_manifest
+                    if persisted_receipt is not None
+                    else None
+                ),
+                output_manifest=(
+                    persisted_receipt.output_manifest if persisted_receipt is not None else None
+                ),
+                ownership="verified" if owned_receipt is not None else "unverified",
+                snapshot="verified" if code != "workspace_snapshot_mismatch" else "rejected",
+                fixture="verified" if owned_receipt is not None else "unverified",
+                output="rejected" if published_output_exists else "unverified",
+                output_paths="verified" if published_output_exists else "unverified",
+                quota=(
+                    "rejected"
+                    if code in _QUOTA_FAILURE_CODES
+                    else "verified"
+                    if quota_measured
+                    else "unverified"
+                ),
+                publication="verified" if published_output_exists else "unverified",
+                state="published" if published_output_exists else "refused",
+                publication_status="published" if published_output_exists else "not_published",
+            )
 
     def quarantine(self, session_id: str, reason: str = "operator_review") -> WorkspaceReceipt:
         """Move an owned session to retained quarantine without deleting its bytes."""

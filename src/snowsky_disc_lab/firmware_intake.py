@@ -319,7 +319,7 @@ def _inspect_zip(path: Path, info: os.stat_result, work: _Inspection) -> str:
             _require(0 < len(members) <= MAX_ENTRIES, "entry_count_limit")
             _require(len(members) == entry_count, "zip_entry_count_mismatch")
             declared = 0
-            planned: list[tuple[zipfile.ZipInfo, str]] = []
+            validated_members: list[tuple[zipfile.ZipInfo, str]] = []
             for member in members:
                 _require(member.orig_filename == member.filename, "unsafe_member_path")
                 mode = member.external_attr >> 16
@@ -352,11 +352,11 @@ def _inspect_zip(path: Path, info: os.stat_result, work: _Inspection) -> str:
                         member.file_size == member.compress_size == member.CRC == 0,
                         "invalid_directory_member",
                     )
-                planned.append((member, name))
+                validated_members.append((member, name))
             # Every byte before the central directory must belong to one indexed
             # local record. No padding, hidden local records or overlapping aliases.
             spans: list[tuple[int, int]] = []
-            for member, name in planned:
+            for member, name in validated_members:
                 stream.seek(member.header_offset)
                 header = stream.read(30)
                 _require(len(header) == 30 and header[:4] == b"PK\x03\x04", "invalid_local_header")
