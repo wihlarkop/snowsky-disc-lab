@@ -4,6 +4,8 @@
 
 > **Project status: M0 firmware-free foundation.** The CLI provides host diagnostics, strict UI/firmware manifest validation, and immutable upstream source projections with offline cache verification. Emulator execution, builds, adapter SDK and device flashing are not implemented. No firmware/UI combination is Lab-verified. Commands in the planned experience section remain design targets.
 
+[M1-01 runtime preparation](docs/M1-01-RUNTIME-PREPARATION.md) records reviewed stock V2.57 source/build inputs, local firmware identity requirements and isolation boundaries. Runtime output identities and execution gates remain open; no firmware intake or runner is shipped.
+
 SNOWSKY DISC Lab aims to provide one reproducible workflow for:
 
 - Running **stock DISC firmware** in an isolated QEMU-based development environment.
