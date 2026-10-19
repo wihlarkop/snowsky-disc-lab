@@ -33,3 +33,4 @@ jobs:
       - run: uv run disc-lab doctor
       - run: uv run disc-lab ui validate examples/ui-valid.yaml
       - run: uv run disc-lab firmware validate examples/firmware-valid.yaml
+      - run: uv run disc-lab sources list

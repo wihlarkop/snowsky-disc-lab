@@ -25,3 +25,5 @@ Use [the synthetic firmware example](../examples/firmware-valid.yaml). Required 
 Validation uses no temporary work directories and performs no artifact writes. uv/pytest use ignored local tooling directories. `.lab/`, caches, firmware, vendor inputs, working state and local evidence remain ignored. Do not put personal media or proprietary inputs elsewhere in the repository. Future extraction/cache workflows must define their own safe temporary directory ownership and cleanup policy before implementation.
 
 This first-party implementation copies no upstream code or assets. A final core LICENSE/NOTICE decision and dependency/SPDX inventory are still pending M0-07; this Draft implementation does not relicense any third-party source or authorize firmware redistribution. No package publication or release workflow is included.
+
+The separate `lab-upstreams/v1` lock contract and source cache commands are documented in [SOURCES.md](SOURCES.md). They reuse the bounded YAML loader while keeping source resolution independent of manifests and future emulator adapters.

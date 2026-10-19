@@ -254,7 +254,7 @@ def _validate_output_containment(path: Path, manifest: UIManifest) -> None:
         ) from None
 
 
-def _check_yaml_tokens(text: str, kind: ManifestKind) -> None:
+def _check_yaml_tokens(text: str, kind: str) -> None:
     depth = 0
     start_tokens = (
         BlockMappingStartToken,
@@ -277,7 +277,7 @@ def _check_yaml_tokens(text: str, kind: ManifestKind) -> None:
             depth = max(0, depth - 1)
 
 
-def _read_bounded_manifest(path: Path, kind: ManifestKind) -> bytes:
+def _read_bounded_manifest(path: Path, kind: str) -> bytes:
     file_status = path.stat()
     if not stat.S_ISREG(file_status.st_mode):
         raise ValueError(f"Invalid {kind} manifest path: input must be a regular file")
@@ -295,13 +295,9 @@ def _read_bounded_manifest(path: Path, kind: ManifestKind) -> bytes:
             os.close(descriptor)
 
 
-def load_manifest(path: Path, kind: ManifestKind) -> UIManifest | FirmwareManifest:
-    """Load and validate a bounded YAML manifest without reading its artifacts."""
-    if kind not in ("ui", "firmware"):
-        raise ValueError("Manifest kind must be 'ui' or 'firmware'")
-
-    manifest_path = Path(path)
-    raw = _read_bounded_manifest(manifest_path, kind)
+def read_yaml_document(path: Path, kind: str) -> object:
+    """Read bounded, regular-file YAML data with no tags, aliases or duplicate keys."""
+    raw = _read_bounded_manifest(path, kind)
     if len(raw) > MAX_MANIFEST_BYTES:
         raise ValueError(
             f"Invalid {kind} manifest: input exceeds the {MAX_MANIFEST_BYTES}-byte size limit"
@@ -327,6 +323,16 @@ def load_manifest(path: Path, kind: ManifestKind) -> UIManifest | FirmwareManife
         raise ValueError(
             f"Invalid {kind} manifest: YAML nesting exceeds the supported limit"
         ) from None
+
+    return data
+
+
+def load_manifest(path: Path, kind: ManifestKind) -> UIManifest | FirmwareManifest:
+    """Load and validate a bounded YAML manifest without reading its artifacts."""
+    if kind not in ("ui", "firmware"):
+        raise ValueError("Manifest kind must be 'ui' or 'firmware'")
+    manifest_path = Path(path)
+    data = read_yaml_document(manifest_path, kind)
 
     model_type: type[UIManifest] | type[FirmwareManifest]
     if kind == "ui":

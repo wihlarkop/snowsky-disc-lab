@@ -1,6 +1,6 @@
 # Architecture & UI Integration (proposed)
 
-**State:** overall design specification. M0 implements only CLI diagnostics and schema-only manifests; [CONTRACTS.md](CONTRACTS.md) and the published JSON schemas define the executable contract. Remaining interfaces, runtime commands, directories and illustrative YAML below are proposals.
+**State:** overall design specification. M0 implements CLI diagnostics, schema-only manifests and immutable source caching; [CONTRACTS.md](CONTRACTS.md), [SOURCES.md](SOURCES.md) and the published JSON schemas define the executable contracts. Remaining interfaces, runtime commands, directories and illustrative YAML below are proposals.
 
 ## 1. Scope, product boundaries
 
@@ -94,7 +94,7 @@ Nontracked user cache (example, not committed):
 └── evidence/local/<run-id>/
 ```
 
-The choice between shallow source checkouts vs submodules remains an **implementation ADR**. Current proposal: a lockfile resolver for *optional* UI forks, because Git submodules cannot scale cleanly to arbitrary external repositories. Use a single checked-out pinned QEMU repo as a cache dependency rather than duplicating its code.
+The M0 source resolver uses immutable lock entries and separate cached projections, with Git blobless fetches and explicitly selected paths. This supports future UI forks through the same contract and avoids downloading upstream flash payloads or recursively resolving submodules. Cache identity includes commit and projection; build/runtime adapters must consume verified sources read-only and use separate working state. See [the implementation decision and upgrade procedure](SOURCES.md). No upstream code is vendored into the Lab tree.
 
 ## 3. Artifact flow and execution boundaries
 

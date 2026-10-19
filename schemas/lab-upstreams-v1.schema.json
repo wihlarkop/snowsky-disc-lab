@@ -1,0 +1,164 @@
+{
+  "$defs": {
+    "GitCommit": {
+      "pattern": "^[0-9a-f]{40}$",
+      "type": "string"
+    },
+    "LicenseRecord": {
+      "additionalProperties": false,
+      "properties": {
+        "path": {
+          "$ref": "#/$defs/OutputPath"
+        },
+        "sha256": {
+          "$ref": "#/$defs/Sha256"
+        },
+        "spdx": {
+          "$ref": "#/$defs/Note"
+        },
+        "scope": {
+          "$ref": "#/$defs/Note"
+        }
+      },
+      "required": [
+        "path",
+        "sha256",
+        "spdx",
+        "scope"
+      ],
+      "title": "LicenseRecord",
+      "type": "object"
+    },
+    "Note": {
+      "maxLength": 512,
+      "minLength": 1,
+      "type": "string"
+    },
+    "OutputPath": {
+      "maxLength": 1024,
+      "minLength": 1,
+      "pattern": "^[A-Za-z0-9_-][A-Za-z0-9._-]*(?:/[A-Za-z0-9_-][A-Za-z0-9._-]*)*$",
+      "type": "string"
+    },
+    "Repository": {
+      "maxLength": 256,
+      "pattern": "^https://github\\.com/[A-Za-z0-9][A-Za-z0-9-]*/[A-Za-z0-9][A-Za-z0-9._-]*\\.git$",
+      "type": "string"
+    },
+    "Sha256": {
+      "pattern": "^[0-9a-fA-F]{64}$",
+      "type": "string"
+    },
+    "SourceId": {
+      "maxLength": 48,
+      "pattern": "^[a-z][a-z0-9]*(?:-[a-z0-9]+)*$",
+      "type": "string"
+    },
+    "SourcePath": {
+      "maxLength": 256,
+      "pattern": "^[A-Za-z0-9_][A-Za-z0-9._-]*(?:/[A-Za-z0-9_][A-Za-z0-9._-]*)*/?$",
+      "type": "string"
+    },
+    "SourcePin": {
+      "additionalProperties": false,
+      "properties": {
+        "id": {
+          "$ref": "#/$defs/SourceId"
+        },
+        "repository": {
+          "$ref": "#/$defs/Repository"
+        },
+        "commit": {
+          "$ref": "#/$defs/GitCommit"
+        },
+        "includePaths": {
+          "items": {
+            "$ref": "#/$defs/SourcePath"
+          },
+          "maxItems": 64,
+          "minItems": 1,
+          "title": "Includepaths",
+          "type": "array"
+        },
+        "licenses": {
+          "items": {
+            "$ref": "#/$defs/LicenseRecord"
+          },
+          "maxItems": 16,
+          "minItems": 1,
+          "title": "Licenses",
+          "type": "array"
+        },
+        "provenance": {
+          "$ref": "#/$defs/SourceProvenance"
+        }
+      },
+      "required": [
+        "id",
+        "repository",
+        "commit",
+        "includePaths",
+        "licenses",
+        "provenance"
+      ],
+      "title": "SourcePin",
+      "type": "object"
+    },
+    "SourceProvenance": {
+      "additionalProperties": false,
+      "properties": {
+        "reference": {
+          "$ref": "#/$defs/Note"
+        },
+        "url": {
+          "$ref": "#/$defs/Note"
+        },
+        "reviewedOn": {
+          "pattern": "^\\d{4}-\\d{2}-\\d{2}$",
+          "title": "Reviewedon",
+          "type": "string"
+        },
+        "method": {
+          "$ref": "#/$defs/Note"
+        }
+      },
+      "required": [
+        "reference",
+        "url",
+        "reviewedOn",
+        "method"
+      ],
+      "title": "SourceProvenance",
+      "type": "object"
+    }
+  },
+  "additionalProperties": false,
+  "properties": {
+    "apiVersion": {
+      "const": "lab-upstreams/v1",
+      "title": "Apiversion",
+      "type": "string"
+    },
+    "kind": {
+      "const": "SourceLock",
+      "title": "Kind",
+      "type": "string"
+    },
+    "sources": {
+      "items": {
+        "$ref": "#/$defs/SourcePin"
+      },
+      "maxItems": 64,
+      "minItems": 1,
+      "title": "Sources",
+      "type": "array"
+    }
+  },
+  "required": [
+    "apiVersion",
+    "kind",
+    "sources"
+  ],
+  "title": "SourceLock",
+  "type": "object"
+}

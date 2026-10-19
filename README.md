@@ -2,7 +2,7 @@
 
 **A proposed community development, emulation, and compatibility lab for the FiiO / SNOWSKY DISC.**
 
-> **Project status: M0 firmware-free foundation.** The CLI provides host diagnostics and strict UI/firmware manifest validation. Emulator execution, source fetching, builds, adapter SDK and device flashing are not implemented. No firmware/UI combination is Lab-verified. Commands in the planned experience section remain design targets.
+> **Project status: M0 firmware-free foundation.** The CLI provides host diagnostics, strict UI/firmware manifest validation, and immutable upstream source projections with offline cache verification. Emulator execution, builds, adapter SDK and device flashing are not implemented. No firmware/UI combination is Lab-verified. Commands in the planned experience section remain design targets.
 
 SNOWSKY DISC Lab aims to provide one reproducible workflow for:
 
@@ -63,6 +63,7 @@ uv run disc-lab --help
 uv run disc-lab doctor
 uv run disc-lab ui validate examples/ui-valid.yaml
 uv run disc-lab firmware validate examples/firmware-valid.yaml
+uv run disc-lab sources list
 ```
 
 `doctor` reports OS, architecture, Python and installed Docker/Compose versions. On Windows it queries the WSL component version; on Linux it identifies WSL from the kernel release. It does not start distributions or a daemon, probe devices, download anything, or contact the network. Missing optional tools are `UNAVAILABLE`; a completed diagnostic returns 0 even if Docker is absent. This does not certify a working Docker daemon or WSL2 runtime.
@@ -77,6 +78,16 @@ uv run pytest
 ```
 
 The lockfile pins all Python tools and dependencies. Firmware-free CI checks Linux and Windows on Python 3.12 and 3.14 without secrets, firmware, privileged containers or devices. Core M0 host targets are native Linux and Windows Python; WSL2/Docker emulator integration is pending M1 validation. Other hosts are unverified.
+
+With Git installed, synchronize the reviewed source projections separately:
+
+```sh
+uv run disc-lab sources sync
+uv run disc-lab sources verify
+uv run disc-lab sources sync --offline
+```
+
+[`upstreams.lock.yaml`](upstreams.lock.yaml) selects exact commits and source-only paths. The ignored `.lab/sources/` cache retains previous revisions; changed/corrupt entries are refused and preserved. `verify` and `sync --offline` never fetch. Flash payloads tracked by upstream repositories are excluded. See [source management and upgrades](docs/SOURCES.md) and [pin provenance](docs/UPSTREAM-PROVENANCE.md). Source verification establishes source identity only.
 
 ## Planned developer experience (not implemented)
 
@@ -103,4 +114,4 @@ External Git sources will require an explicit immutable ref, safe checkout, revi
 
 ## Immediate next step
 
-Implement **M0-02 + M0-05** from the [roadmap](docs/ROADMAP.md): immutable upstream locks and offline source-cache verification. The first firmware runtime target after those foundations is **stock V2.57**; older versions follow as separate reviewed profiles, never by silently reusing V2.57 binary addresses.
+Complete the remaining **M0 host preflight and trust/license baseline** from the [roadmap](docs/ROADMAP.md) before **M1 stock V2.57** runtime work. Older versions follow as separate reviewed profiles, never by silently reusing V2.57 binary addresses.
