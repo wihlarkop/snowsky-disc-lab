@@ -1,0 +1,116 @@
+{
+  "$defs": {
+    "FirmwareIdentity": {
+      "additionalProperties": false,
+      "properties": {
+        "main": {
+          "$ref": "#/$defs/FirmwareVersion"
+        },
+        "recovery": {
+          "$ref": "#/$defs/FirmwareVersion"
+        },
+        "rootfsSha256": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/Sha256"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        },
+        "playerSha256": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/Sha256"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        }
+      },
+      "required": [
+        "main",
+        "recovery"
+      ],
+      "title": "FirmwareIdentity",
+      "type": "object"
+    },
+    "FirmwareRuntime": {
+      "additionalProperties": false,
+      "properties": {
+        "runnerId": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/RunnerReference"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        }
+      },
+      "title": "FirmwareRuntime",
+      "type": "object"
+    },
+    "FirmwareVersion": {
+      "maxLength": 128,
+      "minLength": 1,
+      "type": "string"
+    },
+    "RunnerReference": {
+      "maxLength": 128,
+      "minLength": 1,
+      "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]*$",
+      "type": "string"
+    },
+    "Sha256": {
+      "pattern": "^[0-9a-fA-F]{64}$",
+      "type": "string"
+    }
+  },
+  "additionalProperties": false,
+  "properties": {
+    "apiVersion": {
+      "const": "lab-firmware/v1",
+      "title": "Apiversion",
+      "type": "string"
+    },
+    "kind": {
+      "const": "Firmware",
+      "title": "Kind",
+      "type": "string"
+    },
+    "device": {
+      "const": "snowsky-disc",
+      "title": "Device",
+      "type": "string"
+    },
+    "firmware": {
+      "$ref": "#/$defs/FirmwareIdentity"
+    },
+    "runtime": {
+      "anyOf": [
+        {
+          "$ref": "#/$defs/FirmwareRuntime"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null
+    }
+  },
+  "required": [
+    "apiVersion",
+    "kind",
+    "device",
+    "firmware"
+  ],
+  "title": "FirmwareManifest",
+  "type": "object"
+}

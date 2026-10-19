@@ -2,7 +2,7 @@
 
 **A proposed community development, emulation, and compatibility lab for the FiiO / SNOWSKY DISC.**
 
-> **Project status: planning / documentation only.** This repository does not yet contain a working emulator, CLI, adapter SDK, verified compatibility results, or a flashing tool. Commands below are targets, **not runnable instructions**. Do not interpret upstream test results as tests performed by this repository.
+> **Project status: M0 firmware-free foundation.** The CLI provides host diagnostics, strict UI/firmware manifest validation, and immutable upstream source projections with offline cache verification. Emulator execution, builds, adapter SDK and device flashing are not implemented. No firmware/UI combination is Lab-verified. Commands in the planned experience section remain design targets.
 
 SNOWSKY DISC Lab aims to provide one reproducible workflow for:
 
@@ -21,6 +21,9 @@ The initial and only committed device scope is **SNOWSKY DISC (Ingenic X2000)**.
 | --- | --- |
 | [Detailed roadmap](docs/ROADMAP.md) | Milestones, task breakdown, acceptance criteria, dependencies, risks and priorities |
 | [Architecture & UI integration](docs/ARCHITECTURE.md) | Dependency strategy, adapters, plugin manifest proposal, CLI and trust boundaries |
+| [External UI handoff ADR](docs/adr/0001-external-ui-handoff.md) | Pinned historical evidence, cold-first lifecycle and M1/M2 boundaries |
+| [M0 integration readiness](docs/M0-INTEGRATION-READINESS.md) | Stack order, verification evidence, closure and release gates |
+| [Final M0 integration candidate](docs/M0-FINAL-INTEGRATION.md) | Latest-main preservation, combined-tree verification and recommended merge strategy |
 | [Compatibility & validation policy](docs/COMPATIBILITY.md) | Firmware profiles, support states, CI matrix, OTA intake and evidence rules |
 | [Firmware update manager](docs/UPDATE_MANAGER.md) | FiiO OTA detection, registered UI fork compatibility checks and safe separate update channels |
 | [Contributing](CONTRIBUTING.md) | How community developers can eventually add UI forks, firmware evidence and emulator fixes |
@@ -42,7 +45,7 @@ The initial and only committed device scope is **SNOWSKY DISC (Ingenic X2000)**.
 
 ## What is supported today?
 
-**Nothing has been validated by SNOWSKY DISC Lab yet.** The table summarizes *upstream evidence as of 2026-10-19* to determine initial work, not a promise about our runtime.
+**No firmware/runtime combination has been validated by SNOWSKY DISC Lab yet.** The table summarizes *upstream evidence as of 2026-10-19* to determine initial work, not a promise about our runtime.
 
 | FiiO stock firmware | diskOS 1.2.1 installer | Disco! 2.5.6 | Upstream QEMU stock runtime | Lab validation |
 | --- | --- | --- | --- | --- |
@@ -54,10 +57,45 @@ The initial and only committed device scope is **SNOWSKY DISC (Ingenic X2000)**.
 
 Upstream details: [diskOS install](https://github.com/b0hemia/diskos/blob/main/docs/INSTALL.md), [Disco! README](https://github.com/zmd22/diskos-disco), [QEMU firmware profiles](https://github.com/eudj1n/snowsky-disc-qemu/blob/2.x/firmware/docs/firmware-profiles.md), [QEMU limits](https://github.com/eudj1n/snowsky-disc-qemu/blob/2.x/emulator/docs/limits.md).
 
+## Runnable M0 CLI
+
+Install Python 3.12+ and [uv](https://docs.astral.sh/uv/), then from a clean clone:
+
+```sh
+uv sync --locked --dev
+uv run disc-lab --help
+uv run disc-lab doctor
+uv run disc-lab ui validate examples/ui-valid.yaml
+uv run disc-lab firmware validate examples/firmware-valid.yaml
+uv run disc-lab sources list
+```
+
+`doctor` reports host/architecture, Python/Git/uv, Docker/Compose versions, WSL evidence, source-cache location, disk space and permission/path warnings. Default behavior is read-only and does not contact the daemon/network, start/configure services or distributions, probe devices, download or write files. Missing tools and limited evidence produce actionable `UNAVAILABLE`, `WARNING` or `NOT VERIFIED` rows; a completed diagnostic returns 0. An explicit `--docker-daemon` permits a fixed server-version query against the configured context, which may be remote. Neither mode proves WSL2/Docker/QEMU runtime compatibility. See [host preflight](docs/HOST-PREFLIGHT.md).
+
+Validation reads YAML only. Exit 0 means the **schema passed**, never binary compatibility, vendor authenticity or firmware support. Invalid input, missing files and unsupported API versions return 2. See [public contracts](docs/CONTRACTS.md), [JSON schemas](schemas/) and [verification scope](docs/M0-VERIFICATION.md).
+
+```sh
+uv run ruff check .
+uv run ruff format --check .
+uv run ty check
+uv run pytest
+```
+
+The lockfile pins all Python tools and dependencies. Firmware-free CI checks Linux and Windows on Python 3.12 and 3.14 without secrets, firmware, privileged containers or devices. Core M0 host targets are native Linux and Windows Python; WSL2/Docker emulator integration is pending M1 validation. Other hosts are unverified.
+
+With Git installed, synchronize the reviewed source projections separately:
+
+```sh
+uv run disc-lab sources sync
+uv run disc-lab sources verify
+uv run disc-lab sources sync --offline
+```
+
+[`upstreams.lock.yaml`](upstreams.lock.yaml) selects exact commits and source-only paths. The ignored `.lab/sources/` cache retains previous revisions; changed/corrupt entries are refused and preserved. `verify` and `sync --offline` never fetch. Flash payloads tracked by upstream repositories are excluded. See [source management and upgrades](docs/SOURCES.md) and [pin provenance](docs/UPSTREAM-PROVENANCE.md). Source verification establishes source identity only.
+
 ## Planned developer experience (not implemented)
 
 ```sh
-disc-lab doctor
 disc-lab firmware inventory --version 2.57 --archive /path/to/official.zip
 disc-lab ui build --source /path/to/my-ui --ref <immutable-commit>
 disc-lab run --firmware 2.57 --ui /path/to/mq_ui
@@ -82,4 +120,4 @@ External Git sources will require an explicit immutable ref, safe checkout, revi
 
 ## Immediate next step
 
-Implement **M0** from the [roadmap](docs/ROADMAP.md): repository scaffolding, pinned dependency manifest, the versioned UI adapter contract, firmware-free checks and a safe `doctor` command. The first firmware runtime target is **stock V2.57**; older versions follow as separate reviewed profiles, never by silently reusing V2.57 binary addresses.
+Review the [final M0 integration candidate](docs/M0-FINAL-INTEGRATION.md), which combines PR #2 → #3 → #4 → #5 with newer main decisions. Close M0 only after approval, integration and successful CI for the exact combined tree; the original PRs remain untouched. The first M1 task is **M1-01: pinned stock V2.57 QEMU runtime preparation**, followed by lawful local firmware intake and stock acceptance before custom UI execution in M2 under the [handoff ADR](docs/adr/0001-external-ui-handoff.md). The [trust baseline](docs/TRUST-BOUNDARIES.md) and [initial license inventory](docs/LICENSE-INVENTORY.md) keep unresolved build/distribution rights explicit; the Lab's root license is still unset. Older versions and warm UI replacement require separate reviewed evidence.

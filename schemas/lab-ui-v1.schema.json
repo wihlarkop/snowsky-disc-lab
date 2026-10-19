@@ -1,0 +1,182 @@
+{
+  "$defs": {
+    "ClaimedFirmware": {
+      "maxLength": 128,
+      "minLength": 1,
+      "type": "string"
+    },
+    "CommitRevision": {
+      "pattern": "^(?:[0-9a-fA-F]{40}|[0-9a-fA-F]{64})$",
+      "type": "string"
+    },
+    "OutputPath": {
+      "maxLength": 1024,
+      "minLength": 1,
+      "pattern": "^[A-Za-z0-9_-][A-Za-z0-9._-]*(?:/[A-Za-z0-9_-][A-Za-z0-9._-]*)*$",
+      "type": "string"
+    },
+    "SafeName": {
+      "maxLength": 64,
+      "minLength": 1,
+      "pattern": "^[A-Za-z0-9]+(?:-[A-Za-z0-9]+)*$",
+      "type": "string"
+    },
+    "UIBuild": {
+      "additionalProperties": false,
+      "properties": {
+        "preset": {
+          "enum": [
+            "diskos-musl",
+            "disco-musl",
+            "synthetic"
+          ],
+          "title": "Preset",
+          "type": "string"
+        },
+        "output": {
+          "$ref": "#/$defs/OutputPath"
+        }
+      },
+      "required": [
+        "preset",
+        "output"
+      ],
+      "title": "UIBuild",
+      "type": "object"
+    },
+    "UIClaims": {
+      "additionalProperties": false,
+      "properties": {
+        "firmware": {
+          "items": {
+            "$ref": "#/$defs/ClaimedFirmware"
+          },
+          "title": "Firmware",
+          "type": "array"
+        }
+      },
+      "required": [
+        "firmware"
+      ],
+      "title": "UIClaims",
+      "type": "object"
+    },
+    "UIMetadata": {
+      "additionalProperties": false,
+      "properties": {
+        "name": {
+          "$ref": "#/$defs/SafeName"
+        },
+        "upstream": {
+          "anyOf": [
+            {
+              "format": "uri",
+              "minLength": 1,
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Upstream"
+        }
+      },
+      "required": [
+        "name"
+      ],
+      "title": "UIMetadata",
+      "type": "object"
+    },
+    "UIRuntime": {
+      "additionalProperties": false,
+      "properties": {
+        "target": {
+          "const": "snowsky-disc",
+          "title": "Target",
+          "type": "string"
+        },
+        "architecture": {
+          "const": "mipsel",
+          "title": "Architecture",
+          "type": "string"
+        },
+        "display": {
+          "items": {
+            "const": 360,
+            "type": "integer"
+          },
+          "maxItems": 2,
+          "minItems": 2,
+          "title": "Display",
+          "type": "array"
+        },
+        "ipc": {
+          "const": "fiio-posix-mqueue",
+          "title": "Ipc",
+          "type": "string"
+        }
+      },
+      "required": [
+        "target",
+        "architecture",
+        "display",
+        "ipc"
+      ],
+      "title": "UIRuntime",
+      "type": "object"
+    },
+    "UISource": {
+      "additionalProperties": false,
+      "properties": {
+        "revision": {
+          "$ref": "#/$defs/CommitRevision"
+        }
+      },
+      "required": [
+        "revision"
+      ],
+      "title": "UISource",
+      "type": "object"
+    }
+  },
+  "additionalProperties": false,
+  "properties": {
+    "apiVersion": {
+      "const": "lab-ui/v1",
+      "title": "Apiversion",
+      "type": "string"
+    },
+    "kind": {
+      "const": "UI",
+      "title": "Kind",
+      "type": "string"
+    },
+    "metadata": {
+      "$ref": "#/$defs/UIMetadata"
+    },
+    "source": {
+      "$ref": "#/$defs/UISource"
+    },
+    "build": {
+      "$ref": "#/$defs/UIBuild"
+    },
+    "runtime": {
+      "$ref": "#/$defs/UIRuntime"
+    },
+    "claims": {
+      "$ref": "#/$defs/UIClaims"
+    }
+  },
+  "required": [
+    "apiVersion",
+    "kind",
+    "metadata",
+    "source",
+    "build",
+    "runtime",
+    "claims"
+  ],
+  "title": "UIManifest",
+  "type": "object"
+}

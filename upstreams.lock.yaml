@@ -1,0 +1,78 @@
+apiVersion: lab-upstreams/v1
+kind: SourceLock
+sources:
+  - id: diskos
+    repository: https://github.com/b0hemia/diskos.git
+    commit: 4cd4a60003944b0cf4e8e5fb9feac2d07ea87df9
+    includePaths:
+      - docs/
+      - ui/
+      - README.md
+      - LICENSE
+    licenses:
+      - path: LICENSE
+        sha256: fd3cc13d72fc81a51cfc06d191ac26e3de8f3d33587ba142c89e71bd38596e06
+        spdx: MIT
+        scope: Installer and tooling; ui/README.md declares the UI under its own GPL-3.0-or-later license.
+      - path: ui/COPYING
+        sha256: 3972dc9744f6499f0f9b2dbf76696f2ae7ad8af9b23dde66d6af86c9dfb36986
+        spdx: GPL-3.0-or-later
+        scope: On-device UI in ui/, as declared by ui/README.md.
+      - path: ui/licenses/LICENSE-LVGL-MIT.txt
+        sha256: 6a916130a36e83a79bb0dca6c6a7bfe60a67af7d118605e2b7b23bd5ad5c4eb0
+        spdx: MIT
+        scope: Vendored LVGL 9.2.2 under ui/lvgl/.
+    provenance:
+      reference: tag:v1.2.1
+      url: https://github.com/b0hemia/diskos/commit/4cd4a60003944b0cf4e8e5fb9feac2d07ea87df9
+      reviewedOn: '2026-10-19'
+      method: GitHub ref, commit, tree, and selected public license-text metadata review; no scripts or runtime execution.
+  - id: disco
+    repository: https://github.com/zmd22/diskos-disco.git
+    commit: 485fe0ff685b3c386e679491cda74e275016b481
+    includePaths:
+      - docs/
+      - ui/
+      - README.md
+      - LICENSE
+    licenses:
+      - path: LICENSE
+        sha256: fd3cc13d72fc81a51cfc06d191ac26e3de8f3d33587ba142c89e71bd38596e06
+        spdx: MIT
+        scope: Installer and tooling; ui/README.md declares the UI under its own GPL-3.0-or-later license.
+      - path: ui/COPYING
+        sha256: 3972dc9744f6499f0f9b2dbf76696f2ae7ad8af9b23dde66d6af86c9dfb36986
+        spdx: GPL-3.0-or-later
+        scope: On-device UI in ui/, as declared by ui/README.md.
+      - path: ui/licenses/LICENSE-LVGL-MIT.txt
+        sha256: 6a916130a36e83a79bb0dca6c6a7bfe60a67af7d118605e2b7b23bd5ad5c4eb0
+        spdx: MIT
+        scope: Vendored LVGL 9.2.2 under ui/lvgl/.
+    provenance:
+      reference: tag:v2.5.6
+      url: https://github.com/zmd22/diskos-disco/commit/485fe0ff685b3c386e679491cda74e275016b481
+      reviewedOn: '2026-10-19'
+      method: GitHub ref, commit, tree, and selected public license-text metadata review; no scripts or runtime execution.
+  - id: snowsky-disc-qemu
+    repository: https://github.com/eudj1n/snowsky-disc-qemu.git
+    commit: 85ab00deb08ac112066377fd8083cc8727ed859a
+    includePaths:
+      - controller/
+      - docs/
+      - emulator/
+      - library/
+      - tests/
+      - viewer/
+      - README.md
+      - LICENSE
+      - pyproject.toml
+    licenses:
+      - path: LICENSE
+        sha256: 8cbb19ad3535601695a5c40583497c5e1bcbb8fddaf0e177be07a54cf15e8762
+        spdx: MIT
+        scope: Included controller, emulator, library, tests, viewer, and documentation paths.
+    provenance:
+      reference: branch:2.x
+      url: https://github.com/eudj1n/snowsky-disc-qemu/commit/85ab00deb08ac112066377fd8083cc8727ed859a
+      reviewedOn: '2026-10-19'
+      method: GitHub branch, commit, tree, and selected public license-text metadata review; no scripts or runtime execution.

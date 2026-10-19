@@ -1,6 +1,6 @@
 # Contributing to SNOWSKY DISC Lab
 
-Welcome! **SNOWSKY DISC Lab is currently in the documentation/planning stage.** There is no usable CLI, UI SDK, emulator integration or firmware release from this repository yet. Please start with [ROADMAP](docs/ROADMAP.md), [ARCHITECTURE](docs/ARCHITECTURE.md) and [COMPATIBILITY](docs/COMPATIBILITY.md). Contributions and feedback are welcome, but status claims must be backed by real test evidence.
+Welcome! **SNOWSKY DISC Lab has an M0 firmware-free CLI and manifest contracts.** UI SDK, emulator integration and firmware releases remain future work. Start with the [README setup](README.md#runnable-m0-cli), [contracts](docs/CONTRACTS.md), [ROADMAP](docs/ROADMAP.md), [ARCHITECTURE](docs/ARCHITECTURE.md) and [COMPATIBILITY](docs/COMPATIBILITY.md). Contributions and feedback are welcome, but status claims must be backed by real test evidence.
 
 This is an **independent SNOWSKY DISC-specific** project. Do not infer support for SNOWSKY Echo or other products from the shared brand.
 
@@ -69,9 +69,9 @@ Do not claim broad compatibility based on a successful menu screenshot, an archi
 
 ## Licenses and attribution
 
-- [QEMU code](https://github.com/eudj1n/snowsky-disc-qemu/blob/2.x/LICENSE) is MIT.
+- The [DISC emulator integration repository](https://github.com/eudj1n/snowsky-disc-qemu/blob/2.x/LICENSE) declares MIT. This notice does not clear the separate QEMU emulator distribution or copied patch code; review its exact version/provenance separately.
 - [diskOS UI](https://github.com/b0hemia/diskos/blob/main/ui/README.md) and [Disco! UI](https://github.com/zmd22/diskos-disco/blob/main/ui/README.md) identify GPL-3.0-or-later obligations; their tooling/other components may have distinct licenses.
-- Lab original core-code licensing is **not finalized until a LICENSE/NOTICE audit**. Do not simply relabel copied GPL or third-party code.
+- Lab original core-code licensing is **not finalized until an owner-approved LICENSE/NOTICE decision and distribution audit**. The [initial source inventory](docs/LICENSE-INVENTORY.md) identifies component evidence and unresolved gates; it does not choose the Lab license or clear every file. Do not relabel copied GPL or third-party code.
 - Sorane will be a **separate UI repo** with its own source history and appropriate derivative licensing if based on diskOS/Disco!.
 - The original FiiO firmware and generated rootfs image are not distributable project assets.
 

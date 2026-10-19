@@ -1,0 +1,518 @@
+{
+  "formatVersion": 1,
+  "reviewedOn": "2026-10-20",
+  "sources": [
+    {
+      "sourceId": "diskos",
+      "commit": "4cd4a60003944b0cf4e8e5fb9feac2d07ea87df9"
+    },
+    {
+      "sourceId": "disco",
+      "commit": "485fe0ff685b3c386e679491cda74e275016b481"
+    },
+    {
+      "sourceId": "snowsky-disc-qemu",
+      "commit": "85ab00deb08ac112066377fd8083cc8727ed859a"
+    }
+  ],
+  "inventoryRows": [
+    {
+      "sourceId": "diskos",
+      "commit": "4cd4a60003944b0cf4e8e5fb9feac2d07ea87df9",
+      "component": "Installer and repository tooling",
+      "paths": [
+        "LICENSE"
+      ],
+      "spdxExpression": "MIT",
+      "evidence": [
+        {
+          "path": "LICENSE",
+          "sha256": "fd3cc13d72fc81a51cfc06d191ac26e3de8f3d33587ba142c89e71bd38596e06",
+          "url": "https://github.com/b0hemia/diskos/blob/4cd4a60003944b0cf4e8e5fb9feac2d07ea87df9/LICENSE"
+        }
+      ],
+      "reviewStatus": "identified",
+      "notes": "Root license text identifies the installer/tooling scope; it does not replace the separately declared UI or bundled component licenses."
+    },
+    {
+      "sourceId": "diskos",
+      "commit": "4cd4a60003944b0cf4e8e5fb9feac2d07ea87df9",
+      "component": "On-device UI and first-party UI source",
+      "paths": [
+        "ui/"
+      ],
+      "spdxExpression": "GPL-3.0-or-later",
+      "evidence": [
+        {
+          "path": "ui/README.md",
+          "sha256": "b4198ea93bebae5af09e8e66b57c584521249bd3041d644ce42bcf6de7337adf",
+          "url": "https://github.com/b0hemia/diskos/blob/4cd4a60003944b0cf4e8e5fb9feac2d07ea87df9/ui/README.md"
+        },
+        {
+          "path": "ui/COPYING",
+          "sha256": "3972dc9744f6499f0f9b2dbf76696f2ae7ad8af9b23dde66d6af86c9dfb36986",
+          "url": "https://github.com/b0hemia/diskos/blob/4cd4a60003944b0cf4e8e5fb9feac2d07ea87df9/ui/COPYING"
+        }
+      ],
+      "reviewStatus": "identified",
+      "notes": "The UI README explicitly scopes GPL-3.0-or-later to ui/ and points to COPYING. Component exceptions and bundled works retain their own licenses."
+    },
+    {
+      "sourceId": "diskos",
+      "commit": "4cd4a60003944b0cf4e8e5fb9feac2d07ea87df9",
+      "component": "LVGL 9.2.2 core",
+      "paths": [
+        "ui/lvgl/"
+      ],
+      "spdxExpression": "MIT",
+      "evidence": [
+        {
+          "path": "ui/README.md",
+          "sha256": "b4198ea93bebae5af09e8e66b57c584521249bd3041d644ce42bcf6de7337adf",
+          "url": "https://github.com/b0hemia/diskos/blob/4cd4a60003944b0cf4e8e5fb9feac2d07ea87df9/ui/README.md"
+        },
+        {
+          "path": "ui/licenses/LICENSE-LVGL-MIT.txt",
+          "sha256": "6a916130a36e83a79bb0dca6c6a7bfe60a67af7d118605e2b7b23bd5ad5c4eb0",
+          "url": "https://github.com/b0hemia/diskos/blob/4cd4a60003944b0cf4e8e5fb9feac2d07ea87df9/ui/licenses/LICENSE-LVGL-MIT.txt"
+        }
+      ],
+      "reviewStatus": "identified",
+      "notes": "The UI README identifies the vendored LVGL version and MIT license; customized files and separately bundled helpers still need component-level review."
+    },
+    {
+      "sourceId": "diskos",
+      "commit": "4cd4a60003944b0cf4e8e5fb9feac2d07ea87df9",
+      "component": "Embedded generated font and icon glyph data",
+      "paths": [
+        "ui/font_*.c",
+        "ui/font_cjk_extra_16.c",
+        "ui/lvgl/src/font/lv_font_source_han_16_cjk.c"
+      ],
+      "spdxExpression": "OFL-1.1",
+      "evidence": [
+        {
+          "path": "ui/README.md",
+          "sha256": "b4198ea93bebae5af09e8e66b57c584521249bd3041d644ce42bcf6de7337adf",
+          "url": "https://github.com/b0hemia/diskos/blob/4cd4a60003944b0cf4e8e5fb9feac2d07ea87df9/ui/README.md"
+        },
+        {
+          "path": "ui/licenses/OFL-1.1-SourceHanSans.txt",
+          "sha256": "e4b58456502d7d6ad21632b7820ad5f59a7e4305ef60f2cade610a036459bc6c",
+          "url": "https://github.com/b0hemia/diskos/blob/4cd4a60003944b0cf4e8e5fb9feac2d07ea87df9/ui/licenses/OFL-1.1-SourceHanSans.txt"
+        },
+        {
+          "path": "ui/licenses/OFL-1.1-FontAwesome.txt",
+          "sha256": "544ce393df4866a9da2e6fe15cddde07a1c25e6360a9a74dc840bf1271efa749",
+          "url": "https://github.com/b0hemia/diskos/blob/4cd4a60003944b0cf4e8e5fb9feac2d07ea87df9/ui/licenses/OFL-1.1-FontAwesome.txt"
+        }
+      ],
+      "reviewStatus": "identified",
+      "notes": "The UI README maps embedded font families to OFL-1.1 notice files, including Source Han Sans and Font Awesome. Preserve notices and review reserved font names and attribution when redistributing generated data."
+    },
+    {
+      "sourceId": "diskos",
+      "commit": "4cd4a60003944b0cf4e8e5fb9feac2d07ea87df9",
+      "component": "Bundled SQLite, jsmn, md5, TJpgDec and qrcodegen",
+      "paths": [
+        "ui/sqlite3.c",
+        "ui/sqlite3.h",
+        "ui/jsmn.h",
+        "ui/md5.c",
+        "ui/lvgl/src/libs/tjpgd/",
+        "ui/lvgl/src/libs/qrcodegen/"
+      ],
+      "spdxExpression": "NOASSERTION",
+      "evidence": [
+        {
+          "path": "ui/README.md",
+          "sha256": "b4198ea93bebae5af09e8e66b57c584521249bd3041d644ce42bcf6de7337adf",
+          "url": "https://github.com/b0hemia/diskos/blob/4cd4a60003944b0cf4e8e5fb9feac2d07ea87df9/ui/README.md"
+        }
+      ],
+      "reviewStatus": "pending",
+      "notes": "README claims SQLite and md5 are public domain, jsmn and qrcodegen MIT, and TJpgDec BSD-style, but the selected projection has no corresponding standalone license texts for all of these claims. Normalize public-domain status and identify exact notices/upstream versions; the README-referenced LICENSE-TJpgDec.txt and MIT-qrcodegen.txt are absent from the selected projection."
+    },
+    {
+      "sourceId": "disco",
+      "commit": "485fe0ff685b3c386e679491cda74e275016b481",
+      "component": "Installer and repository tooling",
+      "paths": [
+        "LICENSE"
+      ],
+      "spdxExpression": "MIT",
+      "evidence": [
+        {
+          "path": "LICENSE",
+          "sha256": "fd3cc13d72fc81a51cfc06d191ac26e3de8f3d33587ba142c89e71bd38596e06",
+          "url": "https://github.com/zmd22/diskos-disco/blob/485fe0ff685b3c386e679491cda74e275016b481/LICENSE"
+        }
+      ],
+      "reviewStatus": "identified",
+      "notes": "Root license text identifies the installer/tooling scope; it does not replace the separately declared UI or bundled component licenses."
+    },
+    {
+      "sourceId": "disco",
+      "commit": "485fe0ff685b3c386e679491cda74e275016b481",
+      "component": "On-device UI and first-party UI source",
+      "paths": [
+        "ui/"
+      ],
+      "spdxExpression": "GPL-3.0-or-later",
+      "evidence": [
+        {
+          "path": "ui/README.md",
+          "sha256": "7a9b751bdeffdf69d2c02446e057bc5f33e8053410275658cf48f222837e1f6c",
+          "url": "https://github.com/zmd22/diskos-disco/blob/485fe0ff685b3c386e679491cda74e275016b481/ui/README.md"
+        },
+        {
+          "path": "ui/COPYING",
+          "sha256": "3972dc9744f6499f0f9b2dbf76696f2ae7ad8af9b23dde66d6af86c9dfb36986",
+          "url": "https://github.com/zmd22/diskos-disco/blob/485fe0ff685b3c386e679491cda74e275016b481/ui/COPYING"
+        }
+      ],
+      "reviewStatus": "identified",
+      "notes": "The UI README explicitly scopes GPL-3.0-or-later to ui/ and points to COPYING. Component exceptions and bundled works retain their own licenses."
+    },
+    {
+      "sourceId": "disco",
+      "commit": "485fe0ff685b3c386e679491cda74e275016b481",
+      "component": "LVGL 9.2.2 core",
+      "paths": [
+        "ui/lvgl/"
+      ],
+      "spdxExpression": "MIT",
+      "evidence": [
+        {
+          "path": "ui/README.md",
+          "sha256": "7a9b751bdeffdf69d2c02446e057bc5f33e8053410275658cf48f222837e1f6c",
+          "url": "https://github.com/zmd22/diskos-disco/blob/485fe0ff685b3c386e679491cda74e275016b481/ui/README.md"
+        },
+        {
+          "path": "ui/licenses/LICENSE-LVGL-MIT.txt",
+          "sha256": "6a916130a36e83a79bb0dca6c6a7bfe60a67af7d118605e2b7b23bd5ad5c4eb0",
+          "url": "https://github.com/zmd22/diskos-disco/blob/485fe0ff685b3c386e679491cda74e275016b481/ui/licenses/LICENSE-LVGL-MIT.txt"
+        }
+      ],
+      "reviewStatus": "identified",
+      "notes": "The UI README identifies the vendored LVGL version and MIT license; customized files and separately bundled helpers still need component-level review."
+    },
+    {
+      "sourceId": "disco",
+      "commit": "485fe0ff685b3c386e679491cda74e275016b481",
+      "component": "Embedded generated font and icon glyph data",
+      "paths": [
+        "ui/font_*.c",
+        "ui/font_cjk_extra_16.c",
+        "ui/lvgl/src/font/lv_font_source_han_16_cjk.c"
+      ],
+      "spdxExpression": "OFL-1.1",
+      "evidence": [
+        {
+          "path": "ui/README.md",
+          "sha256": "7a9b751bdeffdf69d2c02446e057bc5f33e8053410275658cf48f222837e1f6c",
+          "url": "https://github.com/zmd22/diskos-disco/blob/485fe0ff685b3c386e679491cda74e275016b481/ui/README.md"
+        },
+        {
+          "path": "ui/licenses/OFL-1.1-SourceHanSans.txt",
+          "sha256": "e4b58456502d7d6ad21632b7820ad5f59a7e4305ef60f2cade610a036459bc6c",
+          "url": "https://github.com/zmd22/diskos-disco/blob/485fe0ff685b3c386e679491cda74e275016b481/ui/licenses/OFL-1.1-SourceHanSans.txt"
+        },
+        {
+          "path": "ui/licenses/OFL-1.1-FontAwesome.txt",
+          "sha256": "544ce393df4866a9da2e6fe15cddde07a1c25e6360a9a74dc840bf1271efa749",
+          "url": "https://github.com/zmd22/diskos-disco/blob/485fe0ff685b3c386e679491cda74e275016b481/ui/licenses/OFL-1.1-FontAwesome.txt"
+        }
+      ],
+      "reviewStatus": "identified",
+      "notes": "The UI README maps embedded font families to OFL-1.1 notice files, including Source Han Sans and Font Awesome. Preserve notices and review reserved font names and attribution when redistributing generated data."
+    },
+    {
+      "sourceId": "disco",
+      "commit": "485fe0ff685b3c386e679491cda74e275016b481",
+      "component": "Bundled SQLite, jsmn, md5, TJpgDec and qrcodegen",
+      "paths": [
+        "ui/sqlite3.c",
+        "ui/sqlite3.h",
+        "ui/jsmn.h",
+        "ui/md5.c",
+        "ui/lvgl/src/libs/tjpgd/",
+        "ui/lvgl/src/libs/qrcodegen/"
+      ],
+      "spdxExpression": "NOASSERTION",
+      "evidence": [
+        {
+          "path": "ui/README.md",
+          "sha256": "7a9b751bdeffdf69d2c02446e057bc5f33e8053410275658cf48f222837e1f6c",
+          "url": "https://github.com/zmd22/diskos-disco/blob/485fe0ff685b3c386e679491cda74e275016b481/ui/README.md"
+        }
+      ],
+      "reviewStatus": "pending",
+      "notes": "README claims SQLite and md5 are public domain, jsmn and qrcodegen MIT, and TJpgDec BSD-style, but the selected projection has no corresponding standalone license texts for all of these claims. Normalize public-domain status and identify exact notices/upstream versions; the README-referenced LICENSE-TJpgDec.txt and MIT-qrcodegen.txt are absent from the selected projection."
+    },
+    {
+      "sourceId": "diskos",
+      "commit": "4cd4a60003944b0cf4e8e5fb9feac2d07ea87df9",
+      "component": "FreeType 2.13.3",
+      "paths": [
+        "ui/third_party/freetype-2.13.3/"
+      ],
+      "spdxExpression": "(FTL OR GPL-2.0-or-later)",
+      "evidence": [
+        {
+          "path": "ui/README.md",
+          "sha256": "b4198ea93bebae5af09e8e66b57c584521249bd3041d644ce42bcf6de7337adf",
+          "url": "https://github.com/b0hemia/diskos/blob/4cd4a60003944b0cf4e8e5fb9feac2d07ea87df9/ui/README.md"
+        },
+        {
+          "path": "ui/third_party/freetype-2.13.3/LICENSE.TXT",
+          "sha256": "2e3bbb7d7c5c396368dd0853a790ec29ce5b8647163dde42a0493fb0d6556b2b",
+          "url": "https://github.com/b0hemia/diskos/blob/4cd4a60003944b0cf4e8e5fb9feac2d07ea87df9/ui/third_party/freetype-2.13.3/LICENSE.TXT"
+        },
+        {
+          "path": "ui/third_party/freetype-2.13.3/docs/FTL.TXT",
+          "sha256": "08c135755dd589039470f1fdbb400daaabaaa50d0b366d19cebff4d22986baa1",
+          "url": "https://github.com/b0hemia/diskos/blob/4cd4a60003944b0cf4e8e5fb9feac2d07ea87df9/ui/third_party/freetype-2.13.3/docs/FTL.TXT"
+        }
+      ],
+      "reviewStatus": "identified",
+      "notes": "LICENSE.TXT states FreeType is offered under mutually exclusive FTL or GPLv2-or-later; the UI README selects FTL. Preserve the FTL text and required acknowledgement if using that route. The FreeType tree also names per-driver and module exceptions/licenses (including BDF/PCF, gzip/zlib and old-MIT files); review those file scopes before redistribution. This inventory is not legal advice."
+    },
+    {
+      "sourceId": "diskos",
+      "commit": "4cd4a60003944b0cf4e8e5fb9feac2d07ea87df9",
+      "component": "Vendored LZ4 helper under LVGL",
+      "paths": [
+        "ui/lvgl/src/libs/lz4/"
+      ],
+      "spdxExpression": "BSD-2-Clause",
+      "evidence": [
+        {
+          "path": "ui/lvgl/src/libs/lz4/LICENSE",
+          "sha256": "8b58c446121a109ccf32edc094bba3010a3d85e4ee3702950db55e4d3e87736c",
+          "url": "https://github.com/b0hemia/diskos/blob/4cd4a60003944b0cf4e8e5fb9feac2d07ea87df9/ui/lvgl/src/libs/lz4/LICENSE"
+        }
+      ],
+      "reviewStatus": "identified",
+      "notes": "The vendored LZ4 LICENSE text contains the two BSD redistribution conditions."
+    },
+    {
+      "sourceId": "disco",
+      "commit": "485fe0ff685b3c386e679491cda74e275016b481",
+      "component": "Disco Boomshine mini-game",
+      "paths": [
+        "ui/boomshine/"
+      ],
+      "spdxExpression": "MIT",
+      "evidence": [
+        {
+          "path": "ui/boomshine/LICENSE",
+          "sha256": "baa0cbbf9ea0fe78a0dd768685db9ab8bff469c6edd9fcacfcf8498fd65a4c37",
+          "url": "https://github.com/zmd22/diskos-disco/blob/485fe0ff685b3c386e679491cda74e275016b481/ui/boomshine/LICENSE"
+        },
+        {
+          "path": "ui/boomshine/NOTICE.md",
+          "sha256": "6d44f4b3ba44da202fb118cd1d9acbac8e2c8d491dee4d43492ba5fb3000b3b9",
+          "url": "https://github.com/zmd22/diskos-disco/blob/485fe0ff685b3c386e679491cda74e275016b481/ui/boomshine/NOTICE.md"
+        }
+      ],
+      "reviewStatus": "identified",
+      "notes": "Boomshine has its own MIT license and NOTICE states it is an original implementation; embedded DejaVu glyph data is separately licensed."
+    },
+    {
+      "sourceId": "disco",
+      "commit": "485fe0ff685b3c386e679491cda74e275016b481",
+      "component": "Boomshine embedded DejaVu glyph data",
+      "paths": [
+        "ui/boomshine/fonts.h",
+        "ui/boomshine/licenses/LICENSE-DejaVu.txt"
+      ],
+      "spdxExpression": "Bitstream-Vera",
+      "evidence": [
+        {
+          "path": "ui/boomshine/NOTICE.md",
+          "sha256": "6d44f4b3ba44da202fb118cd1d9acbac8e2c8d491dee4d43492ba5fb3000b3b9",
+          "url": "https://github.com/zmd22/diskos-disco/blob/485fe0ff685b3c386e679491cda74e275016b481/ui/boomshine/NOTICE.md"
+        },
+        {
+          "path": "ui/boomshine/licenses/LICENSE-DejaVu.txt",
+          "sha256": "63d3ba759d12804c5b31a9d5940d855c1820d1f5999e6b0872eb1c7ff045fbc9",
+          "url": "https://github.com/zmd22/diskos-disco/blob/485fe0ff685b3c386e679491cda74e275016b481/ui/boomshine/licenses/LICENSE-DejaVu.txt"
+        }
+      ],
+      "reviewStatus": "identified",
+      "notes": "The Debian copyright-format notice assigns Bitstream Vera to Files: * and states DejaVu changes are public domain. Its separate GPL-2+ stanza is scoped to debian/* packaging files, not the font glyphs. Retain the Bitstream copyright/trademark and permission notice and avoid reserved names when modifying fonts."
+    },
+    {
+      "sourceId": "disco",
+      "commit": "485fe0ff685b3c386e679491cda74e275016b481",
+      "component": "Disco! additional UI font assets",
+      "paths": [
+        "ui/fonts/nowplaying/"
+      ],
+      "spdxExpression": "OFL-1.1",
+      "evidence": [
+        {
+          "path": "ui/README.md",
+          "sha256": "7a9b751bdeffdf69d2c02446e057bc5f33e8053410275658cf48f222837e1f6c",
+          "url": "https://github.com/zmd22/diskos-disco/blob/485fe0ff685b3c386e679491cda74e275016b481/ui/README.md"
+        },
+        {
+          "path": "ui/fonts/nowplaying/README.md",
+          "sha256": "59aa8f6e0ce9f97048a67001ce5bfba165831a5ec1869cd9cf0ef4d25639784c",
+          "url": "https://github.com/zmd22/diskos-disco/blob/485fe0ff685b3c386e679491cda74e275016b481/ui/fonts/nowplaying/README.md"
+        },
+        {
+          "path": "ui/fonts/nowplaying/Inter-OFL.txt",
+          "sha256": "5b9321a4298cfeb6b34354164a1c3afc3db114569984c502b9b35d988fd58c57",
+          "url": "https://github.com/zmd22/diskos-disco/blob/485fe0ff685b3c386e679491cda74e275016b481/ui/fonts/nowplaying/Inter-OFL.txt"
+        },
+        {
+          "path": "ui/fonts/nowplaying/Nunito-OFL.txt",
+          "sha256": "580df76c95a1ec5ab878ceb25bb3d85c6a076804e9c970c8c6972aea775fdf65",
+          "url": "https://github.com/zmd22/diskos-disco/blob/485fe0ff685b3c386e679491cda74e275016b481/ui/fonts/nowplaying/Nunito-OFL.txt"
+        }
+      ],
+      "reviewStatus": "identified",
+      "notes": "UI README identifies optional Inter and Nunito now-playing fonts and says sources, OFL licenses, and regeneration instructions are in this subtree; keep those notices with redistributed font assets."
+    },
+    {
+      "sourceId": "snowsky-disc-qemu",
+      "commit": "85ab00deb08ac112066377fd8083cc8727ed859a",
+      "component": "QEMU runner repository source and documentation projection",
+      "paths": [
+        "controller/",
+        "docs/",
+        "emulator/",
+        "library/",
+        "tests/",
+        "viewer/",
+        "README.md",
+        "pyproject.toml"
+      ],
+      "spdxExpression": "MIT",
+      "evidence": [
+        {
+          "path": "LICENSE",
+          "sha256": "8cbb19ad3535601695a5c40583497c5e1bcbb8fddaf0e177be07a54cf15e8762",
+          "url": "https://github.com/eudj1n/snowsky-disc-qemu/blob/85ab00deb08ac112066377fd8083cc8727ed859a/LICENSE"
+        }
+      ],
+      "reviewStatus": "identified",
+      "notes": "The selected projection is covered by the root MIT license according to upstream lock scope. This does not license externally obtained QEMU binaries, firmware, or external Python packages."
+    },
+    {
+      "sourceId": "snowsky-disc-qemu",
+      "commit": "85ab00deb08ac112066377fd8083cc8727ed859a",
+      "component": "Python controller package",
+      "paths": [
+        "controller/"
+      ],
+      "spdxExpression": "MIT",
+      "evidence": [
+        {
+          "path": "controller/pyproject.toml",
+          "sha256": "edf6ea3f80bc077b23945e0111ff502eb622fd505d7b66fe96f3335ad1a267d0",
+          "url": "https://github.com/eudj1n/snowsky-disc-qemu/blob/85ab00deb08ac112066377fd8083cc8727ed859a/controller/pyproject.toml"
+        },
+        {
+          "path": "controller/LICENSE",
+          "sha256": "8cbb19ad3535601695a5c40583497c5e1bcbb8fddaf0e177be07a54cf15e8762",
+          "url": "https://github.com/eudj1n/snowsky-disc-qemu/blob/85ab00deb08ac112066377fd8083cc8727ed859a/controller/LICENSE"
+        }
+      ],
+      "reviewStatus": "identified",
+      "notes": "Controller metadata declares MIT and the controller carries its own MIT text."
+    },
+    {
+      "sourceId": "snowsky-disc-qemu",
+      "commit": "85ab00deb08ac112066377fd8083cc8727ed859a",
+      "component": "Optional controller Python dependencies",
+      "paths": [
+        "controller/pyproject.toml"
+      ],
+      "spdxExpression": "NOASSERTION",
+      "evidence": [
+        {
+          "path": "controller/pyproject.toml",
+          "sha256": "edf6ea3f80bc077b23945e0111ff502eb622fd505d7b66fe96f3335ad1a267d0",
+          "url": "https://github.com/eudj1n/snowsky-disc-qemu/blob/85ab00deb08ac112066377fd8083cc8727ed859a/controller/pyproject.toml"
+        }
+      ],
+      "reviewStatus": "pending",
+      "notes": "aiohttp is declared as an optional dependency without a lockfile or vendored distribution in this projection. Record resolved versions and licenses before redistributing an environment or bundle."
+    },
+    {
+      "sourceId": "snowsky-disc-qemu",
+      "commit": "85ab00deb08ac112066377fd8083cc8727ed859a",
+      "component": "QEMU device patch and external QEMU code",
+      "paths": [
+        "emulator/docker/qemu/snowsky-disc-devices.patch"
+      ],
+      "spdxExpression": "NOASSERTION",
+      "evidence": [
+        {
+          "path": "README.md",
+          "sha256": "d22b2dbf026b6c07f3cc52f4b747d7a3a38160624e32b7875bf694a7fd34bbca",
+          "url": "https://github.com/eudj1n/snowsky-disc-qemu/blob/85ab00deb08ac112066377fd8083cc8727ed859a/README.md"
+        }
+      ],
+      "reviewStatus": "pending",
+      "notes": "The projection contains a QEMU device patch, not the upstream QEMU source tree. Review patch authorship/provenance and the target QEMU version license and source-offer obligations before distributing patched QEMU."
+    },
+    {
+      "sourceId": "snowsky-disc-qemu",
+      "commit": "85ab00deb08ac112066377fd8083cc8727ed859a",
+      "component": "Documentation screenshots and project imagery",
+      "paths": [
+        "docs/images/"
+      ],
+      "spdxExpression": "NOASSERTION",
+      "evidence": [
+        {
+          "path": "docs/images/README.md",
+          "sha256": "cfde975f0485b6c9c7ee8b1fb2a7b676ddda4b105c160bdaecac8aef4780e5a4",
+          "url": "https://github.com/eudj1n/snowsky-disc-qemu/blob/85ab00deb08ac112066377fd8083cc8727ed859a/docs/images/README.md"
+        }
+      ],
+      "reviewStatus": "pending",
+      "notes": "Image files are included in the projection but were not individually rights-reviewed. Identify authors and third-party artwork/source rights before public redistribution."
+    },
+    {
+      "sourceId": "disco",
+      "commit": "485fe0ff685b3c386e679491cda74e275016b481",
+      "component": "Disco! null-theme Jersey typefaces",
+      "paths": [
+        "ui/fonts/null/jersey/Handjet.ttf",
+        "ui/fonts/null/jersey/Jersey10-Regular.ttf",
+        "ui/fonts/null/jersey/PixelifySans.ttf",
+        "ui/fonts/null/jersey/VT323.ttf"
+      ],
+      "spdxExpression": "OFL-1.1",
+      "evidence": [
+        {
+          "path": "ui/fonts/null/jersey/handjet-OFL.txt",
+          "sha256": "934a45d3b43276e1f857301e9cb07e00b829cca3d0c13e8e6f8c6790dd6c8a2c",
+          "url": "https://github.com/zmd22/diskos-disco/blob/485fe0ff685b3c386e679491cda74e275016b481/ui/fonts/null/jersey/handjet-OFL.txt"
+        },
+        {
+          "path": "ui/fonts/null/jersey/jersey10-OFL.txt",
+          "sha256": "436d5836064cec796c7ddde6fb4faeabdb6f2f17443a24a30d0c38b75d13f922",
+          "url": "https://github.com/zmd22/diskos-disco/blob/485fe0ff685b3c386e679491cda74e275016b481/ui/fonts/null/jersey/jersey10-OFL.txt"
+        },
+        {
+          "path": "ui/fonts/null/jersey/pixelifysans-OFL.txt",
+          "sha256": "b66ba46f511a851ab09998b5a5a9fdbb102545a3864cb993095e1745996873a7",
+          "url": "https://github.com/zmd22/diskos-disco/blob/485fe0ff685b3c386e679491cda74e275016b481/ui/fonts/null/jersey/pixelifysans-OFL.txt"
+        },
+        {
+          "path": "ui/fonts/null/jersey/vt323-OFL.txt",
+          "sha256": "27d9af34210253e7ca1251fbace86c6f65b40031d6ce1a75493a1b2093631298",
+          "url": "https://github.com/zmd22/diskos-disco/blob/485fe0ff685b3c386e679491cda74e275016b481/ui/fonts/null/jersey/vt323-OFL.txt"
+        }
+      ],
+      "reviewStatus": "identified",
+      "notes": "Each listed typeface has a matching SIL Open Font License text in the selected projection; preserve each notice with its font asset."
+    }
+  ]
+}

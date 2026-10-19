@@ -1,6 +1,6 @@
 # Firmware, UI and Emulator Compatibility Policy
 
-**This is a proposed Lab policy, not a report of tests completed in this repository.** Last upstream-documentation review: **2026-10-19**.
+**This is a proposed Lab policy, not a report of firmware tests completed in this repository.** Pinned handoff-source review: **2026-10-20**; see [ADR 0001](adr/0001-external-ui-handoff.md). Initial M2 custom UI execution is cold-session only after stock M1 acceptance; warm replacement requires separate exact-combination evidence and is deferred.
 
 ## 1. What does "supported" mean?
 
