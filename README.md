@@ -23,6 +23,7 @@ The initial and only committed device scope is **SNOWSKY DISC (Ingenic X2000)**.
 | [Architecture & UI integration](docs/ARCHITECTURE.md) | Dependency strategy, adapters, plugin manifest proposal, CLI and trust boundaries |
 | [Compatibility & validation policy](docs/COMPATIBILITY.md) | Firmware profiles, support states, CI matrix, OTA intake and evidence rules |
 | [Contributing](CONTRIBUTING.md) | How community developers can eventually add UI forks, firmware evidence and emulator fixes |
+| [Technology stack](docs/TECH_STACK.md) | Python 3.12+, uv, Ruff, Astral ty, QEMU/C, LVGL and future Svelte Developer Studio |
 
 ## Upstream projects
 
