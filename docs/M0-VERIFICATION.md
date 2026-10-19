@@ -16,7 +16,7 @@ uv run ty check
 uv run pytest
 ```
 
-Use `uv sync --locked --dev` to additionally refuse dependency-lock drift. Tool versions are pinned by `uv.lock`. This sandbox uses `UV_CACHE_DIR=<checkout>/.cache/uv`; pytest scratch space is configured as `.cache/pytest` (owned by pytest and cleared between runs).
+Use `uv sync --locked --dev` to additionally refuse dependency-lock drift. Tool versions are pinned by `uv.lock`. This sandbox uses `UV_CACHE_DIR=<checkout>/.cache/uv`; pytest scratch space is configured as `.pytest-tmp` (owned by pytest and cleared between runs).
 
 ## Acceptance boundaries
 
