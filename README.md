@@ -81,7 +81,7 @@ uv run ty check
 uv run pytest
 ```
 
-The lockfile pins all Python tools and dependencies. Firmware-free CI checks Linux and Windows on Python 3.12 and 3.14 without secrets, firmware, privileged containers or devices. Core M0 host targets are native Linux and Windows Python; WSL2/Docker emulator integration is pending M1 validation. Other hosts are unverified.
+The lockfile pins application and development dependencies. The isolated Hatchling build backend currently has a lower-bound requirement in `pyproject.toml`, not an exact lock; reproducible packaged builds need a separate release pin/review. Firmware-free CI checks Linux and Windows on Python 3.12 and 3.14 without secrets, firmware, privileged containers or devices. Core M0 host targets are native Linux and Windows Python; WSL2/Docker emulator integration is pending M1 validation. Other hosts are unverified.
 
 With Git installed, synchronize the reviewed source projections separately:
 
