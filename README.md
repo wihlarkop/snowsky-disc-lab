@@ -22,6 +22,7 @@ The initial and only committed device scope is **SNOWSKY DISC (Ingenic X2000)**.
 | [Detailed roadmap](docs/ROADMAP.md) | Milestones, task breakdown, acceptance criteria, dependencies, risks and priorities |
 | [Architecture & UI integration](docs/ARCHITECTURE.md) | Dependency strategy, adapters, plugin manifest proposal, CLI and trust boundaries |
 | [Compatibility & validation policy](docs/COMPATIBILITY.md) | Firmware profiles, support states, CI matrix, OTA intake and evidence rules |
+| [Firmware update manager](docs/UPDATE_MANAGER.md) | FiiO OTA detection, registered UI fork compatibility checks and safe separate update channels |
 | [Contributing](CONTRIBUTING.md) | How community developers can eventually add UI forks, firmware evidence and emulator fixes |
 | [Technology stack](docs/TECH_STACK.md) | Python 3.12+, uv, Ruff, Astral ty, QEMU/C, LVGL and future Svelte Developer Studio |
 
@@ -65,6 +66,8 @@ disc-lab compatibility report
 ```
 
 External Git sources will require an explicit immutable ref, safe checkout, reviewable build recipe, and appropriate trust separation. Local binaries can be inspected without executing them first.
+
+**Test policy:** no TDD, no mandatory unit-test suite or coverage targets. Prioritize real CLI integration/contract checks and emulator regression tests when available.
 
 ## Non-goals and safety
 
