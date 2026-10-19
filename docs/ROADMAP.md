@@ -21,7 +21,7 @@ SNOWSKY DISC Lab is an integration platform for official stock firmware, diskOS,
 7. **Separate untrusted builds from trusted firmware runtime.** No proprietary firmware, secrets, hardware passthrough or privileged Docker access in public/untrusted PR jobs.
 8. **Emulation is not hardware proof.** QEMU user-mode cannot certify actual MIPS CPU speed, RAM limits, USB gadget, Bluetooth, DAC, suspend/resume, NAND or battery behavior.
 9. **No automatic physical flashing.** Initial device install/recovery/SD signing are separate opt-in operations after backups, suitability checks and manual approval.
-10. **Small independently shippable PRs.** Each phase has an acceptance gate; focused integration/regression tests first, with unit tests for pure parsers/validation where sensible.
+10. **Small independently shippable PRs.** Each phase has an acceptance gate based on executable behavior. **No TDD, no required unit tests, no coverage targets**: use focused CLI/contract integration checks and later QEMU/regression tests. No frontend is needed to test a CLI.
 
 ## 2. Upstream baseline and support semantics
 
@@ -182,6 +182,9 @@ Registry and safety scaffolding start in M0; M5 makes them complete and publicly
 - [ ] **M7-06** Generate candidate support report and proposed exact-pinned lock update. Do not execute new firmware on privileged QEMU or auto-merge from untrusted events.
 - [ ] **M7-07** Add notification rules for `new firmware detected`, `candidate tests failed`, and `candidate ready for maintainer review`.
 - [ ] **M7-08** Test false positives, malformed OTA JSON, duplicate versions, recovery-only changes, outages, hash mismatch and secrets leakage.
+- [ ] **M7-09** Add compatibility orchestration on new FiiO firmware: baseline new stock image on a reviewed runner, then run **opted-in registered** diskOS, Disco!, Sorane and community fork adapters against exact firmware/UI hashes. Unknown/NOT RUN is never compatible.
+- [ ] **M7-10** Present an evidence-backed matrix (emulator vs physical test distinctions), source/recovery update route, last test date and actionable blockers. Never auto-run arbitrary fork code with privileged firmware access.
+- [ ] **M7-11** Provide initial read-only `disc-lab update check` / `update candidates` workflow with no automatic firmware installation, no proprietary packages distributed, and no surprise upgrades.
 
 **Exit gate:** a simulated new V2.xx release creates a clearly unknown candidate with no changes to accepted profiles and no unauthorized execution; a failure never masquerades as "fully compatible."
 
@@ -196,6 +199,7 @@ Registry and safety scaffolding start in M0; M5 makes them complete and publicly
 - [ ] **M8-06** Validate dependency/source licenses and notices in distributable artifacts; exclude stock/vendor binaries and private secrets.
 - [ ] **M8-07** Maintain a public support matrix with exact last-test date and limitations; stale evidence cannot imply recent verification.
 - [ ] **M8-08** Publish a source-only release with installation and troubleshooting docs once the minimal verified baseline exists.
+- [ ] **M8-09** Design optional **Lab environment** updater: pin/verify reviewed runner/CLI updates, preserve old working versions and rollback. This is not a FiiO device firmware updater.
 
 **Exit gate:** an intentional breaking upstream candidate fails promotion while the last accepted set still runs; release links only to artifact types safe to distribute.
 
@@ -209,6 +213,7 @@ Registry and safety scaffolding start in M0; M5 makes them complete and publicly
 - [ ] **M9-05** Compare emulator against DISC for navigation accuracy, touch responsiveness, animation fluidity, RAM limits, battery/power, playback, headphone/BT/USB behavior and cold-boot stability.
 - [ ] **M9-06** Maintain hardware acceptance reports separate from emulator reports; record which features are not modeled.
 - [ ] **M9-07** Document abort/recovery steps before any write. Interrupted/unknown writes require following the installer's wait/recovery instructions; recovery is not guaranteed.
+- [ ] **M9-08** Research a separate, opt-in **custom UI update package** path using owner-signed SD updates after correct key enrollment and validation; never auto-install. Official FiiO main/recovery updates remain vendor-managed unless a distinct reviewed, explicitly approved device-update scope is opened.
 
 **Exit gate:** separate hardware-specific outcomes recorded; no `verified-device` state from emulator-only evidence; no unattended firmware flash or device wipe.
 
@@ -286,6 +291,8 @@ For a milestone to be marked complete, record:
 - security and licensing review for any new execution/distribution boundary.
 
 **Suggested first PR after this documentation:** **M0-01 + M0-03** only: create CLI/manifest/schema skeleton and focused firmware-free tests. Avoid scaffolding all milestones or integrating device flash code prematurely.
+
+**Additional design:** [Firmware updates, compatibility orchestration and safe update paths](UPDATE_MANAGER.md). This deliberately separates read-only OTA detection, verified Lab runtime upgrades, owner-signed UI-only SD packages and high-risk official device firmware changes.
 
 ## 9. References (primary upstream documentation)
 
