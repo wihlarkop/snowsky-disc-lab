@@ -1,6 +1,6 @@
 # SNOWSKY DISC Lab — Detailed Roadmap
 
-**Status:** M0 implementation and handoff design combined in a [final integration candidate](M0-FINAL-INTEGRATION.md). Approval, integration and exact combined-tree CI gate closure. No Lab-verified firmware/UI combination yet.
+**Status:** M0 integrated through [PR #6](https://github.com/wihlarkop/snowsky-disc-lab/pull/6) at `f6ab222dac3afdc3d67efbc031046d5ad2737897`; its [exact main CI](https://github.com/wihlarkop/snowsky-disc-lab/actions/runs/39299642208) passed all four jobs. [M1-01 preparation](M1-01-RUNTIME-PREPARATION.md) records evidence and remaining runtime-pin gates. No Lab-verified firmware/UI combination yet.
 **Last reviewed against pinned handoff sources/documentation:** 2026-10-20.
 **Device scope:** FiiO / SNOWSKY **DISC** only.  
 **Companion UI:** **Sorane**, in a separate repository to be created later.  
@@ -95,8 +95,11 @@ Issue #1 delivers M0-01/M0-03 and the initial workflow. M0-02/M0-05 add immutabl
 **Goal:** prove the underlying emulator works on *our* supported host before introducing custom UIs.
 
 - [ ] **M1-01** Pin reviewed QEMU `2.x` commit, Docker image/tool dependencies, official V2.57 rootfs metadata and guest shims. Record known limitations.
+  - [Preparation evidence](M1-01-RUNTIME-PREPARATION.md) records immutable source/base-image/recipe/patch identities and upstream firmware references after PR #6's exact integrated-main CI passed. Built runtime/toolchain/shim identities and execution gates remain unresolved; this item is not fully closed.
 - [ ] **M1-02** Add an explicit, safe local official firmware intake path: ZIP/OTA folder selection, size/contiguity/hash checks, optional verified vendor signature when trust chain is reviewed; fail closed for unknown firmware.
+  - [Safe intake foundation](FIRMWARE-INTAKE.md) implements bounded offline ZIP/package inspection, strict V2.57 structure and main-manifest ciphertext checks, and versioned receipts with no extraction/execution authority. Synthetic acceptance only; product/plaintext identity, vendor trust chain and actual-package acceptance remain unverified. Full M1-02 stays open.
 - [ ] **M1-03** Extract into per-firmware, per-run isolated ignored volumes; never upload firmware or mount real devices.
+  - [M1-03 workspace preparation and synthetic output harness](FIRMWARE-INTAKE.md#m1-03--private-workspace-preparation) provides synthetic-verified private snapshots, package/session identities, bounded quotas, revalidation, no-replace publication, quarantine, limited cleanup and a fixed output-lifecycle fixture bound to one first-party synthetic package digest. The checkbox remains open: this is not a firmware extractor and does not produce proprietary firmware outputs, a decrypted image or a mounted rootfs. The [upstream extraction/toolchain readiness review](M1-EXTRACTION-TOOLCHAIN-READINESS.md) records the pinned extraction call path and confirms that authenticity, licensing, toolchain and isolation gates remain unresolved. Its next recommendation is a firmware-free M1-01 QEMU runtime build.
 - [ ] **M1-04** Boot V2.57 stock `mq_ui` + `mq_player`; capture actual framebuffer, log and a reproducible screenshot fixture.
 - [ ] **M1-05** Test touches/swipes/physical key model, SD import/index, local PCM output and WAV fixture comparisons.
 - [ ] **M1-06** Test stop/restart/power lifecycle and persistent guest data isolation; document qemu-user timing and hardware limitations.

@@ -1,0 +1,308 @@
+{
+  "$defs": {
+    "ChunkIdentity": {
+      "additionalProperties": false,
+      "properties": {
+        "index": {
+          "title": "Index",
+          "type": "integer"
+        },
+        "size": {
+          "title": "Size",
+          "type": "integer"
+        },
+        "sha256": {
+          "title": "Sha256",
+          "type": "string"
+        },
+        "manifest_sha256": {
+          "title": "Manifest Sha256",
+          "type": "string"
+        },
+        "filename_hash": {
+          "title": "Filename Hash",
+          "type": "string"
+        }
+      },
+      "required": [
+        "index",
+        "size",
+        "sha256",
+        "manifest_sha256",
+        "filename_hash"
+      ],
+      "title": "ChunkIdentity",
+      "type": "object"
+    },
+    "Condition": {
+      "additionalProperties": false,
+      "properties": {
+        "check": {
+          "title": "Check",
+          "type": "string"
+        },
+        "status": {
+          "enum": [
+            "verified",
+            "unverified",
+            "unsupported",
+            "rejected"
+          ],
+          "title": "Status",
+          "type": "string"
+        },
+        "code": {
+          "title": "Code",
+          "type": "string"
+        }
+      },
+      "required": [
+        "check",
+        "status",
+        "code"
+      ],
+      "title": "Condition",
+      "type": "object"
+    }
+  },
+  "additionalProperties": false,
+  "properties": {
+    "api_version": {
+      "const": "lab-firmware-intake/v1",
+      "default": "lab-firmware-intake/v1",
+      "title": "Api Version",
+      "type": "string"
+    },
+    "policy": {
+      "const": "m1-02-v257",
+      "default": "m1-02-v257",
+      "title": "Policy",
+      "type": "string"
+    },
+    "status": {
+      "default": "refused",
+      "enum": [
+        "accepted",
+        "refused"
+      ],
+      "title": "Status",
+      "type": "string"
+    },
+    "input_format": {
+      "default": "unknown",
+      "enum": [
+        "zip",
+        "directory",
+        "unknown"
+      ],
+      "title": "Input Format",
+      "type": "string"
+    },
+    "archive_sha256": {
+      "anyOf": [
+        {
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Archive Sha256"
+    },
+    "package_sha256": {
+      "anyOf": [
+        {
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Package Sha256"
+    },
+    "package_digest_algorithm": {
+      "default": "sha256-lab-sorted-file-inventory-v1",
+      "title": "Package Digest Algorithm",
+      "type": "string"
+    },
+    "observed_main": {
+      "anyOf": [
+        {
+          "type": "integer"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Observed Main"
+    },
+    "observed_recovery": {
+      "anyOf": [
+        {
+          "type": "integer"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Observed Recovery"
+    },
+    "expected_main": {
+      "const": 257,
+      "default": 257,
+      "title": "Expected Main",
+      "type": "integer"
+    },
+    "expected_recovery": {
+      "const": 18,
+      "default": 18,
+      "title": "Expected Recovery",
+      "type": "integer"
+    },
+    "observed_product": {
+      "default": null,
+      "title": "Observed Product",
+      "type": "null"
+    },
+    "reference_product": {
+      "default": "SNOWSKY_DISC",
+      "title": "Reference Product",
+      "type": "string"
+    },
+    "reference_id": {
+      "default": "v257-upstream-metadata",
+      "title": "Reference Id",
+      "type": "string"
+    },
+    "reference_sha256": {
+      "anyOf": [
+        {
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Reference Sha256"
+    },
+    "reference_source_commit": {
+      "default": "85ab00deb08ac112066377fd8083cc8727ed859a",
+      "title": "Reference Source Commit",
+      "type": "string"
+    },
+    "rootfs_reference_sha256": {
+      "anyOf": [
+        {
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Rootfs Reference Sha256"
+    },
+    "rootfs_reference_bytes": {
+      "anyOf": [
+        {
+          "type": "integer"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Rootfs Reference Bytes"
+    },
+    "expected_chunk_count": {
+      "default": 77,
+      "title": "Expected Chunk Count",
+      "type": "integer"
+    },
+    "chunk_count": {
+      "default": 0,
+      "title": "Chunk Count",
+      "type": "integer"
+    },
+    "chunks": {
+      "items": {
+        "$ref": "#/$defs/ChunkIdentity"
+      },
+      "title": "Chunks",
+      "type": "array"
+    },
+    "metadata_hashes": {
+      "additionalProperties": {
+        "type": "string"
+      },
+      "title": "Metadata Hashes",
+      "type": "object"
+    },
+    "limits": {
+      "additionalProperties": {
+        "type": "integer"
+      },
+      "title": "Limits",
+      "type": "object"
+    },
+    "conditions": {
+      "items": {
+        "$ref": "#/$defs/Condition"
+      },
+      "title": "Conditions",
+      "type": "array"
+    },
+    "inspected_files": {
+      "default": 0,
+      "title": "Inspected Files",
+      "type": "integer"
+    },
+    "inspected_bytes": {
+      "default": 0,
+      "title": "Inspected Bytes",
+      "type": "integer"
+    },
+    "inspection_complete": {
+      "default": false,
+      "title": "Inspection Complete",
+      "type": "boolean"
+    },
+    "may_proceed": {
+      "const": false,
+      "default": false,
+      "title": "May Proceed",
+      "type": "boolean"
+    },
+    "extraction_authorized": {
+      "const": false,
+      "default": false,
+      "title": "Extraction Authorized",
+      "type": "boolean"
+    },
+    "execution_authorized": {
+      "const": false,
+      "default": false,
+      "title": "Execution Authorized",
+      "type": "boolean"
+    },
+    "compatibility": {
+      "const": "unverified",
+      "default": "unverified",
+      "title": "Compatibility",
+      "type": "string"
+    },
+    "vendor_authenticity": {
+      "const": "unverified",
+      "default": "unverified",
+      "title": "Vendor Authenticity",
+      "type": "string"
+    }
+  },
+  "title": "IntakeReceipt",
+  "type": "object"
+}

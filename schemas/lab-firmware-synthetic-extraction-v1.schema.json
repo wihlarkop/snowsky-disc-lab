@@ -1,0 +1,366 @@
+{
+  "$defs": {
+    "Condition": {
+      "additionalProperties": false,
+      "properties": {
+        "check": {
+          "title": "Check",
+          "type": "string"
+        },
+        "status": {
+          "enum": [
+            "verified",
+            "unverified",
+            "unsupported",
+            "rejected"
+          ],
+          "title": "Status",
+          "type": "string"
+        },
+        "code": {
+          "title": "Code",
+          "type": "string"
+        }
+      },
+      "required": [
+        "check",
+        "status",
+        "code"
+      ],
+      "title": "Condition",
+      "type": "object"
+    },
+    "SyntheticOutputIdentity": {
+      "additionalProperties": false,
+      "description": "Content identity for one deterministic harness output.",
+      "properties": {
+        "path": {
+          "maxLength": 768,
+          "minLength": 1,
+          "title": "Path",
+          "type": "string"
+        },
+        "size": {
+          "maximum": 8192,
+          "minimum": 0,
+          "title": "Size",
+          "type": "integer"
+        },
+        "sha256": {
+          "pattern": "^[0-9a-f]{64}$",
+          "title": "Sha256",
+          "type": "string"
+        }
+      },
+      "required": [
+        "path",
+        "size",
+        "sha256"
+      ],
+      "title": "SyntheticOutputIdentity",
+      "type": "object"
+    }
+  },
+  "additionalProperties": false,
+  "description": "Pathless receipt for one fixed, first-party synthetic output operation.",
+  "properties": {
+    "api_version": {
+      "const": "lab-firmware-synthetic-extraction/v1",
+      "default": "lab-firmware-synthetic-extraction/v1",
+      "title": "Api Version",
+      "type": "string"
+    },
+    "operation_status": {
+      "enum": [
+        "accepted",
+        "refused"
+      ],
+      "title": "Operation Status",
+      "type": "string"
+    },
+    "state": {
+      "enum": [
+        "refused",
+        "incomplete",
+        "published"
+      ],
+      "title": "State",
+      "type": "string"
+    },
+    "workspace_id": {
+      "anyOf": [
+        {
+          "pattern": "^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$",
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Workspace Id"
+    },
+    "firmware_id": {
+      "anyOf": [
+        {
+          "pattern": "^sha256-[0-9a-f]{64}$",
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Firmware Id"
+    },
+    "input_digest": {
+      "anyOf": [
+        {
+          "pattern": "^[0-9a-f]{64}$",
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Input Digest"
+    },
+    "operation": {
+      "const": "synthetic_fixture_materialization_v1",
+      "default": "synthetic_fixture_materialization_v1",
+      "title": "Operation",
+      "type": "string"
+    },
+    "operation_id": {
+      "anyOf": [
+        {
+          "pattern": "^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$",
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Operation Id"
+    },
+    "expected_output_manifest": {
+      "items": {
+        "$ref": "#/$defs/SyntheticOutputIdentity"
+      },
+      "title": "Expected Output Manifest",
+      "type": "array"
+    },
+    "output_manifest": {
+      "items": {
+        "$ref": "#/$defs/SyntheticOutputIdentity"
+      },
+      "title": "Output Manifest",
+      "type": "array"
+    },
+    "output_file_count": {
+      "default": 0,
+      "maximum": 2,
+      "minimum": 0,
+      "title": "Output File Count",
+      "type": "integer"
+    },
+    "output_bytes": {
+      "default": 0,
+      "maximum": 16384,
+      "minimum": 0,
+      "title": "Output Bytes",
+      "type": "integer"
+    },
+    "session_bytes_before": {
+      "anyOf": [
+        {
+          "maximum": 4294967296,
+          "minimum": 0,
+          "type": "integer"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Session Bytes Before"
+    },
+    "session_bytes_after": {
+      "anyOf": [
+        {
+          "maximum": 4294967296,
+          "minimum": 0,
+          "type": "integer"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Session Bytes After"
+    },
+    "store_bytes_before": {
+      "anyOf": [
+        {
+          "maximum": 8589934592,
+          "minimum": 0,
+          "type": "integer"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Store Bytes Before"
+    },
+    "store_bytes_after": {
+      "anyOf": [
+        {
+          "maximum": 8589934592,
+          "minimum": 0,
+          "type": "integer"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Store Bytes After"
+    },
+    "session_entries_before": {
+      "anyOf": [
+        {
+          "minimum": 0,
+          "type": "integer"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Session Entries Before"
+    },
+    "session_entries_after": {
+      "anyOf": [
+        {
+          "minimum": 0,
+          "type": "integer"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Session Entries After"
+    },
+    "store_entries_before": {
+      "anyOf": [
+        {
+          "minimum": 0,
+          "type": "integer"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Store Entries Before"
+    },
+    "store_entries_after": {
+      "anyOf": [
+        {
+          "minimum": 0,
+          "type": "integer"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Store Entries After"
+    },
+    "session_quota_bytes": {
+      "default": 4294967296,
+      "title": "Session Quota Bytes",
+      "type": "integer"
+    },
+    "store_quota_bytes": {
+      "default": 8589934592,
+      "title": "Store Quota Bytes",
+      "type": "integer"
+    },
+    "publication_status": {
+      "default": "not_published",
+      "enum": [
+        "not_published",
+        "published"
+      ],
+      "title": "Publication Status",
+      "type": "string"
+    },
+    "failure_code": {
+      "anyOf": [
+        {
+          "pattern": "^[a-z][a-z0-9_]{0,63}$",
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Failure Code"
+    },
+    "conditions": {
+      "items": {
+        "$ref": "#/$defs/Condition"
+      },
+      "title": "Conditions",
+      "type": "array"
+    },
+    "synthetic_only": {
+      "const": true,
+      "default": true,
+      "title": "Synthetic Only",
+      "type": "boolean"
+    },
+    "may_proceed": {
+      "const": false,
+      "default": false,
+      "title": "May Proceed",
+      "type": "boolean"
+    },
+    "extraction_authorized": {
+      "const": false,
+      "default": false,
+      "title": "Extraction Authorized",
+      "type": "boolean"
+    },
+    "execution_authorized": {
+      "const": false,
+      "default": false,
+      "title": "Execution Authorized",
+      "type": "boolean"
+    },
+    "compatibility": {
+      "const": "unverified",
+      "default": "unverified",
+      "title": "Compatibility",
+      "type": "string"
+    },
+    "vendor_authenticity": {
+      "const": "unverified",
+      "default": "unverified",
+      "title": "Vendor Authenticity",
+      "type": "string"
+    }
+  },
+  "required": [
+    "operation_status",
+    "state"
+  ],
+  "title": "SyntheticExtractionReceipt",
+  "type": "object"
+}

@@ -1,5 +1,6 @@
 """Public M0 command surface. Validation never executes manifest data."""
 
+import json
 from pathlib import Path
 from typing import Annotated, Literal
 
@@ -10,6 +11,13 @@ from rich.text import Text
 
 from snowsky_disc_lab.contracts import load_manifest
 from snowsky_disc_lab.doctor import collect_diagnostics
+from snowsky_disc_lab.firmware_intake import inspect_firmware
+from snowsky_disc_lab.firmware_workspace import (
+    FirmwareWorkspaceManager,
+    WorkspaceError,
+    WorkspaceReceipt,
+    default_workspace_root,
+)
 from snowsky_disc_lab.source_lock import SourcePin, load_source_lock
 from snowsky_disc_lab.sources import (
     DEFAULT_CACHE_DIR,
@@ -23,15 +31,26 @@ app = typer.Typer(
     help="Firmware-free SNOWSKY DISC Lab diagnostics and schema validation.", add_completion=False
 )
 ui_app = typer.Typer(help="Validate UI manifest data; no builds or execution.")
-firmware_app = typer.Typer(help="Validate firmware profile data; no firmware access.")
+firmware_app = typer.Typer(
+    help="Validate profiles or inspect local candidate inputs; no extraction."
+)
+workspace_app = typer.Typer(
+    help="Create and verify private firmware byte snapshots; no extraction or execution."
+)
 sources_app = typer.Typer(help="Resolve exact source pins into an isolated source-only cache.")
 app.add_typer(ui_app, name="ui")
 app.add_typer(firmware_app, name="firmware")
+firmware_app.add_typer(workspace_app, name="workspace")
 app.add_typer(sources_app, name="sources")
 console = Console()
 errors = Console(stderr=True)
 DEFAULT_SOURCE_LOCK = Path("upstreams.lock.yaml")
 LockOption = Annotated[Path, typer.Option(help="Versioned source lock YAML.")]
+WorkspaceRootOption = Annotated[
+    Path | None,
+    typer.Option("--workspace-root", help="Private local workspace store; defaults under .lab."),
+]
+OutputFormatOption = Annotated[Literal["text", "json"], typer.Option("--format")]
 
 
 @app.command()
@@ -92,6 +111,170 @@ def ui_validate(manifest: Path) -> None:
 def firmware_validate(profile: Path) -> None:
     """Validate a lab-firmware/v1 YAML profile as data only."""
     validate(profile, "firmware")
+
+
+@firmware_app.command("inspect")
+def firmware_inspect(
+    candidate: Path,
+    output_format: Annotated[Literal["text", "json"], typer.Option("--format")] = "text",
+) -> None:
+    """Inspect a local ZIP or package directory offline, without extracting or decrypting."""
+    receipt = inspect_firmware(candidate)
+    if output_format == "json":
+        typer.echo(receipt.model_dump_json(indent=2))
+    else:
+        console.print(f"Candidate structure: {receipt.status.upper()}", markup=False)
+        console.print(
+            f"Input format: {receipt.input_format}; rootfs chunks: {receipt.chunk_count}/77"
+        )
+        for condition in receipt.conditions:
+            console.print(f"{condition.check}: {condition.status} ({condition.code})", markup=False)
+        console.print(
+            "Structural acceptance only. Vendor authenticity/product/plaintext identity and "
+            "compatibility: UNVERIFIED. Extraction/execution: NOT AUTHORIZED.",
+            markup=False,
+        )
+    if receipt.status == "refused":
+        raise typer.Exit(code=2)
+
+
+def _workspace_manager(root: Path | None) -> FirmwareWorkspaceManager:
+    return FirmwareWorkspaceManager(root or default_workspace_root())
+
+
+def _emit_workspace_receipt(
+    receipt: WorkspaceReceipt,
+    output_format: Literal["text", "json"],
+) -> None:
+    if output_format == "json":
+        typer.echo(receipt.model_dump_json(indent=2))
+    else:
+        console.print(
+            f"Workspace operation: {receipt.operation_status.upper()} ({receipt.state})",
+            markup=False,
+        )
+        if receipt.workspace_id is not None:
+            console.print(f"Workspace ID: {receipt.workspace_id}", markup=False)
+        if receipt.firmware_id is not None:
+            console.print(f"Input identity: {receipt.firmware_id}", markup=False)
+        console.print(
+            f"Snapshot: {receipt.snapshot_files} files, {receipt.snapshot_bytes} bytes; "
+            f"format: {receipt.input_format}"
+        )
+        for condition in receipt.conditions:
+            console.print(f"{condition.check}: {condition.status} ({condition.code})", markup=False)
+        console.print(
+            "Snapshot verification grants no extraction, execution, compatibility, "
+            "or vendor authenticity authority.",
+            markup=False,
+        )
+    if receipt.operation_status == "refused":
+        raise typer.Exit(code=2)
+
+
+@workspace_app.command("stage")
+def firmware_workspace_stage(
+    candidate: Path,
+    workspace_root: WorkspaceRootOption = None,
+    output_format: OutputFormatOption = "text",
+) -> None:
+    """Reinspect a candidate and stage a private, digest-bound input snapshot."""
+    receipt = _workspace_manager(workspace_root).stage(candidate)
+    _emit_workspace_receipt(receipt, output_format)
+
+
+@workspace_app.command("finalize")
+def firmware_workspace_finalize(
+    workspace_id: str,
+    workspace_root: WorkspaceRootOption = None,
+    output_format: OutputFormatOption = "text",
+) -> None:
+    """Revalidate and atomically publish a staged session."""
+    receipt = _workspace_manager(workspace_root).finalize(workspace_id)
+    _emit_workspace_receipt(receipt, output_format)
+
+
+@workspace_app.command("prepare")
+def firmware_workspace_prepare(
+    candidate: Path,
+    workspace_root: WorkspaceRootOption = None,
+    output_format: OutputFormatOption = "text",
+) -> None:
+    """Stage and publish one private snapshot after independent reinspection."""
+    receipt = _workspace_manager(workspace_root).create(candidate)
+    _emit_workspace_receipt(receipt, output_format)
+
+
+@workspace_app.command("verify")
+def firmware_workspace_verify(
+    workspace_id: str,
+    workspace_root: WorkspaceRootOption = None,
+    output_format: OutputFormatOption = "text",
+) -> None:
+    """Recompute the snapshot identity before a future reviewed consumer."""
+    receipt = _workspace_manager(workspace_root).verify(workspace_id)
+    _emit_workspace_receipt(receipt, output_format)
+
+
+@workspace_app.command("list")
+def firmware_workspace_list(
+    workspace_root: WorkspaceRootOption = None,
+    output_format: OutputFormatOption = "text",
+) -> None:
+    """List bounded, pathless receipts for owned workspace sessions."""
+    try:
+        receipts = _workspace_manager(workspace_root).list()
+    except WorkspaceError as error:
+        errors.print(error.code, markup=False)
+        raise typer.Exit(code=2) from None
+    if output_format == "json":
+        typer.echo(json.dumps([item.model_dump(mode="json") for item in receipts], indent=2))
+        return
+    table = Table()
+    table.add_column("Workspace ID", overflow="fold")
+    table.add_column("State")
+    table.add_column("Status")
+    table.add_column("Input identity", overflow="fold")
+    for item in receipts:
+        table.add_row(
+            item.workspace_id or "unknown",
+            item.state,
+            item.operation_status,
+            item.firmware_id or "unknown",
+        )
+    console.print(table)
+
+
+@workspace_app.command("quarantine")
+def firmware_workspace_quarantine(
+    workspace_id: str,
+    reason: Annotated[
+        Literal[
+            "operator_review",
+            "input_changed",
+            "interrupted",
+            "workspace_corrupt",
+            "finalization_incomplete",
+        ],
+        typer.Option("--reason"),
+    ] = "operator_review",
+    workspace_root: WorkspaceRootOption = None,
+    output_format: OutputFormatOption = "text",
+) -> None:
+    """Retain a selected session in quarantine for review."""
+    receipt = _workspace_manager(workspace_root).quarantine(workspace_id, reason)
+    _emit_workspace_receipt(receipt, output_format)
+
+
+@workspace_app.command("cleanup")
+def firmware_workspace_cleanup(
+    workspace_id: str,
+    workspace_root: WorkspaceRootOption = None,
+    output_format: OutputFormatOption = "text",
+) -> None:
+    """Remove an explicitly selected owned staging skeleton only when empty."""
+    receipt = _workspace_manager(workspace_root).cleanup(workspace_id)
+    _emit_workspace_receipt(receipt, output_format)
 
 
 def source_inputs(lock: Path, cache_dir: str, source: str | None) -> tuple[list[SourcePin], Path]:

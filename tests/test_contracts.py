@@ -256,6 +256,7 @@ def test_rejects_fifo_without_blocking(tmp_path: Path) -> None:
     mkfifo = getattr(os, "mkfifo", None)
     if mkfifo is None:
         pytest.skip("this platform does not support POSIX FIFOs")
+    assert mkfifo is not None
     mkfifo(fifo_path)
 
     with pytest.raises(ValueError, match="regular file"):

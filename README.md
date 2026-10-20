@@ -2,7 +2,13 @@
 
 **A proposed community development, emulation, and compatibility lab for the FiiO / SNOWSKY DISC.**
 
-> **Project status: M0 firmware-free foundation.** The CLI provides host diagnostics, strict UI/firmware manifest validation, and immutable upstream source projections with offline cache verification. Emulator execution, builds, adapter SDK and device flashing are not implemented. No firmware/UI combination is Lab-verified. Commands in the planned experience section remain design targets.
+> **Project status: M0 foundation with partial M1 intake/workspace preparation.** The CLI provides host diagnostics, strict UI/firmware manifest validation, immutable upstream source projections, bounded local candidate inspection and private snapshot preparation. Emulator execution, firmware extraction, builds, adapter SDK and device flashing are not implemented. No firmware/UI combination is Lab-verified. Commands in the planned experience section remain design targets.
+
+[M1-01 runtime preparation](docs/M1-01-RUNTIME-PREPARATION.md) records reviewed stock V2.57 source/build inputs, local firmware identity requirements and isolation boundaries. Runtime output identities and execution gates remain open; no runtime runner is shipped.
+
+[M1-02 firmware intake](docs/FIRMWARE-INTAKE.md) adds offline, read-only `disc-lab firmware inspect PATH --format text|json` for local ZIP/package candidates. Structural acceptance grants no authenticity, compatibility, extraction or execution authority. Only synthetic inputs have been verified.
+
+[M1-03 workspace preparation](docs/FIRMWARE-INTAKE.md#m1-03--private-workspace-preparation) adds per-session local snapshots, integrity rechecks, quotas, atomic publication and retained quarantine. It does not extract firmware. Workspace receipts keep extraction/execution authority false, and no real FiiO firmware has been used.
 
 SNOWSKY DISC Lab aims to provide one reproducible workflow for:
 

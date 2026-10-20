@@ -1,0 +1,641 @@
+{
+  "formatVersion": 1,
+  "purpose": "M1-01 review evidence only; not a runtime lock API or executable launch plan",
+  "reviewedOn": "2026-10-20",
+  "status": "preparation-recorded-runtime-blocked",
+  "integratedMain": {
+    "commit": "f6ab222dac3afdc3d67efbc031046d5ad2737897",
+    "pr": "https://github.com/wihlarkop/snowsky-disc-lab/pull/6",
+    "ci": "https://github.com/wihlarkop/snowsky-disc-lab/actions/runs/39299642208",
+    "conclusion": "success"
+  },
+  "integrationSource": {
+    "sourceId": "snowsky-disc-qemu",
+    "commit": "85ab00deb08ac112066377fd8083cc8727ed859a",
+    "projectionDigest": "ef1f0b45f86d4724a7359694b2c3bc4c",
+    "sourceLockChanged": false
+  },
+  "buildInputs": {
+    "platform": "linux/amd64",
+    "nativeBuildPackageRequests": [
+      "dpkg-dev",
+      "build-essential",
+      "ninja-build",
+      "meson",
+      "python3",
+      "pkg-config",
+      "libglib2.0-dev",
+      "libpcre2-dev",
+      "zlib1g-dev",
+      "libffi-dev",
+      "libmount-dev",
+      "libblkid-dev",
+      "libselinux1-dev",
+      "libcap-ng-dev",
+      "libattr1-dev",
+      "fakeroot",
+      "libfakeroot"
+    ],
+    "packageInstallStrategy": {
+      "installer": "fakeroot",
+      "bootstrapPackages": [
+        "fakeroot",
+        "libfakeroot"
+      ],
+      "download": "APT download from the signed, pinned Debian snapshot",
+      "unpack": "dpkg-deb --fsys-tarfile piped to tar --no-same-owner in the build tmpfs",
+      "purpose": "simulate package file ownership operations without granting CAP_CHOWN",
+      "containerCapabilities": "all dropped"
+    },
+    "containerMounts": {
+      "build": {
+        "path": "/build",
+        "type": "tmpfs",
+        "size": "6g",
+        "options": ["rw", "nosuid", "nodev", "exec"],
+        "purpose": "isolated build workspace for pinned tool and generated build execution"
+      },
+      "temporary": {
+        "path": "/tmp",
+        "type": "tmpfs",
+        "size": "512m",
+        "options": ["rw", "nosuid", "nodev", "noexec"]
+      },
+      "sourceInputs": {
+        "path": "/inputs",
+        "type": "bind",
+        "readOnly": true
+      }
+    },
+    "runtimePackageRequests": [
+      "qemu-user-static",
+      "binfmt-support",
+      "squashfs-tools",
+      "gcc-mipsel-linux-gnu",
+      "binutils-mipsel-linux-gnu",
+      "libc6-dev-mipsel-cross",
+      "gdb-multiarch",
+      "strace",
+      "sqlite3",
+      "dosfstools",
+      "exfatprogs",
+      "sox",
+      "python3",
+      "python3-aiohttp",
+      "nodejs",
+      "openssl",
+      "xxd",
+      "file",
+      "procps",
+      "util-linux",
+      "iproute2",
+      "netcat-openbsd",
+      "curl",
+      "ca-certificates"
+    ],
+    "baseImage": {
+      "reference": "docker.io/library/debian:12@sha256:6ebd97fa83deb272194a2cf015b3d26a4d538e9ad3a7a79d544c8af5b0a01443",
+      "platformManifest": "sha256:2f65600e1252c5649d2213e1d1ea4d74253d26514dc6530102a875e429245929",
+      "evidence": "Registry index metadata only; no layer pull or image execution"
+    },
+    "debianSnapshots": {
+      "timestamp": "20260910T000000Z",
+      "suites": [
+        "bookworm",
+        "bookworm-updates",
+        "bookworm-security"
+      ],
+      "sourcesFile": "emulator/docker/debian.sources",
+      "packageVersions": null,
+      "packageArchiveChecksums": null,
+      "authenticationStatus": "APT signature enforcement specified by source; not exercised by Lab"
+    },
+    "qemu": {
+      "debianSourceVersion": "1:7.2+dfsg-7+deb12u18",
+      "target": "mipsel-linux-user",
+      "sourceDescriptor": {
+        "url": "https://snapshot.debian.org/archive/debian/20260910T000000Z/pool/main/q/qemu/qemu_7.2%2Bdfsg-7%2Bdeb12u18.dsc",
+        "sha256": "6b6bd27b947ec89e40a1d6b26d9c9f3c698ca691da13163e0483f6061bbb20b3",
+        "signatureVerified": false
+      },
+      "sourceArchives": [
+        {
+          "name": "qemu_7.2+dfsg.orig.tar.xz",
+          "bytes": 23523172,
+          "sha256": "91aca71520040edc40b8d437aa3004dae614f58e286cf653ee8996c07af2962f"
+        },
+        {
+          "name": "qemu_7.2+dfsg-7+deb12u18.debian.tar.xz",
+          "bytes": 405636,
+          "sha256": "28a1c86310ee53b6bf1854cffe6f6be6ed29a08db7d05759f8ac57b8d6a6cb2f"
+        }
+      ],
+      "archiveBytesVerified": false,
+      "configureFlags": [
+        "--static",
+        "--disable-system",
+        "--disable-tools",
+        "--disable-guest-agent",
+        "--disable-docs",
+        "--disable-werror",
+        "--target-list=mipsel-linux-user",
+        "--with-pkgversion=Debian 1:7.2+dfsg-7+deb12u18, snowsky-disc-devices"
+      ],
+      "patch": "emulator/docker/qemu/snowsky-disc-devices.patch"
+    },
+    "shimToolchain": {
+      "compiler": "mipsel-linux-gnu-gcc",
+      "packages": [
+        "gcc-mipsel-linux-gnu",
+        "binutils-mipsel-linux-gnu",
+        "libc6-dev-mipsel-cross"
+      ],
+      "recipe": "emulator/shims/build_shims.sh",
+      "flags": [
+        "-shared",
+        "-fPIC",
+        "-mabi=32",
+        "-march=mips32r2",
+        "-nostdlib"
+      ],
+      "elfFlagsOffset": 36,
+      "elfFlagsBytes": "07140070",
+      "compilerVersion": null,
+      "sysrootDigest": null
+    },
+    "preloadOrder": [
+      "/lib/fbshim.so",
+      "/lib/asndshim.so",
+      "/lib/tinyshim.so"
+    ],
+    "diagnosticOnlyNotPreloaded": [
+      "mqshim.so"
+    ]
+  },
+  "firmwareReference": {
+    "provenance": "Upstream profile metadata; no Lab firmware measurement or vendor authentication",
+    "product": "SNOWSKY_DISC",
+    "mainOsVersion": 257,
+    "recoveryOsVersion": 18,
+    "rootfsChunks": 77,
+    "rootfsBytes": 80596992,
+    "rootfsSha256": "111e4dd7ee3d7ff91ba7e61181690be7ffd22bd1bbd13ad513f5f015ffb302ae",
+    "originalBinaries": {
+      "usr/bin/mq_player": "a5a6740435758bb3f3d008a4306c93a463c6634318957bbf32086bd7b00fabbc",
+      "usr/bin/mq_ui": "f9b40d825f96906146c31b56a420ab90e6f685f6e2c4761bf867989e12b04226",
+      "bin/busybox": "7517d039b15a2828125da29644e4a9b6ff45ceb6854e52d300c87d6a202d7c9b",
+      "lib/ld-2.29.so": "0c37c07942b176a223b5fd4e1bcd0b7e5ebdf6205bce727ee0f895dd22caf0e2",
+      "lib/libc-2.29.so": "fb2c85aa7e6933d9ce92530427b8272a9dbfad300696e995b542b93f5fb228b6",
+      "usr/lib/libtinyalsa.so.1.1.1": "5d94f6b00d3c4cbd7e4a0141a3e566054eee4ce857c93cb6742a323be3da5b96"
+    },
+    "baselineKeyPatch": {
+      "target": "usr/bin/mq_player",
+      "offset": "0xe7300",
+      "address": "0x4e7300",
+      "before": "41004292",
+      "after": "01000224",
+      "patchedOutputSha256": null
+    },
+    "archiveSha256": null,
+    "vendorSignatureTrustAnchor": null,
+    "authenticityStatus": "unverified"
+  },
+  "unmeasuredOutputs": {
+    "runtimeImageDigest": null,
+    "qemuExecutableSha256": null,
+    "fbshimSha256": null,
+    "asndshimSha256": null,
+    "tinyshimSha256": null,
+    "mqshimSha256": null,
+    "repeatedBuildComparison": "NOT RUN"
+  },
+  "runtimePolicy": {
+    "implemented": false,
+    "bootMode": "direct",
+    "firmwareVersion": "2.57",
+    "network": "none at container boundary; isolated guest namespace",
+    "publishedPorts": [],
+    "qemuDevices": 1,
+    "procExe": 0,
+    "fpuGuard": "reject",
+    "keysEnable": 1,
+    "isolation": "dedicated disposable Linux VM, one session, no host devices/sockets/secrets",
+    "upstreamComposeApprovedAsIs": false
+  },
+  "blockingGates": [
+    "dependency-bom-and-signed-metadata-verification",
+    "firmware-tools-source-availability",
+    "runtime-image-qemu-shim-output-identities",
+    "vendor-authenticity-policy-and-trust-anchor",
+    "privileged-vm-mount-network-cleanup-acceptance",
+    "relevant-license-provenance-review"
+  ],
+  "evidenceFiles": [
+    {
+      "path": "LICENSE",
+      "origin": "verified-source-projection",
+      "gitBlob": "4062ec7aefe2cff17e61c5bc1e892a073aa9640f",
+      "sha256": "8cbb19ad3535601695a5c40583497c5e1bcbb8fddaf0e177be07a54cf15e8762",
+      "url": "https://github.com/eudj1n/snowsky-disc-qemu/blob/85ab00deb08ac112066377fd8083cc8727ed859a/LICENSE"
+    },
+    {
+      "path": "README.md",
+      "origin": "verified-source-projection",
+      "gitBlob": "0740f06bbb4e6d928c5ea03d7a66d6b92c22bd22",
+      "sha256": "d22b2dbf026b6c07f3cc52f4b747d7a3a38160624e32b7875bf694a7fd34bbca",
+      "url": "https://github.com/eudj1n/snowsky-disc-qemu/blob/85ab00deb08ac112066377fd8083cc8727ed859a/README.md"
+    },
+    {
+      "path": "emulator/.env.example",
+      "origin": "verified-source-projection",
+      "gitBlob": "3786e875b2d7716bb70ba14acfdb80952ba7f064",
+      "sha256": "591d1f6db3f2a4b072edd69672f09c1989bc2c9d0b90c08f57a3973e2b07099d",
+      "url": "https://github.com/eudj1n/snowsky-disc-qemu/blob/85ab00deb08ac112066377fd8083cc8727ed859a/emulator/.env.example"
+    },
+    {
+      "path": "emulator/compose.yaml",
+      "origin": "verified-source-projection",
+      "gitBlob": "56c2eb9f000f63b8c13c97884af623d1c8a4f763",
+      "sha256": "47c5eac11a531617ca70d6c4080ca3ae4bd89e381d096e85b295092103c5f33a",
+      "url": "https://github.com/eudj1n/snowsky-disc-qemu/blob/85ab00deb08ac112066377fd8083cc8727ed859a/emulator/compose.yaml"
+    },
+    {
+      "path": "emulator/docker/Dockerfile",
+      "origin": "verified-source-projection",
+      "gitBlob": "8180facedbb4f2a6e0048f2fafc1f0dea36e4416",
+      "sha256": "1de02256f4c2afdb68f854a63293ed651d4aec28c979d2e4ab154a41ed1591b0",
+      "url": "https://github.com/eudj1n/snowsky-disc-qemu/blob/85ab00deb08ac112066377fd8083cc8727ed859a/emulator/docker/Dockerfile"
+    },
+    {
+      "path": "emulator/docker/debian.sources",
+      "origin": "verified-source-projection",
+      "gitBlob": "65aaafc20db4027d7a0404ab43985a940fa64c6c",
+      "sha256": "296362819b78fc90449f2e020f89986c3d3edd2e53fc1d427e572d5209fd595a",
+      "url": "https://github.com/eudj1n/snowsky-disc-qemu/blob/85ab00deb08ac112066377fd8083cc8727ed859a/emulator/docker/debian.sources"
+    },
+    {
+      "path": "emulator/docker/qemu/snowsky-disc-devices.patch",
+      "origin": "verified-source-projection",
+      "gitBlob": "e6e876bb69475e2cb90aa389b44758bcb02bd66a",
+      "sha256": "f3cfebb2eac8170f724b5d5ca900e857fbdfd8905fd1fb4aedc6bcdf41cf3895",
+      "url": "https://github.com/eudj1n/snowsky-disc-qemu/blob/85ab00deb08ac112066377fd8083cc8727ed859a/emulator/docker/qemu/snowsky-disc-devices.patch"
+    },
+    {
+      "path": "emulator/run.sh",
+      "origin": "verified-source-projection",
+      "gitBlob": "7e68f4a1e2984d6da1ab4a9fbf0c17fefa9f8cdc",
+      "sha256": "5dc3c08dbddfc251384456e67406a2cc9e0e53a012f8d6587638159f9c4ffaf9",
+      "url": "https://github.com/eudj1n/snowsky-disc-qemu/blob/85ab00deb08ac112066377fd8083cc8727ed859a/emulator/run.sh"
+    },
+    {
+      "path": "emulator/runtime/__init__.py",
+      "origin": "verified-source-projection",
+      "gitBlob": "e69de29bb2d1d6434b8b29ae775ad8c2e48c5391",
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "url": "https://github.com/eudj1n/snowsky-disc-qemu/blob/85ab00deb08ac112066377fd8083cc8727ed859a/emulator/runtime/__init__.py"
+    },
+    {
+      "path": "emulator/runtime/abi.py",
+      "origin": "verified-source-projection",
+      "gitBlob": "c8968f23998a1256ceace1975052a0150e781a41",
+      "sha256": "41e8c2643b127aae068b9d6e6c569a299a247de740d3681cb8a71a2ba1b446ee",
+      "url": "https://github.com/eudj1n/snowsky-disc-qemu/blob/85ab00deb08ac112066377fd8083cc8727ed859a/emulator/runtime/abi.py"
+    },
+    {
+      "path": "emulator/runtime/audio.py",
+      "origin": "verified-source-projection",
+      "gitBlob": "8d1af2ac5d087bf2444067e805f2c432b5f977af",
+      "sha256": "566fbcb670922183707b955a30e2c825de3fc4e78d5081c050be26568556ecf9",
+      "url": "https://github.com/eudj1n/snowsky-disc-qemu/blob/85ab00deb08ac112066377fd8083cc8727ed859a/emulator/runtime/audio.py"
+    },
+    {
+      "path": "emulator/runtime/battery.py",
+      "origin": "verified-source-projection",
+      "gitBlob": "f7eee39f697035bcf32c0a8e8a617cad19540565",
+      "sha256": "e0720176c84aaf9134ded99c8c17163d351b8f16457647738373daac7b52b912",
+      "url": "https://github.com/eudj1n/snowsky-disc-qemu/blob/85ab00deb08ac112066377fd8083cc8727ed859a/emulator/runtime/battery.py"
+    },
+    {
+      "path": "emulator/runtime/boot_ready.py",
+      "origin": "verified-source-projection",
+      "gitBlob": "9caf172a667e96f2f34558533414cb413cbe0e80",
+      "sha256": "31f60bdc762f19313bba2a1eb24ca5500052ea5165d2a108f53d7883e65efd41",
+      "url": "https://github.com/eudj1n/snowsky-disc-qemu/blob/85ab00deb08ac112066377fd8083cc8727ed859a/emulator/runtime/boot_ready.py"
+    },
+    {
+      "path": "emulator/runtime/card.py",
+      "origin": "verified-source-projection",
+      "gitBlob": "eaf749881dd9832e99b3af5202d2eb33e67e1a93",
+      "sha256": "11ba04013480208059603fb70f68aa21014798806eb5d00fced7dc2ab9d8b5d9",
+      "url": "https://github.com/eudj1n/snowsky-disc-qemu/blob/85ab00deb08ac112066377fd8083cc8727ed859a/emulator/runtime/card.py"
+    },
+    {
+      "path": "emulator/runtime/fb2png.py",
+      "origin": "verified-source-projection",
+      "gitBlob": "631df53e4c95d70e815a7e1be03a5bdb1cbd60ea",
+      "sha256": "7f90ef50e5e4c1d3a3a35318524c1017e70a907d5f90453e286d4702ed5ee85a",
+      "url": "https://github.com/eudj1n/snowsky-disc-qemu/blob/85ab00deb08ac112066377fd8083cc8727ed859a/emulator/runtime/fb2png.py"
+    },
+    {
+      "path": "emulator/runtime/framebuffer.py",
+      "origin": "verified-source-projection",
+      "gitBlob": "e6da3d5f45a014663226fc51fb51f2b43184c0e2",
+      "sha256": "8f88eb2f79ac8564f00da9fca98958fde81c6aa2c183b568487ebae20f39ab9c",
+      "url": "https://github.com/eudj1n/snowsky-disc-qemu/blob/85ab00deb08ac112066377fd8083cc8727ed859a/emulator/runtime/framebuffer.py"
+    },
+    {
+      "path": "emulator/runtime/gpio.py",
+      "origin": "verified-source-projection",
+      "gitBlob": "4e02cc49249fa49048cee7eb9fcf6b057eca8839",
+      "sha256": "35377ebd2740233cafa3b56dad1d1491b552e3eda6baba3e57b34c4cf3162d39",
+      "url": "https://github.com/eudj1n/snowsky-disc-qemu/blob/85ab00deb08ac112066377fd8083cc8727ed859a/emulator/runtime/gpio.py"
+    },
+    {
+      "path": "emulator/runtime/guest_init.py",
+      "origin": "verified-source-projection",
+      "gitBlob": "baf06634edd14ce8b05c3374caaa6b88983c2d28",
+      "sha256": "6edaf96dfc1b8349902fe3133e873df38acec470dc25cada9855147428e86aab",
+      "url": "https://github.com/eudj1n/snowsky-disc-qemu/blob/85ab00deb08ac112066377fd8083cc8727ed859a/emulator/runtime/guest_init.py"
+    },
+    {
+      "path": "emulator/runtime/inject.py",
+      "origin": "verified-source-projection",
+      "gitBlob": "0fb5b1ce4a2298a84361a5ee28f4e94367dc7e59",
+      "sha256": "a0b01dbf12d7dec0887824cb005ac99061aab9b87999917e95aeae8473bacbfa",
+      "url": "https://github.com/eudj1n/snowsky-disc-qemu/blob/85ab00deb08ac112066377fd8083cc8727ed859a/emulator/runtime/inject.py"
+    },
+    {
+      "path": "emulator/runtime/keys.py",
+      "origin": "verified-source-projection",
+      "gitBlob": "3aabb6184896c8ef8a6d80c3fdd2bc0ae1e4b2b2",
+      "sha256": "4f6925468fbb91832a9f37636addca639e1b9889403212bf5d2acafdac782c16",
+      "url": "https://github.com/eudj1n/snowsky-disc-qemu/blob/85ab00deb08ac112066377fd8083cc8727ed859a/emulator/runtime/keys.py"
+    },
+    {
+      "path": "emulator/runtime/machine.py",
+      "origin": "verified-source-projection",
+      "gitBlob": "ef1cb94a9d0f2cd8920a8c87b78afa2aa630cb5e",
+      "sha256": "534e11186538ee18382acb802e5eddedf8cbedb8fdfbc989177b1919448a31fb",
+      "url": "https://github.com/eudj1n/snowsky-disc-qemu/blob/85ab00deb08ac112066377fd8083cc8727ed859a/emulator/runtime/machine.py"
+    },
+    {
+      "path": "emulator/runtime/network.py",
+      "origin": "verified-source-projection",
+      "gitBlob": "4a01c0f309dc22d3b872cd5ad2dd2ba19f8b753d",
+      "sha256": "c5fd26f15791e78bba7f4b3cf3d5cb4dd4d2a792087e2912d8495292c87b9020",
+      "url": "https://github.com/eudj1n/snowsky-disc-qemu/blob/85ab00deb08ac112066377fd8083cc8727ed859a/emulator/runtime/network.py"
+    },
+    {
+      "path": "emulator/runtime/peripherals.py",
+      "origin": "verified-source-projection",
+      "gitBlob": "85085633ff96a5f9ca39e49dff63e176ff5e6d4a",
+      "sha256": "81be7b8f7fef4133d6e69ef5df4aaed1814d6f3643835f6b68ce40d46a27c1d4",
+      "url": "https://github.com/eudj1n/snowsky-disc-qemu/blob/85ab00deb08ac112066377fd8083cc8727ed859a/emulator/runtime/peripherals.py"
+    },
+    {
+      "path": "emulator/runtime/power_watch.py",
+      "origin": "verified-source-projection",
+      "gitBlob": "ea7878c9da2131ed8472bb015b7bf1b41339e710",
+      "sha256": "8c98b3310b3d6b4fdc14e0a59497e7cd5c307c4a6e98a614b6d2d64f2caed28f",
+      "url": "https://github.com/eudj1n/snowsky-disc-qemu/blob/85ab00deb08ac112066377fd8083cc8727ed859a/emulator/runtime/power_watch.py"
+    },
+    {
+      "path": "emulator/runtime/settings.py",
+      "origin": "verified-source-projection",
+      "gitBlob": "d73aa467511e1333234fff2bfba78ff35e07b163",
+      "sha256": "9e576d5e5b8b71ee90967a69224873b83056a6a77dd01b4b2911a96c8ed5e20a",
+      "url": "https://github.com/eudj1n/snowsky-disc-qemu/blob/85ab00deb08ac112066377fd8083cc8727ed859a/emulator/runtime/settings.py"
+    },
+    {
+      "path": "emulator/runtime/touch.py",
+      "origin": "verified-source-projection",
+      "gitBlob": "7607b8df2757966e5a024b2638b94ca05136a785",
+      "sha256": "8f55924bed5025f2caedbe64c622e33f3229ec767ec75715589a66051776d443",
+      "url": "https://github.com/eudj1n/snowsky-disc-qemu/blob/85ab00deb08ac112066377fd8083cc8727ed859a/emulator/runtime/touch.py"
+    },
+    {
+      "path": "emulator/scripts/00_extract_rootfs.sh",
+      "origin": "verified-source-projection",
+      "gitBlob": "0528bd621c1fbf4818a00d67df17bab2d17f26e3",
+      "sha256": "7066fbbc099316c4707c4c507acf22776a1398d4d662d65043a2feef264953be",
+      "url": "https://github.com/eudj1n/snowsky-disc-qemu/blob/85ab00deb08ac112066377fd8083cc8727ed859a/emulator/scripts/00_extract_rootfs.sh"
+    },
+    {
+      "path": "emulator/scripts/01_image_rootfs.sh",
+      "origin": "verified-source-projection",
+      "gitBlob": "c1c110a61d48e064a2e33a8187420cd74b2c4801",
+      "sha256": "64c5a060ebe860f9a94d0dd280fedd1bd223c7922be17feb41358832fc45d0c9",
+      "url": "https://github.com/eudj1n/snowsky-disc-qemu/blob/85ab00deb08ac112066377fd8083cc8727ed859a/emulator/scripts/01_image_rootfs.sh"
+    },
+    {
+      "path": "emulator/scripts/10_setup_env.sh",
+      "origin": "verified-source-projection",
+      "gitBlob": "cd5e5074538db56486c5041bd7fa8d5f061bc7bb",
+      "sha256": "16f26fed03e91284c31074fac343dc6dcfb1f8c0d1ed039fd268bd8fcc1cf7d6",
+      "url": "https://github.com/eudj1n/snowsky-disc-qemu/blob/85ab00deb08ac112066377fd8083cc8727ed859a/emulator/scripts/10_setup_env.sh"
+    },
+    {
+      "path": "emulator/scripts/15_controls.sh",
+      "origin": "verified-source-projection",
+      "gitBlob": "a21a487e84b3febba8d65761f09eabcab909cc30",
+      "sha256": "9679e6b7ef2dc2337808df6ad092cf66b12469c95fe31f0c82fe167a5e8ccf6e",
+      "url": "https://github.com/eudj1n/snowsky-disc-qemu/blob/85ab00deb08ac112066377fd8083cc8727ed859a/emulator/scripts/15_controls.sh"
+    },
+    {
+      "path": "emulator/scripts/15_make_sdcard.sh",
+      "origin": "verified-source-projection",
+      "gitBlob": "b773526af7cf7ca373917303976c02fad7adc013",
+      "sha256": "f53976758f7d703c5594c057960a305aa11b7229749aa075107a7cd1fa8387eb",
+      "url": "https://github.com/eudj1n/snowsky-disc-qemu/blob/85ab00deb08ac112066377fd8083cc8727ed859a/emulator/scripts/15_make_sdcard.sh"
+    },
+    {
+      "path": "emulator/scripts/16_network.sh",
+      "origin": "verified-source-projection",
+      "gitBlob": "80e4ca716fb9f3b3bedee263d99340ab69c56acc",
+      "sha256": "cc3806279d2f805d505b9115abe57108fb2f9034e01f2e3f256df1687df97914",
+      "url": "https://github.com/eudj1n/snowsky-disc-qemu/blob/85ab00deb08ac112066377fd8083cc8727ed859a/emulator/scripts/16_network.sh"
+    },
+    {
+      "path": "emulator/scripts/17_init_stubs.sh",
+      "origin": "verified-source-projection",
+      "gitBlob": "7422ae406a83a1560d9dcdee07bd2a7507164749",
+      "sha256": "0e1649c6ded215e850fbba0dc14ac822cf07df6e1f9b9446c1be08c0e13b3389",
+      "url": "https://github.com/eudj1n/snowsky-disc-qemu/blob/85ab00deb08ac112066377fd8083cc8727ed859a/emulator/scripts/17_init_stubs.sh"
+    },
+    {
+      "path": "emulator/scripts/20_boot.sh",
+      "origin": "verified-source-projection",
+      "gitBlob": "2907e9516c8f8b82850f754b2a6e12395f8ca20b",
+      "sha256": "3fdd40b4715c9eeb38c12cdec1bde81ec2356aacceafaf65deeb1de7abc1bd7e",
+      "url": "https://github.com/eudj1n/snowsky-disc-qemu/blob/85ab00deb08ac112066377fd8083cc8727ed859a/emulator/scripts/20_boot.sh"
+    },
+    {
+      "path": "emulator/scripts/25_power.sh",
+      "origin": "verified-source-projection",
+      "gitBlob": "970f398569464c77a4b2c575be787dd7b63b421b",
+      "sha256": "227c1cd2bb3ee4f6810592b646993cc250f4825d9fcab6e657f050fcab336524",
+      "url": "https://github.com/eudj1n/snowsky-disc-qemu/blob/85ab00deb08ac112066377fd8083cc8727ed859a/emulator/scripts/25_power.sh"
+    },
+    {
+      "path": "emulator/scripts/30_tap.sh",
+      "origin": "verified-source-projection",
+      "gitBlob": "e785257d52e299da7dea3c44041ea142b75f01bd",
+      "sha256": "d30f2eff1fe338a7077362449ff37ab43dcae9be88985f05b463ab14e86672bb",
+      "url": "https://github.com/eudj1n/snowsky-disc-qemu/blob/85ab00deb08ac112066377fd8083cc8727ed859a/emulator/scripts/30_tap.sh"
+    },
+    {
+      "path": "emulator/scripts/99_stop.sh",
+      "origin": "verified-source-projection",
+      "gitBlob": "6cd3ba01d9097df1e46137bac6bd09e8d145c758",
+      "sha256": "ea7fe55797b599086ab3cbec06f574dfac2811419dd7caf14e657ddcd2164663",
+      "url": "https://github.com/eudj1n/snowsky-disc-qemu/blob/85ab00deb08ac112066377fd8083cc8727ed859a/emulator/scripts/99_stop.sh"
+    },
+    {
+      "path": "emulator/scripts/capture.sh",
+      "origin": "verified-source-projection",
+      "gitBlob": "4a89bed2490bbfb16d05b20e36b3107e356d9704",
+      "sha256": "54fdd55b078a03dcc5f2ab4f99ff30aa012aa33ca968e2291e5259c989484296",
+      "url": "https://github.com/eudj1n/snowsky-disc-qemu/blob/85ab00deb08ac112066377fd8083cc8727ed859a/emulator/scripts/capture.sh"
+    },
+    {
+      "path": "emulator/scripts/guest-command.sh",
+      "origin": "verified-source-projection",
+      "gitBlob": "68a9ad2b0f1d5a187dd340877d59570905d432be",
+      "sha256": "892ea575e6130359a8a9cd1009bce3d006cfa084ce6fcf014f4d4ce2fa0b26b8",
+      "url": "https://github.com/eudj1n/snowsky-disc-qemu/blob/85ab00deb08ac112066377fd8083cc8727ed859a/emulator/scripts/guest-command.sh"
+    },
+    {
+      "path": "emulator/scripts/guest-init-stub.sh",
+      "origin": "verified-source-projection",
+      "gitBlob": "1af370b3894625314a4603c7c91806a3e6493afc",
+      "sha256": "cbe229b9284995135d1ebd735d6cdb8dc43b5cd534c84646ff70398218e64441",
+      "url": "https://github.com/eudj1n/snowsky-disc-qemu/blob/85ab00deb08ac112066377fd8083cc8727ed859a/emulator/scripts/guest-init-stub.sh"
+    },
+    {
+      "path": "emulator/scripts/lib.sh",
+      "origin": "verified-source-projection",
+      "gitBlob": "b623c8fe157ee2c517f71dccbd3c5642e0626fcd",
+      "sha256": "b49f5a89ee20866a257501e2ddb5561f741ed46e5781a3498d1b5dabc2284927",
+      "url": "https://github.com/eudj1n/snowsky-disc-qemu/blob/85ab00deb08ac112066377fd8083cc8727ed859a/emulator/scripts/lib.sh"
+    },
+    {
+      "path": "emulator/scripts/patch_keys.sh",
+      "origin": "verified-source-projection",
+      "gitBlob": "274fbdd15a6851ec93cddf4452bd412a401ee95b",
+      "sha256": "c02ee7c337cd5afc8a8826c1033b6913d40f90d647f2133d2f60eea1bad24348",
+      "url": "https://github.com/eudj1n/snowsky-disc-qemu/blob/85ab00deb08ac112066377fd8083cc8727ed859a/emulator/scripts/patch_keys.sh"
+    },
+    {
+      "path": "emulator/settings/always-on.json",
+      "origin": "verified-source-projection",
+      "gitBlob": "37c4c03341a0240c9775e2c369386bb006aca4dc",
+      "sha256": "f60924f728757579695a7b216dba5f15304e0e287e1599720e11efb330754c1a",
+      "url": "https://github.com/eudj1n/snowsky-disc-qemu/blob/85ab00deb08ac112066377fd8083cc8727ed859a/emulator/settings/always-on.json"
+    },
+    {
+      "path": "emulator/settings/emulator.json",
+      "origin": "verified-source-projection",
+      "gitBlob": "decc9072afb24f668b9bf1d99a7edd9419156f89",
+      "sha256": "03fede124fb42bcb65291e70ce229da035d0fe3af1070af407702a9489900fdf",
+      "url": "https://github.com/eudj1n/snowsky-disc-qemu/blob/85ab00deb08ac112066377fd8083cc8727ed859a/emulator/settings/emulator.json"
+    },
+    {
+      "path": "emulator/settings/factory.json",
+      "origin": "verified-source-projection",
+      "gitBlob": "b849f573e7744e9fb8bd63bce17f39394970da02",
+      "sha256": "ebc34dacb0c195f06e54d79f64fec78e9a4e39293c1dd078968ab085020ad4ae",
+      "url": "https://github.com/eudj1n/snowsky-disc-qemu/blob/85ab00deb08ac112066377fd8083cc8727ed859a/emulator/settings/factory.json"
+    },
+    {
+      "path": "emulator/shims/asndshim.c",
+      "origin": "verified-source-projection",
+      "gitBlob": "bc01ff258e421d7aad1986a3ada1f62b311b4b95",
+      "sha256": "3c40915af5c55f20f261923dd48f93aee14a4dfdc3c117c7673ede1daefb8d2f",
+      "url": "https://github.com/eudj1n/snowsky-disc-qemu/blob/85ab00deb08ac112066377fd8083cc8727ed859a/emulator/shims/asndshim.c"
+    },
+    {
+      "path": "emulator/shims/asound.cards",
+      "origin": "verified-source-projection",
+      "gitBlob": "1f514c70c462f68f0b4482eba6d72bac8374be27",
+      "sha256": "a9543fb9955047fb92d926531f3334403d4ffa995d3c7307d7ffa8b9d2d0e099",
+      "url": "https://github.com/eudj1n/snowsky-disc-qemu/blob/85ab00deb08ac112066377fd8083cc8727ed859a/emulator/shims/asound.cards"
+    },
+    {
+      "path": "emulator/shims/build_shims.sh",
+      "origin": "verified-source-projection",
+      "gitBlob": "d389669d073d9b31ede635c2743ab4fa758948ab",
+      "sha256": "81672b21c54e8757a4ca95e0abedeeef17d4dda2300995b3f62a0fe17d24a838",
+      "url": "https://github.com/eudj1n/snowsky-disc-qemu/blob/85ab00deb08ac112066377fd8083cc8727ed859a/emulator/shims/build_shims.sh"
+    },
+    {
+      "path": "emulator/shims/capture.h",
+      "origin": "verified-source-projection",
+      "gitBlob": "ea4324c49017f1c3ff88bfc9fdb4720631c446b1",
+      "sha256": "bcbf9357e73ce1022cbd03af4da4d064a82adf3278bcbc51dee416798f8ba740",
+      "url": "https://github.com/eudj1n/snowsky-disc-qemu/blob/85ab00deb08ac112066377fd8083cc8727ed859a/emulator/shims/capture.h"
+    },
+    {
+      "path": "emulator/shims/fbshim.c",
+      "origin": "verified-source-projection",
+      "gitBlob": "87eb5adcbd081582a995018a06de0139fab0f3c5",
+      "sha256": "363c84afa84f3aac9738df1d8f232ca5e2ee5b2ae530acf35fe0e6b132cc64a8",
+      "url": "https://github.com/eudj1n/snowsky-disc-qemu/blob/85ab00deb08ac112066377fd8083cc8727ed859a/emulator/shims/fbshim.c"
+    },
+    {
+      "path": "emulator/shims/mqshim.c",
+      "origin": "verified-source-projection",
+      "gitBlob": "ffb75e62d167e91b980f5ace610c402b86e8f6f3",
+      "sha256": "41ea965dd0bb06ae6dfdedeb7a30af267df7393aaa6770bb0aa19ea4bbdb1bb5",
+      "url": "https://github.com/eudj1n/snowsky-disc-qemu/blob/85ab00deb08ac112066377fd8083cc8727ed859a/emulator/shims/mqshim.c"
+    },
+    {
+      "path": "emulator/shims/tinyshim.c",
+      "origin": "verified-source-projection",
+      "gitBlob": "a433e98f8ffb94afaac1f24804019f39b49eb94c",
+      "sha256": "ff290becc5d431f8594da8d401cf424f18abcf652020211014b9a06573c93cc1",
+      "url": "https://github.com/eudj1n/snowsky-disc-qemu/blob/85ab00deb08ac112066377fd8083cc8727ed859a/emulator/shims/tinyshim.c"
+    },
+    {
+      "path": "firmware/active-version",
+      "origin": "separate-public-source-review",
+      "gitBlob": "7521537d96663385b29fcf2863ca2d8b2a4d601c",
+      "sha256": "614c56cf1dbf19349b8e7fd1fc7efdd918e1aa382b8faf6a55b83e220157bdfb",
+      "url": "https://github.com/eudj1n/snowsky-disc-qemu/blob/85ab00deb08ac112066377fd8083cc8727ed859a/firmware/active-version"
+    },
+    {
+      "path": "firmware/docs/firmware-profiles.md",
+      "origin": "separate-public-source-review",
+      "gitBlob": "0f3d65a3d0bf5796c591d214ce2cb2795559b0c2",
+      "sha256": "10767afd0c0560f838ec4c8f10d1b5698013b6b7a90255c345ca73d07cca029c",
+      "url": "https://github.com/eudj1n/snowsky-disc-qemu/blob/85ab00deb08ac112066377fd8083cc8727ed859a/firmware/docs/firmware-profiles.md"
+    },
+    {
+      "path": "firmware/profile.py",
+      "origin": "separate-public-source-review",
+      "gitBlob": "273cce7859d645efc4eb8ab6bb5343ac464ec04c",
+      "sha256": "06e30dfb68006948d72a67ecf3d1d058feedf2293695c2adf98d0667e4e05262",
+      "url": "https://github.com/eudj1n/snowsky-disc-qemu/blob/85ab00deb08ac112066377fd8083cc8727ed859a/firmware/profile.py"
+    },
+    {
+      "path": "firmware/tools/firmware_extract.py",
+      "origin": "separate-public-source-review",
+      "gitBlob": "79ff054a740ed44c57e08a2608348a12e876012c",
+      "sha256": "b88e7ae65a038fd8691a18de8b6f980655ae2a90c46ecf3b79cf89cc6c27a5bd",
+      "url": "https://github.com/eudj1n/snowsky-disc-qemu/blob/85ab00deb08ac112066377fd8083cc8727ed859a/firmware/tools/firmware_extract.py"
+    },
+    {
+      "path": "firmware/tools/firmware_inventory.py",
+      "origin": "separate-public-source-review",
+      "gitBlob": "c59e4b27709b1c08a638ca95c6d34ec701c58245",
+      "sha256": "da3d4f9582f9699b030ed86c4ccc607213f591e59cd0b14a28adaf9c0e327e0a",
+      "url": "https://github.com/eudj1n/snowsky-disc-qemu/blob/85ab00deb08ac112066377fd8083cc8727ed859a/firmware/tools/firmware_inventory.py"
+    },
+    {
+      "path": "firmware/v2.57.json",
+      "origin": "separate-public-source-review",
+      "gitBlob": "6ff5fb7c2371fac8b5f4cddc12dc0e6d47b9d3ca",
+      "sha256": "e0bb2613eff334e3550f41a992b4b10c0bff151ddcb0c64d128eef77ec6606a9",
+      "url": "https://github.com/eudj1n/snowsky-disc-qemu/blob/85ab00deb08ac112066377fd8083cc8727ed859a/firmware/v2.57.json"
+    }
+  ]
+}
