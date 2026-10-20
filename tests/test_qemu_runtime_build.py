@@ -979,3 +979,11 @@ def test_debian_license_inventory_distinguishes_expression_and_full_text() -> No
     assert inventory["full_text_license_block_count"] == 1
     assert len(inventory["full_text_license_block_sha256"][0]) == 64
     assert inventory["empty_license_field_count"] == 0
+
+
+def test_session_command_reuses_reviewed_builder(monkeypatch):
+    calls = []
+    monkeypatch.setattr(qemu_runtime_build.sys, "argv", ["qemu_runtime_build.py", "session"])
+    monkeypatch.setattr(qemu_runtime_build, "build", lambda **kwargs: calls.append(kwargs))
+    assert qemu_runtime_build.main() == 0
+    assert calls == [{"synthetic_session": True}]

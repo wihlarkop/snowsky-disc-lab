@@ -1,5 +1,12 @@
 # M0 trust and execution boundaries
 
+**Narrow later addition:** the [synthetic runtime](synthetic-runtime.md) now provides
+one fixed first-party QEMU execution journey with inspected unprivileged container
+bindings and ephemeral private state. Its explicit developer invocation and scoped
+CI workflow authorize only that synthetic journey. The M0/default-command and
+firmware-intake boundaries below retain their meanings; they do not grant firmware
+execution authority. Stock boot and persistent stock userdata remain unverified.
+
 This is the required baseline for designing M1. It documents enforced M0 behavior and the gates that later execution code must implement. It does not authorize firmware acquisition, builds, privileged containers, device access, or runtime execution. A passed doctor or source check never grants those permissions.
 
 M1-02's [intake foundation](FIRMWARE-INTAKE.md) adds bounded offline candidate inspection and stdout receipts, verified only with synthetic samples. M1-03 adds a per-session private byte snapshot, integrity recheck, no-replace publication, quotas, quarantine, narrow empty-staging cleanup and a fixed output-lifecycle harness bound to one first-party synthetic package digest. That harness writes two synthetic files only; it does not process firmware payloads. No milestone here decrypts proprietary firmware, mounts a rootfs, executes firmware, accesses devices, starts containers, or makes network requests. Accepted intake or finalized snapshot structure is not vendor-authenticated firmware, compatibility evidence, or authority for later work. All authority fields remain false, and existing source locks/cache identities remain unchanged.
