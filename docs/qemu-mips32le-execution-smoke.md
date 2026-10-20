@@ -25,6 +25,11 @@ deadline also bounds the complete runtime container.
 
 The fixture is a static Linux MIPS O32 executable, matching QEMU 7.2's
 documented `qemu-mipsel` user-mode target and avoiding a target dynamic loader.
+The pinned QEMU Linux-user loader requires its input ELF to be a regular file
+with at least one execute bit. The temporary guest copy is therefore staged as
+mode `0555` and remains on a read-only bind mount. Earlier staging used `0444`,
+which caused QEMU to reject the guest before instruction or syscall execution.
+This requirement is visible in the [QEMU Linux-user loader source for 7.2.16](https://qemu.googlesource.com/qemu/+/refs/tags/v7.2.16/linux-user/linuxload.c).
 If the success attempt exits unsuccessfully or produces different stdout, the
 same fixed guest is retried once with `QEMU_STRACE=1`, a five-second deadline,
 and the same container restrictions. QEMU syscall, guest-error, and instruction

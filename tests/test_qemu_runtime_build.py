@@ -736,6 +736,117 @@ def test_build_container_copies_only_validated_json_then_removes_container(
     assert [args[:2] for args in calls][-1] == ["docker", "rm"]
 
 
+def test_build_container_stages_synthetic_guest_as_read_only_executable(
+    monkeypatch, tmp_path: Path
+) -> None:
+    qemu_bytes = b"synthetic qemu"
+    guest_bytes = b"synthetic mips elf"
+    qemu_artifact = {
+        "name": "qemu-mipsel",
+        "bytes": len(qemu_bytes),
+        "sha256": qemu_runtime_build.hashlib.sha256(qemu_bytes).hexdigest(),
+        "elf_class": "ELF64",
+        "elf_data": "little endian",
+        "machine": "Advanced Micro Devices X86-64",
+        "flags": "0x0",
+        "has_interpreter": False,
+    }
+    shims = [
+        {
+            "name": name,
+            "bytes": 128,
+            "sha256": "b" * 64,
+            "elf_class": "ELF32",
+            "elf_data": "little endian",
+            "machine": "MIPS R3000",
+            "flags": "0x70001407",
+            "has_interpreter": False,
+        }
+        for name in ("fbshim.so", "asndshim.so", "tinyshim.so", "mqshim.so")
+    ]
+    guest_evidence = {
+        "schema_version": "firmware-free-mips32le-synthetic-guest/v1",
+        "status": "synthetic-static-guest-built",
+        "source": {"sha256": qemu_runtime_build.digest(qemu_runtime_build.SMOKE_GUEST_SOURCE_PATH)},
+        "elf": {
+            "bytes": len(guest_bytes),
+            "sha256": qemu_runtime_build.hashlib.sha256(guest_bytes).hexdigest(),
+            "elf_class": "ELF32",
+            "elf_data": "little endian",
+            "machine": "MIPS R3000",
+            "abi": "o32",
+            "isa": "mips32",
+            "has_interpreter": False,
+        },
+    }
+    build_evidence = {
+        "schema_version": "firmware-free-qemu-runtime-build/v1",
+        "status": "build-passed-binaries-ephemeral",
+        "artifacts": [qemu_artifact, *shims],
+        "synthetic_guest": guest_evidence,
+        "retention": {"compiled_binaries_published": False},
+    }
+    binaries = {
+        "/audit/execution-inputs/qemu-mipsel": qemu_bytes,
+        "/audit/execution-inputs/mips32le-execution-smoke.elf": guest_bytes,
+    }
+
+    def fake_run(args: list[str], **_kwargs: object) -> subprocess.CompletedProcess[str]:
+        if args[:2] == ["docker", "cp"]:
+            source = args[-2].split(":", 1)[-1]
+            target = Path(args[-1])
+            target.parent.mkdir(parents=True, exist_ok=True)
+            if source == "/audit/build-evidence.json":
+                target.write_text(json.dumps(build_evidence), encoding="utf-8")
+            elif source == "/audit/synthetic-guest-evidence.json":
+                target.write_text(json.dumps(guest_evidence), encoding="utf-8")
+            else:
+                target.write_bytes(binaries[source])
+        return subprocess.CompletedProcess(args, 0, stdout="")
+
+    copy_modes: list[tuple[str, bool]] = []
+    copy_execution_binary = qemu_runtime_build.copy_execution_binary
+
+    def recording_copy(
+        container_name: str,
+        container_path: str,
+        target: Path,
+        expected_sha256: str,
+        maximum_bytes: int,
+        *,
+        executable: bool,
+    ) -> None:
+        copy_modes.append((container_path, executable))
+        copy_execution_binary(
+            container_name,
+            container_path,
+            target,
+            expected_sha256,
+            maximum_bytes,
+            executable=executable,
+        )
+
+    monkeypatch.setattr(qemu_runtime_build, "run", fake_run)
+    monkeypatch.setattr(qemu_runtime_build, "copy_execution_binary", recording_copy)
+    inputs = tmp_path / "inputs"
+    inputs.mkdir()
+    smoke_inputs = tmp_path / "smoke-inputs"
+    smoke_inputs.mkdir()
+
+    qemu_runtime_build.run_build_container(
+        inputs,
+        tmp_path / "report" / "build-evidence.json",
+        qemu_runtime_build.read_reference(),
+        smoke_inputs_dir=smoke_inputs,
+    )
+
+    assert copy_modes == [
+        ("/audit/execution-inputs/qemu-mipsel", True),
+        ("/audit/execution-inputs/mips32le-execution-smoke.elf", True),
+    ]
+    assert (smoke_inputs / "mips32le-execution-smoke.elf").read_bytes() == guest_bytes
+
+
 def test_failed_build_reports_bounded_container_logs_before_cleanup(
     monkeypatch, tmp_path: Path
 ) -> None:

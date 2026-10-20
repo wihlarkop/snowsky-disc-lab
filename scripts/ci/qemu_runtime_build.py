@@ -1980,7 +1980,7 @@ def run_build_container(
                 smoke_inputs_dir / "mips32le-execution-smoke.elf",
                 str(elf.get("sha256", "")),
                 16 * 1024 * 1024,
-                executable=False,
+                executable=True,
             )
             smoke_inputs_dir.chmod(0o711)
             evidence["synthetic_guest"] = guest_receipt
