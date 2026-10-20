@@ -294,6 +294,33 @@ def test_synthetic_guest_elf_rejects_interpreted_or_wrong_abi(monkeypatch, tmp_p
         qemu_runtime_build.synthetic_guest_elf_evidence(guest)
 
 
+def test_synthetic_guest_elf_preserves_the_reported_mips32r2_isa(
+    monkeypatch, tmp_path: Path
+) -> None:
+    guest = tmp_path / "guest.elf"
+    guest.write_bytes(b"synthetic ELF fixture")
+    header = """ELF Header:
+  Class:                             ELF32
+  Data:                              2's complement, little endian
+  Type:                              EXEC (Executable file)
+  Machine:                           MIPS R3000
+  Flags:                             0x70001007, noreorder, pic, cpic, o32, mips32r2
+"""
+
+    def fake_tool_output(args: list[str]) -> str:
+        if args[:2] == ["mipsel-linux-gnu-readelf", "-h"]:
+            return header
+        return "Program Headers:\n  LOAD\n"
+
+    monkeypatch.setattr(qemu_runtime_build, "_tool_output", fake_tool_output)
+
+    evidence = qemu_runtime_build.synthetic_guest_elf_evidence(guest)
+
+    assert evidence["architecture"] == "MIPS32 little-endian"
+    assert evidence["abi"] == "o32"
+    assert evidence["isa"] == "mips32r2"
+
+
 def test_execution_container_inspection_rejects_network_or_mount_drift(tmp_path: Path) -> None:
     inputs = tmp_path / "inputs"
     inputs.mkdir()

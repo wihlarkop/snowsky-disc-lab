@@ -1764,9 +1764,10 @@ def run_build_container(
                 not isinstance(elf, dict)
                 or elf.get("elf_class") != "ELF32"
                 or elf.get("elf_data") != "little endian"
-                or elf.get("machine", "").startswith("MIPS") is False
+                or not isinstance(elf.get("machine"), str)
+                or not elf["machine"].startswith("MIPS")
                 or elf.get("abi") != "o32"
-                or elf.get("isa") != "mips32"
+                or elf.get("isa") not in {"mips32", "mips32r2"}
                 or elf.get("has_interpreter") is not False
             ):
                 raise StopBuild(
@@ -1902,7 +1903,8 @@ def synthetic_guest_elf_evidence(path: Path) -> dict[str, Any]:
     elf_type = fields.get("Type", "").split(maxsplit=1)[0].upper()
     has_interpreter = bool(re.search(r"(?m)^\s*INTERP\s", program_headers))
     abi = "o32" if re.search(r"(?<![a-z0-9])o32(?![a-z0-9])", flags) else "unknown"
-    isa = "mips32" if re.search(r"(?<![a-z0-9])mips32(?![a-z0-9])", flags) else "unknown"
+    isa_match = re.search(r"(?<![a-z0-9])(mips32(?:r2)?)(?![a-z0-9])", flags)
+    isa = isa_match.group(1) if isa_match else "unknown"
     evidence = {
         "bytes": size,
         "sha256": digest(path),
@@ -1921,10 +1923,15 @@ def synthetic_guest_elf_evidence(path: Path) -> dict[str, Any]:
         or not evidence["machine"].startswith("MIPS")
         or elf_type != "EXEC"
         or abi != "o32"
-        or isa != "mips32"
+        or isa not in {"mips32", "mips32r2"}
         or has_interpreter
     ):
-        raise StopBuild("synthetic guest must be a static MIPS32 little-endian O32 ELF")
+        raise StopBuild(
+            "synthetic guest must be a static MIPS32 little-endian O32 ELF; "
+            f"observed class={evidence['elf_class']!r}, data={evidence['elf_data']!r}, "
+            f"type={elf_type!r}, machine={evidence['machine']!r}, abi={abi!r}, "
+            f"isa={isa!r}, interpreter={has_interpreter}"
+        )
     evidence["architecture"] = "MIPS32 little-endian"
     return evidence
 
