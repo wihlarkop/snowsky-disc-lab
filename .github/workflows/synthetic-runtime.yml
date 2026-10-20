@@ -1,6 +1,7 @@
 name: Firmware-free synthetic runtime
 
 on:
+  workflow_dispatch:
   pull_request:
     branches: [main]
     paths:
@@ -17,15 +18,19 @@ permissions:
 jobs:
   synthetic-runtime:
     if: >-
-      github.repository == 'wihlarkop/snowsky-disc-lab' &&
-      github.event.pull_request.head.repo.full_name == 'wihlarkop/snowsky-disc-lab' &&
-      github.event.pull_request.head.ref == 'codex/synthetic-runtime-session'
+      (github.event_name == 'pull_request' &&
+       github.repository == 'wihlarkop/snowsky-disc-lab' &&
+       github.event.pull_request.head.repo.full_name == 'wihlarkop/snowsky-disc-lab' &&
+       github.event.pull_request.head.ref == 'codex/synthetic-runtime-session') ||
+      (github.event_name == 'workflow_dispatch' &&
+       github.repository == 'wihlarkop/snowsky-disc-lab' &&
+       github.ref == 'refs/heads/main')
     runs-on: ubuntu-24.04
     timeout-minutes: 45
     steps:
       - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
         with:
-          ref: ${{ github.event.pull_request.head.sha }}
+          ref: ${{ github.event_name == 'pull_request' && github.event.pull_request.head.sha || github.sha }}
           persist-credentials: false
       - name: Build pinned QEMU once and execute synthetic filesystem and lifecycle acceptance
         run: python3 scripts/ci/qemu_runtime_build.py session

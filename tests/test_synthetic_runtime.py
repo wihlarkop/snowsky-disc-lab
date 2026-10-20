@@ -5,6 +5,7 @@ from __future__ import annotations
 import hashlib
 import json
 import subprocess
+from pathlib import Path
 from typing import Any
 
 import pytest
@@ -294,3 +295,39 @@ def test_acceptance_retention_is_globally_bounded(tmp_path):
     with pytest.raises(runtime.RuntimeRefused, match="retention"):
         runtime.reserve_acceptance_store(parent)
     assert len(list(parent.iterdir())) == 8
+
+
+def test_workflow_manual_dispatch_and_pr_guards_are_narrow():
+    import yaml
+
+    path = Path(__file__).resolve().parents[1] / ".github/workflows/synthetic-runtime.yml"
+    workflow = yaml.load(path.read_text(encoding="utf-8"), Loader=yaml.BaseLoader)
+    assert set(workflow["on"]) == {"pull_request", "workflow_dispatch"}
+    assert workflow["on"]["workflow_dispatch"] == ""
+    job = workflow["jobs"]["synthetic-runtime"]
+    guard = job["if"]
+    assert guard == (
+        "(github.event_name == 'pull_request' &&\n"
+        " github.repository == 'wihlarkop/snowsky-disc-lab' &&\n"
+        " github.event.pull_request.head.repo.full_name == 'wihlarkop/snowsky-disc-lab' &&\n"
+        " github.event.pull_request.head.ref == 'codex/synthetic-runtime-session') ||\n"
+        "(github.event_name == 'workflow_dispatch' &&\n"
+        " github.repository == 'wihlarkop/snowsky-disc-lab' &&\n"
+        " github.ref == 'refs/heads/main')"
+    )
+    assert "inputs." not in guard
+    assert workflow["permissions"] == {"contents": "read"}
+    assert job["timeout-minutes"] == "45"
+    steps = job["steps"]
+    assert len(steps) == 2
+    checkout = steps[0]
+    assert checkout["uses"].endswith("@11bd71901bbe5b1630ceea73d27597364c9af683")
+    assert "github.event.pull_request.head.sha" in checkout["with"]["ref"]
+    assert "github.sha" in checkout["with"]["ref"]
+    assert checkout["with"]["persist-credentials"] == "false"
+    assert steps[1]["run"] == "python3 scripts/ci/qemu_runtime_build.py session"
+    source = path.read_text(encoding="utf-8")
+    assert "inputs:" not in source
+    assert "inputs." not in source
+    assert "secrets." not in source
+    assert "push:" not in source

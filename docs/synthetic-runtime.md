@@ -15,9 +15,10 @@ This developer invocation reuses the existing capacity gate, reviewed source
 fetch, signed Debian snapshot audit, digest-pinned image, toolchain, QEMU and shim
 build, and MIPS execution smoke. It builds once and runs the fixed session
 journey. It accepts no command, binary, rootfs, firmware or arbitrary build input.
-There is no public preparation operation. The original main-only manual smoke
-workflow is preserved. The new PR workflow checks out the exact PR head with
-read-only repository permissions and no persisted credentials or secrets.
+There is no public preparation operation. The PR workflow checks out the exact
+PR head with read-only repository permissions and no persisted credentials or
+secrets. It also supports input-free manual dispatch only from the canonical
+repository's `main` branch and checks out that exact dispatch SHA.
 
 ## Upstream evidence and synthetic mappings
 
