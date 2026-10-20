@@ -237,6 +237,9 @@ def test_only_execution_build_compiles_the_first_party_guest() -> None:
     assert "/inputs/lab/fixtures/mips32le_execution_smoke.c" in smoke
     assert "mark_phase synthetic-guest-build /audit/synthetic-guest-build.log" in smoke
     assert "measure-smoke-guest" in smoke
+    assert "mark_phase synthetic-guest-artifact-staging" in smoke
+    assert "/audit/execution-inputs/qemu-mipsel" in smoke
+    assert "/audit/execution-inputs/mips32le-execution-smoke.elf" in smoke
 
 
 def test_synthetic_guest_elf_requires_static_mips32le_o32(monkeypatch, tmp_path: Path) -> None:

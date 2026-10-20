@@ -139,6 +139,7 @@ AUDIT_LOG_FILES += (
 AUDIT_LOG_FILES += (
     ("/audit/synthetic-guest-build.log", "synthetic-guest-build.log"),
     ("/audit/synthetic-guest-evidence.log", "synthetic-guest-evidence.log"),
+    ("/audit/execution-input-staging.log", "execution-input-staging.log"),
 )
 FAKEROOT_BOOTSTRAP_PACKAGES = ("fakeroot", "libfakeroot")
 NATIVE_BUILD_PACKAGES = (
@@ -1406,6 +1407,19 @@ mipsel-linux-gnu-gcc -static -march=mips32 -mabi=32 -EL -O2 -fno-pie -no-pie \
 mark_phase synthetic-guest-evidence /audit/synthetic-guest-evidence.log
 python3 /inputs/lab/qemu_runtime_build.py measure-smoke-guest \
   >/audit/synthetic-guest-evidence.log 2>&1
+mark_phase synthetic-guest-artifact-staging /audit/execution-input-staging.log
+{
+  install -d -m 0700 /audit/execution-inputs
+  install -m 0555 /build/qemu-7.2+dfsg/build/qemu-mipsel \
+    /audit/execution-inputs/qemu-mipsel
+  install -m 0444 /build/smoke/mips32le-execution-smoke.elf \
+    /audit/execution-inputs/mips32le-execution-smoke.elf
+  cmp -s /build/qemu-7.2+dfsg/build/qemu-mipsel /audit/execution-inputs/qemu-mipsel
+  cmp -s /build/smoke/mips32le-execution-smoke.elf \
+    /audit/execution-inputs/mips32le-execution-smoke.elf
+  test -s /audit/execution-inputs/qemu-mipsel
+  test -s /audit/execution-inputs/mips32le-execution-smoke.elf
+} >/audit/execution-input-staging.log 2>&1
 """
     archive_checks = "\n".join(
         f"printf '%s  %s\\n' '{sha256}' '/inputs/qemu/{name}' | sha256sum --check --status"
@@ -1781,7 +1795,7 @@ def run_build_container(
                 raise StopBuild("built QEMU binary identity is missing")
             copy_execution_binary(
                 container_name,
-                "/build/qemu-7.2+dfsg/build/qemu-mipsel",
+                "/audit/execution-inputs/qemu-mipsel",
                 smoke_inputs_dir / "qemu-mipsel",
                 str(qemu_artifact.get("sha256", "")),
                 150 * 1024 * 1024,
@@ -1789,7 +1803,7 @@ def run_build_container(
             )
             copy_execution_binary(
                 container_name,
-                SMOKE_GUEST_ELF_PATH,
+                "/audit/execution-inputs/mips32le-execution-smoke.elf",
                 smoke_inputs_dir / "mips32le-execution-smoke.elf",
                 str(elf.get("sha256", "")),
                 16 * 1024 * 1024,
