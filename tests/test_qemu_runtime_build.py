@@ -52,6 +52,7 @@ def test_source_audit_exports_container_owned_evidence_without_writable_host_mou
     assert "install -d -m 0700 /audit/source /audit/unpacked" not in create[-1]
     assert "FIRMWARE_FREE_PHASE_FAILURE" in create[-1]
     assert 'tail -n 12 "$failure_log"' in create[-1]
+    assert "exec 3>&2" in create[-1]
     assert "printf '%s\\n' \"$phase\" > /audit/phase" in create[-1]
     assert "printf '%s\\n' \"$failure_log\" > /audit/failure-log" in create[-1]
     assert "4CB50190207B4758A3F73A796ED0E7B82643E131" in create[-1]
@@ -192,6 +193,7 @@ def test_build_recipe_uses_the_pinned_target_without_runtime_or_guest_commands()
     assert "grep -Eiq 'fuzz|offset|reversed|previously applied|skipping'" in command
     assert "FIRMWARE_FREE_PHASE_FAILURE" in command
     assert 'tail -n 12 "$failure_log"' in command
+    assert "exec 3>&2" in command
     assert "printf '%s\\n' \"$phase\" > /audit/phase" in command
     assert "printf '%s\\n' \"$failure_log\" > /audit/failure-log" in command
     assert "./configure" in command

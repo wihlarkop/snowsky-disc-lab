@@ -474,17 +474,18 @@ def source_audit_container(sources_file: Path, audit_dir: Path) -> None:
     command = (
         r"""
 set -eEuo pipefail
+exec 3>&2
 install -d -m 0700 /audit
 phase=container-initialization
 failure_log=
 report_failure() {
   failure_status=$?
   trap - ERR
-  printf 'FIRMWARE_FREE_PHASE_FAILURE phase=%s exit=%s\n' "$phase" "$failure_status" >&2
+  printf 'FIRMWARE_FREE_PHASE_FAILURE phase=%s exit=%s\n' "$phase" "$failure_status" >&3
   if [[ -n "$failure_log" && -f "$failure_log" ]]; then
-    printf '%s\n' 'FIRMWARE_FREE_LOG_TAIL_BEGIN' >&2
-    tail -n 12 "$failure_log" | sed -E 's/[[:cntrl:]]/ /g' | cut -c1-500 >&2
-    printf '%s\n' 'FIRMWARE_FREE_LOG_TAIL_END' >&2
+    printf '%s\n' 'FIRMWARE_FREE_LOG_TAIL_BEGIN' >&3
+    tail -n 12 "$failure_log" | sed -E 's/[[:cntrl:]]/ /g' | cut -c1-500 >&3
+    printf '%s\n' 'FIRMWARE_FREE_LOG_TAIL_END' >&3
   fi
   exit "$failure_status"
 }
@@ -683,8 +684,9 @@ def read_audit_diagnostics(audit_dir: Path) -> list[str]:
                     .decode("utf-8", errors="replace")
                     .splitlines()
                 )
-            if lines:
-                diagnostics.extend(f"{name}: {line[:500]}" for line in lines[-3:])
+            useful_lines = [line for line in lines if not line.startswith("FIRMWARE_FREE_")]
+            if useful_lines:
+                diagnostics.extend(f"{name}: {line[:500]}" for line in useful_lines[-8:])
     return diagnostics[-24:]
 
 
@@ -936,16 +938,17 @@ def build_container_command(reference: dict[str, Any]) -> str:
         for suite, fingerprint in DEBIAN_SIGNING_FINGERPRINTS.items()
     )
     script = r"""set -eEuo pipefail
+exec 3>&2
 phase=container-initialization
 failure_log=
 report_failure() {
   failure_status=$?
   trap - ERR
-  printf 'FIRMWARE_FREE_PHASE_FAILURE phase=%s exit=%s\n' "$phase" "$failure_status" >&2
+  printf 'FIRMWARE_FREE_PHASE_FAILURE phase=%s exit=%s\n' "$phase" "$failure_status" >&3
   if [[ -n "$failure_log" && -f "$failure_log" ]]; then
-    printf '%s\n' 'FIRMWARE_FREE_LOG_TAIL_BEGIN' >&2
-    tail -n 12 "$failure_log" | sed -E 's/[[:cntrl:]]/ /g' | cut -c1-500 >&2
-    printf '%s\n' 'FIRMWARE_FREE_LOG_TAIL_END' >&2
+    printf '%s\n' 'FIRMWARE_FREE_LOG_TAIL_BEGIN' >&3
+    tail -n 12 "$failure_log" | sed -E 's/[[:cntrl:]]/ /g' | cut -c1-500 >&3
+    printf '%s\n' 'FIRMWARE_FREE_LOG_TAIL_END' >&3
   fi
   exit "$failure_status"
 }
