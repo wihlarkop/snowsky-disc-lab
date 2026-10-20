@@ -58,6 +58,8 @@ def test_source_audit_exports_container_owned_evidence_without_writable_host_mou
     assert "4CB50190207B4758A3F73A796ED0E7B82643E131" in create[-1]
     assert "ED541312A33F1128F10B1C6C54404762BBB6E853" in create[-1]
     assert "-o APT::Sandbox::User=root" in create[-1]
+    assert "-o Dpkg::Use-Pty=false" in create[-1]
+    assert "-o Dir::Log=/dev/null" in create[-1]
     assert 'source_tmp="$(mktemp -d /tmp/qemu-source-download.XXXXXX)"' in create[-1]
     assert 'cd "$source_tmp"' in create[-1]
     assert 'apt-get "${apt_opts[@]}" source --download-only --only-source' in create[-1]
@@ -202,6 +204,8 @@ def test_build_recipe_uses_the_pinned_target_without_runtime_or_guest_commands()
     assert "ED541312A33F1128F10B1C6C54404762BBB6E853" in command
     assert "build_shims.sh" in command
     assert "APT::Sandbox::User=root" in command
+    assert "Dpkg::Use-Pty=false" in command
+    assert "Dir::Log=/dev/null" in command
     assert "binfmt" not in command
     assert "qemu-user-static" not in command
     assert "qemu-mipsel -version" not in command

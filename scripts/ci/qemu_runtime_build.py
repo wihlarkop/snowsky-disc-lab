@@ -500,6 +500,8 @@ mark_phase container-initialization ""
 export DEBIAN_FRONTEND=noninteractive
 apt_opts=(
   -o APT::Sandbox::User=root
+  -o Dpkg::Use-Pty=false
+  -o Dir::Log=/dev/null
   -o Dir::Etc::sourcelist=/dev/null
   -o Dir::Etc::sourceparts=/etc/apt/sources.list.d
   -o Acquire::Languages=none
@@ -973,6 +975,8 @@ export DEBIAN_FRONTEND=noninteractive
 apt() {
   apt-get \
     -o APT::Sandbox::User=root \
+    -o Dpkg::Use-Pty=false \
+    -o Dir::Log=/dev/null \
     -o Dir::Etc::sourcelist=/dev/null \
     -o Dir::Etc::sourceparts=/etc/apt/sources.list.d \
     -o Acquire::Languages=none \
@@ -1683,7 +1687,9 @@ def build() -> None:
             ),
             "apt_sandbox": (
                 "APT ran as container UID 0 because SETUID/SETGID capabilities are dropped; "
-                "the container retained --cap-drop=ALL and no-new-privileges."
+                "Dpkg::Use-Pty=false and Dir::Log=/dev/null avoid APT's term.log ownership "
+                "change, while explicit audit logs retain package diagnostics. The container "
+                "retained --cap-drop=ALL and no-new-privileges."
             ),
             "runtime_and_device_boundaries": {
                 "firmware_processed": False,
