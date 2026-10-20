@@ -52,6 +52,8 @@ def test_source_audit_exports_container_owned_evidence_without_writable_host_mou
     assert "install -d -m 0700 /audit/source /audit/unpacked" not in create[-1]
     assert "FIRMWARE_FREE_PHASE_FAILURE" in create[-1]
     assert 'tail -n 12 "$failure_log"' in create[-1]
+    assert "printf '%s\\n' \"$phase\" > /audit/phase" in create[-1]
+    assert "printf '%s\\n' \"$failure_log\" > /audit/failure-log" in create[-1]
     assert "4CB50190207B4758A3F73A796ED0E7B82643E131" in create[-1]
     assert "ED541312A33F1128F10B1C6C54404762BBB6E853" in create[-1]
     assert "-o APT::Sandbox::User=root" in create[-1]
@@ -190,6 +192,8 @@ def test_build_recipe_uses_the_pinned_target_without_runtime_or_guest_commands()
     assert "grep -Eiq 'fuzz|offset|reversed|previously applied|skipping'" in command
     assert "FIRMWARE_FREE_PHASE_FAILURE" in command
     assert 'tail -n 12 "$failure_log"' in command
+    assert "printf '%s\\n' \"$phase\" > /audit/phase" in command
+    assert "printf '%s\\n' \"$failure_log\" > /audit/failure-log" in command
     assert "./configure" in command
     assert "ninja -j2 -C build qemu-mipsel" in command
     assert "4CB50190207B4758A3F73A796ED0E7B82643E131" in command
@@ -269,19 +273,24 @@ def test_failed_build_reports_bounded_container_logs_before_cleanup(
         calls.append(args)
         if args[:2] == ["docker", "start"]:
             raise qemu_runtime_build.StopBuild("command failed (100): docker start")
+        if args[:2] == ["docker", "cp"]:
+            source = args[-2].split(":", 1)[-1]
+            target = Path(args[-1])
+            if source in {"/audit/phase", "/audit/qemu-build.log"}:
+                target.parent.mkdir(parents=True, exist_ok=True)
+                detail = "qemu-build\n" if source == "/audit/phase" else "ninja failed fixture\n"
+                target.write_text(detail, encoding="utf-8")
+                return subprocess.CompletedProcess(args, 0, stdout="")
+            return subprocess.CompletedProcess(args, 1, stdout="not present")
         if args[:2] == ["docker", "logs"]:
-            return subprocess.CompletedProcess(
-                args,
-                0,
-                stdout="FIRMWARE_FREE_PHASE_FAILURE phase=debian-signature-verification exit=1\n",
-            )
+            return subprocess.CompletedProcess(args, 0, stdout="")
         return subprocess.CompletedProcess(args, 0, stdout="")
 
     monkeypatch.setattr(qemu_runtime_build, "run", fake_run)
     inputs = tmp_path / "inputs"
     inputs.mkdir()
 
-    with pytest.raises(qemu_runtime_build.StopBuild, match="bounded container diagnostic"):
+    with pytest.raises(qemu_runtime_build.StopBuild, match="qemu-build.log: ninja failed fixture"):
         qemu_runtime_build.run_build_container(
             inputs, tmp_path / "report" / "build-evidence.json", qemu_runtime_build.read_reference()
         )

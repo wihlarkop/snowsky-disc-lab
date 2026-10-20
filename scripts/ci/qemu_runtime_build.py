@@ -126,6 +126,15 @@ AUDIT_LOG_FILES = tuple(
         "source-extract.log",
     )
 )
+AUDIT_LOG_FILES += (
+    ("/audit/phase", "phase"),
+    ("/audit/failure-log", "failure-log"),
+    ("/audit/input-hash-check.log", "input-hash-check.log"),
+    ("/audit/patch-application.log", "patch-application.log"),
+    ("/audit/qemu-configure.log", "qemu-configure.log"),
+    ("/audit/qemu-build.log", "qemu-build.log"),
+    ("/audit/shim-build.log", "shim-build.log"),
+)
 NATIVE_BUILD_PACKAGES = (
     "dpkg-dev",
     "build-essential",
@@ -480,6 +489,13 @@ report_failure() {
   exit "$failure_status"
 }
 trap report_failure ERR
+mark_phase() {
+  phase="$1"
+  failure_log="$2"
+  printf '%s\n' "$phase" > /audit/phase
+  printf '%s\n' "$failure_log" > /audit/failure-log
+}
+mark_phase container-initialization ""
 export DEBIAN_FRONTEND=noninteractive
 apt_opts=(
   -o APT::Sandbox::User=root
@@ -495,13 +511,11 @@ test ! -e /etc/apt/sources.list
 source_files=(/etc/apt/sources.list.d/*)
 test "${#source_files[@]}" -eq 1
 test "${source_files[0]}" = /etc/apt/sources.list.d/debian.sources
-phase=debian-index-update
-failure_log=/audit/apt-update.log
+mark_phase debian-index-update /audit/apt-update.log
 apt-get "${apt_opts[@]}" update >/audit/apt-update.log 2>&1
 keyring=/usr/share/keyrings/debian-archive-keyring.gpg
 sha256sum "$keyring" | awk '{print $1}' > /audit/archive-keyring-before.sha256
-phase=debian-signature-verification
-failure_log=/audit/apt-update.log
+mark_phase debian-signature-verification /audit/apt-update.log
 for f in /var/lib/apt/lists/*_InRelease; do
   status="$(gpgv --status-fd 1 --keyring "$keyring" "$f" 2>&1)"
   fingerprint="$(printf '%s\n' "$status" | awk '$2 == "VALIDSIG" {print $3; exit}')"
@@ -522,16 +536,14 @@ __DEBIAN_SIGNATURE_ALLOWLIST__
     "$(basename "$f")" "$codename" "$fingerprint" "$file_hash" \
     >> /audit/inrelease.tsv
 done
-phase=dpkg-dev-install
-failure_log=/audit/apt-install.log
+mark_phase dpkg-dev-install /audit/apt-install.log
 apt-get "${apt_opts[@]}" install -y --no-install-recommends dpkg-dev >/audit/apt-install.log 2>&1
 sha256sum "$keyring" | awk '{print $1}' > /audit/archive-keyring-after.sha256
 cmp /audit/archive-keyring-before.sha256 /audit/archive-keyring-after.sha256
 install -d -m 0700 /audit/source
 source_tmp="$(mktemp -d /tmp/qemu-source-download.XXXXXX)"
 cd "$source_tmp"
-phase=qemu-source-download
-failure_log=/audit/source-download.log
+mark_phase qemu-source-download /audit/source-download.log
 apt-get "${apt_opts[@]}" source --download-only --only-source \
   'qemu=1:7.2+dfsg-7+deb12u18' >/audit/source-download.log 2>&1
 dsc=(qemu_7.2+dfsg-7+deb12u18.dsc)
@@ -546,8 +558,7 @@ mv qemu_7.2+dfsg.orig.tar.xz qemu_7.2+dfsg-7+deb12u18.debian.tar.xz /audit/sourc
 """
         + archive_checks
         + r"""
-phase=qemu-source-extract
-failure_log=/audit/source-extract.log
+mark_phase qemu-source-extract /audit/source-extract.log
 dpkg-source -x /audit/source/qemu_7.2+dfsg-7+deb12u18.dsc /audit/unpacked \
   >/audit/source-extract.log 2>&1
 test -f /audit/unpacked/debian/copyright
@@ -595,8 +606,10 @@ find /audit/unpacked -maxdepth 1 -type f -name 'COPYING*' -print0 \
             container_diagnostics = read_container_diagnostics(container_name)
             try:
                 copy_audit_files(container_name, audit_dir, AUDIT_LOG_FILES, required=False)
-            except (StopBuild, OSError, subprocess.SubprocessError):
-                pass
+            except (StopBuild, OSError, subprocess.SubprocessError) as copy_exc:
+                container_diagnostics.append(
+                    "bounded-log-copy-failed: " + str(copy_exc).replace(str(audit_dir), "<audit>")
+                )
             diagnostics = read_audit_diagnostics(audit_dir)
             diagnostics.extend(container_diagnostics)
             detail = " | ".join(diagnostics).replace(str(audit_dir), "<audit>")
@@ -671,8 +684,8 @@ def read_audit_diagnostics(audit_dir: Path) -> list[str]:
                     .splitlines()
                 )
             if lines:
-                diagnostics = lines[-10:]
-    return diagnostics
+                diagnostics.extend(f"{name}: {line[:500]}" for line in lines[-3:])
+    return diagnostics[-24:]
 
 
 def read_container_diagnostics(container_name: str) -> list[str]:
@@ -938,14 +951,20 @@ report_failure() {
 }
 trap report_failure ERR
 install -d -m 0700 /audit
+mark_phase() {
+  phase="$1"
+  failure_log="$2"
+  printf '%s\n' "$phase" > /audit/phase
+  printf '%s\n' "$failure_log" > /audit/failure-log
+}
+mark_phase container-initialization ""
 install -d -m 0755 /etc/apt/sources.list.d
 cp /inputs/upstream/emulator/docker/debian.sources /etc/apt/sources.list.d/debian.sources
 test ! -e /etc/apt/sources.list
 test -f /etc/apt/sources.list.d/debian.sources
 test "$(find /etc/apt/sources.list.d -maxdepth 1 -type f | wc -l)" -eq 1
 cd /inputs
-phase=reviewed-input-integrity
-failure_log=/audit/input-hash-check.log
+mark_phase reviewed-input-integrity /audit/input-hash-check.log
 sha256sum --check /inputs/SHA256SUMS >/audit/input-hash-check.log 2>&1
 export DEBIAN_FRONTEND=noninteractive
 apt() {
@@ -959,14 +978,12 @@ apt() {
     -o Acquire::AllowWeakRepositories=false \
     -o APT::Get::AllowUnauthenticated=false "$@"
 }
-phase=debian-index-update
-failure_log=/audit/apt-update.log
+mark_phase debian-index-update /audit/apt-update.log
 apt update >/audit/apt-update.log 2>&1
 keyring=/usr/share/keyrings/debian-archive-keyring.gpg
 sha256sum "$keyring" | awk '{print $1}' > /audit/archive-keyring-before.sha256
 : > /audit/inrelease.tsv
-phase=debian-signature-verification
-failure_log=/audit/apt-update.log
+mark_phase debian-signature-verification /audit/apt-update.log
 for f in /var/lib/apt/lists/*_InRelease; do
   status="$(gpgv --status-fd 1 --keyring "$keyring" "$f" 2>&1)"
   fingerprint="$(printf '%s\n' "$status" | awk '$2 == "VALIDSIG" {print $3; exit}')"
@@ -989,8 +1006,7 @@ done
 for suite in bookworm bookworm-updates bookworm-security; do
   grep -q "$(printf '\t%s\t' "$suite")" /audit/inrelease.tsv
 done
-phase=build-package-install
-failure_log=/audit/apt-install.log
+mark_phase build-package-install /audit/apt-install.log
 apt install -y --no-install-recommends __BUILD_PACKAGES__ >/audit/apt-install.log 2>&1
 sha256sum "$keyring" | awk '{print $1}' > /audit/archive-keyring-after.sha256
 cmp /audit/archive-keyring-before.sha256 /audit/archive-keyring-after.sha256
@@ -1001,18 +1017,15 @@ apt clean
 rm -rf /var/lib/apt/lists/*
 printf '%s\n' "$(date +%s)" > /audit/build-start-epoch
 cd /inputs/qemu
-phase=qemu-source-integrity
-failure_log=
+mark_phase qemu-source-integrity ""
 test "$(stat -c %s qemu_7.2+dfsg-7+deb12u18.dsc)" -le 1048576
 printf '%s  %s\n' '__DSC_SHA256__' qemu_7.2+dfsg-7+deb12u18.dsc \
   | sha256sum --check --status
 __ARCHIVE_CHECKS__
-phase=qemu-source-extract
-failure_log=/audit/source-extract.log
+mark_phase qemu-source-extract /audit/source-extract.log
 dpkg-source -x qemu_7.2+dfsg-7+deb12u18.dsc /build/qemu-7.2+dfsg \
   >/audit/source-extract.log 2>&1
-phase=qemu-patch-application
-failure_log=/audit/patch-application.log
+mark_phase qemu-patch-application /audit/patch-application.log
 patch --batch --forward --fuzz=0 -p1 --directory=/build/qemu-7.2+dfsg \
   < /inputs/upstream/emulator/docker/qemu/snowsky-disc-devices.patch \
   >/audit/patch-application.log 2>&1
@@ -1021,19 +1034,15 @@ if grep -Eiq 'fuzz|offset|reversed|previously applied|skipping' /audit/patch-app
   exit 1
 fi
 cd /build/qemu-7.2+dfsg
-phase=qemu-configure
-failure_log=/audit/qemu-configure.log
+mark_phase qemu-configure /audit/qemu-configure.log
 ./configure __CONFIGURE_ARGS__ >/audit/qemu-configure.log 2>&1
-phase=qemu-build
-failure_log=/audit/qemu-build.log
+mark_phase qemu-build /audit/qemu-build.log
 ninja -j2 -C build qemu-mipsel >/audit/qemu-build.log 2>&1
 mkdir -p /build/shims
-phase=mips-shim-build
-failure_log=/audit/shim-build.log
+mark_phase mips-shim-build /audit/shim-build.log
 WORK=/build/shims bash /inputs/upstream/emulator/shims/build_shims.sh \
   >/audit/shim-build.log 2>&1
-phase=build-evidence-collection
-failure_log=
+mark_phase build-evidence-collection ""
 python3 /inputs/lab/qemu_runtime_build.py measure
 """
     return (
@@ -1103,7 +1112,15 @@ def run_build_container(
                 timeout=timeout_seconds,
             )
         except (StopBuild, OSError, subprocess.SubprocessError) as exc:
-            detail = " | ".join(read_container_diagnostics(container_name))
+            diagnostic_dir = report_path.parent / "failed-container-diagnostics"
+            diagnostics = []
+            try:
+                copy_audit_files(container_name, diagnostic_dir, AUDIT_LOG_FILES, required=False)
+                diagnostics.extend(read_audit_diagnostics(diagnostic_dir))
+            except (StopBuild, OSError, subprocess.SubprocessError) as copy_exc:
+                diagnostics.append("bounded-log-copy-failed: " + str(copy_exc))
+            diagnostics.extend(read_container_diagnostics(container_name))
+            detail = " | ".join(diagnostics)
             if detail:
                 raise StopBuild(f"{exc}; bounded container diagnostic: {detail}") from exc
             raise
