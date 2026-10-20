@@ -13,6 +13,7 @@ import subprocess
 import sys
 import tempfile
 import time
+import uuid
 from pathlib import Path, PurePosixPath
 from typing import Any
 from urllib.error import HTTPError, URLError
@@ -91,6 +92,45 @@ MIN_CPUS = 2
 MIN_AVAILABLE_MEMORY = 8 * 1024**3
 MIN_DOCKER_FREE = 10 * 1024**3
 MIN_TEMP_FREE = 1 * 1024**3
+AUDIT_EVIDENCE_FILES = (
+    ("/audit/inrelease.tsv", "inrelease.tsv"),
+    ("/audit/archive-keyring-before.sha256", "archive-keyring-before.sha256"),
+    (
+        "/audit/source/qemu_7.2+dfsg-7+deb12u18.dsc",
+        "source/qemu_7.2+dfsg-7+deb12u18.dsc",
+    ),
+    (
+        "/audit/source/qemu_7.2+dfsg.orig.tar.xz",
+        "source/qemu_7.2+dfsg.orig.tar.xz",
+    ),
+    (
+        "/audit/source/qemu_7.2+dfsg-7+deb12u18.debian.tar.xz",
+        "source/qemu_7.2+dfsg-7+deb12u18.debian.tar.xz",
+    ),
+    ("/audit/unpacked/debian/copyright", "unpacked/debian/copyright"),
+    ("/audit/copying-hashes.txt", "copying-hashes.txt"),
+)
+AUDIT_LOG_FILES = tuple(
+    (f"/audit/{name}", name)
+    for name in (
+        "apt-update.log",
+        "apt-install.log",
+        "source-download.log",
+        "source-extract.log",
+    )
+)
+AUDIT_FILE_MAX_BYTES = {
+    "inrelease.tsv": 4 * 1024,
+    "archive-keyring-before.sha256": 128,
+    "source/qemu_7.2+dfsg-7+deb12u18.dsc": 1024 * 1024,
+    "source/qemu_7.2+dfsg.orig.tar.xz": QEMU_ARCHIVES["qemu_7.2+dfsg.orig.tar.xz"][0],
+    "source/qemu_7.2+dfsg-7+deb12u18.debian.tar.xz": QEMU_ARCHIVES[
+        "qemu_7.2+dfsg-7+deb12u18.debian.tar.xz"
+    ][0],
+    "unpacked/debian/copyright": 4 * 1024 * 1024,
+    "copying-hashes.txt": 128 * 1024,
+    **{name: 1024 * 1024 for _, name in AUDIT_LOG_FILES},
+}
 
 
 class StopBuild(RuntimeError):
@@ -349,10 +389,18 @@ def source_audit_container(sources_file: Path, audit_dir: Path) -> None:
     prepared_sources.write_text(
         source_text.replace("Types: deb\n", "Types: deb deb-src\n"), encoding="utf-8"
     )
-    command = r"""
+    archive_checks = "\n".join(
+        f"test \"$(stat -c %s '/audit/source/{name}')\" -eq {size}\n"
+        f"printf '%s  %s\\n' '{sha256}' '/audit/source/{name}' | sha256sum --check --status"
+        for name, (size, sha256) in QEMU_ARCHIVES.items()
+    )
+    command = (
+        r"""
 set -euo pipefail
+install -d -m 0700 /audit
 export DEBIAN_FRONTEND=noninteractive
 apt_opts=(
+  -o APT::Sandbox::User=root
   -o Dir::Etc::sourcelist=/dev/null
   -o Dir::Etc::sourceparts=/etc/apt/sources.list.d
   -o Acquire::Languages=none
@@ -382,22 +430,38 @@ done
 apt-get "${apt_opts[@]}" install -y --no-install-recommends dpkg-dev >/audit/apt-install.log 2>&1
 sha256sum "$keyring" | awk '{print $1}' > /audit/archive-keyring-after.sha256
 cmp /audit/archive-keyring-before.sha256 /audit/archive-keyring-after.sha256
-cd /audit/source
+install -d -m 0700 /audit/source /audit/unpacked
+source_tmp="$(mktemp -d /tmp/qemu-source-download.XXXXXX)"
+cd "$source_tmp"
 apt-get "${apt_opts[@]}" source --download-only --only-source \
   'qemu=1:7.2+dfsg-7+deb12u18' >/audit/source-download.log 2>&1
-dsc=(/audit/source/*.dsc)
+dsc=(qemu_7.2+dfsg-7+deb12u18.dsc)
 test "${#dsc[@]}" -eq 1
-dpkg-source -x "${dsc[0]}" /audit/unpacked >/audit/source-extract.log 2>&1
+test -f "${dsc[0]}"
+test "$(stat -c %s "${dsc[0]}")" -le 1048576
+printf '%s  %s\n' '"""
+        + QEMU_DSC_SHA256
+        + r"""' "${dsc[0]}" | sha256sum --check --status
+mv "${dsc[0]}" /audit/source/
+mv qemu_7.2+dfsg.orig.tar.xz qemu_7.2+dfsg-7+deb12u18.debian.tar.xz /audit/source/
+"""
+        + archive_checks
+        + r"""
+dpkg-source -x /audit/source/qemu_7.2+dfsg-7+deb12u18.dsc /audit/unpacked \
+  >/audit/source-extract.log 2>&1
 test -f /audit/unpacked/debian/copyright
 sha256sum /audit/unpacked/debian/copyright > /audit/debian-copyright.sha256
 find /audit/unpacked -maxdepth 1 -type f -name 'COPYING*' -print0 \
   | sort -z \
   | xargs -0 -r sha256sum > /audit/copying-hashes.txt
 """
+    )
+    container_name = f"qemu-source-audit-{uuid.uuid4().hex[:16]}"
     command_args = [
         "docker",
-        "run",
-        "--rm",
+        "create",
+        "--name",
+        container_name,
         "--network",
         "bridge",
         "--cap-drop=ALL",
@@ -410,35 +474,102 @@ find /audit/unpacked -maxdepth 1 -type f -name 'COPYING*' -print0 \
         "--cpus",
         "2",
         "--tmpfs",
-        "/tmp:rw,nosuid,nodev,size=512m",
+        "/tmp:rw,nosuid,nodev,noexec,size=512m,mode=1777",
         "--mount",
         f"type=bind,src={prepared_sources},dst=/etc/apt/sources.list.d/debian.sources,readonly",
-        "--mount",
-        f"type=bind,src={audit_dir},dst=/audit",
         BASE_IMAGE,
         "/bin/bash",
         "-euc",
         command,
     ]
+    create_attempted = False
+    container_created = False
     try:
-        run(command_args, capture=True, timeout=900)
-    except StopBuild as exc:
-        diagnostics = []
-        for name in (
-            "apt-update.log",
-            "apt-install.log",
-            "source-download.log",
-            "source-extract.log",
-        ):
-            path = audit_dir / name
-            if path.exists():
-                lines = path.read_text(encoding="utf-8", errors="replace").splitlines()
-                if lines:
-                    diagnostics = lines[-10:]
-        detail = " | ".join(diagnostics).replace(str(audit_dir), "<audit>")
-        raise StopBuild(
-            f"{exc}" + (f"; sanitized apt diagnostic: {detail}" if detail else "")
-        ) from exc
+        create_attempted = True
+        run(command_args, capture=True, timeout=120)
+        container_created = True
+        try:
+            run(["docker", "start", "--attach", container_name], capture=True, timeout=900)
+        except (StopBuild, OSError, subprocess.SubprocessError) as exc:
+            try:
+                copy_audit_files(container_name, audit_dir, AUDIT_LOG_FILES, required=False)
+            except (StopBuild, OSError, subprocess.SubprocessError):
+                pass
+            diagnostics = read_audit_diagnostics(audit_dir)
+            detail = " | ".join(diagnostics).replace(str(audit_dir), "<audit>")
+            raise StopBuild(
+                f"{exc}" + (f"; sanitized apt diagnostic: {detail}" if detail else "")
+            ) from exc
+        copy_audit_files(container_name, audit_dir, AUDIT_EVIDENCE_FILES, required=True)
+    finally:
+        if create_attempted:
+            active_error = sys.exc_info()[1]
+            try:
+                cleanup = run(
+                    ["docker", "rm", "--force", container_name],
+                    capture=True,
+                    check=False,
+                    timeout=60,
+                )
+                cleanup_failed = cleanup.returncode != 0
+            except (OSError, subprocess.SubprocessError):
+                cleanup_failed = True
+            if cleanup_failed:
+                if active_error is None and container_created:
+                    raise StopBuild("failed to remove the temporary Debian source audit container")
+                if active_error is not None:
+                    print(
+                        "CLEANUP_WARNING: temporary Debian source audit container "
+                        "could not be removed",
+                        file=sys.stderr,
+                    )
+
+
+def copy_audit_files(
+    container_name: str,
+    audit_dir: Path,
+    files: tuple[tuple[str, str], ...],
+    *,
+    required: bool,
+) -> None:
+    missing = []
+    for container_path, relative_path in files:
+        target = audit_dir / relative_path
+        target.parent.mkdir(parents=True, exist_ok=True)
+        result = run(
+            ["docker", "cp", f"{container_name}:{container_path}", str(target)],
+            capture=True,
+            check=False,
+            timeout=120,
+        )
+        if result.returncode != 0:
+            missing.append(relative_path)
+            continue
+        if target.is_symlink() or not target.is_file():
+            raise StopBuild(f"container audit evidence is not a regular file: {relative_path}")
+        limit = AUDIT_FILE_MAX_BYTES[relative_path]
+        if target.stat().st_size > limit:
+            raise StopBuild(f"container audit evidence exceeds its size limit: {relative_path}")
+    if required and missing:
+        raise StopBuild("container did not produce required audit evidence: " + ", ".join(missing))
+
+
+def read_audit_diagnostics(audit_dir: Path) -> list[str]:
+    diagnostics = []
+    for _, name in AUDIT_LOG_FILES:
+        path = audit_dir / name
+        if path.is_file() and not path.is_symlink():
+            with path.open("rb") as stream:
+                stream.seek(0, os.SEEK_END)
+                stream.seek(max(0, stream.tell() - AUDIT_FILE_MAX_BYTES[name]))
+                lines = (
+                    stream.read(AUDIT_FILE_MAX_BYTES[name])
+                    .decode("utf-8", errors="replace")
+                    .splitlines()
+                )
+            if lines:
+                diagnostics = lines[-10:]
+    return diagnostics
 
 
 def verify_source_audit(audit_dir: Path) -> dict[str, Any]:
