@@ -219,6 +219,8 @@ def test_execution_smoke_command_checks_success_failure_and_timeout() -> None:
     assert '"$qemu" --version' in command
     assert "ulimit -c 0" in command
     assert 'timeout --signal=TERM --kill-after=1s 5s "$qemu" --version' in command
+    assert "version_status=$?" in command
+    assert "QEMU_VERSION_EXIT_STATUS=%s" in command
     assert "/inputs/mips32le-execution-smoke.elf" in command
     assert "--fail" in command
     assert "--timeout" in command

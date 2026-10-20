@@ -1011,9 +1011,23 @@ def execution_smoke_container_command() -> str:
 ulimit -c 0
 qemu=/inputs/qemu-mipsel
 guest=/inputs/mips32le-execution-smoke.elf
-test -x "$qemu"
-test -r "$guest"
+if [[ ! -x "$qemu" ]]; then
+  printf '%s\n' 'QEMU_INPUT_NOT_EXECUTABLE' >&2
+  exit 79
+fi
+if [[ ! -r "$guest" ]]; then
+  printf '%s\n' 'SYNTHETIC_GUEST_INPUT_NOT_READABLE' >&2
+  exit 79
+fi
+set +e
 version_output="$(timeout --signal=TERM --kill-after=1s 5s "$qemu" --version 2>&1)"
+version_status=$?
+set -e
+if [[ "$version_status" -ne 0 ]]; then
+  printf 'QEMU_VERSION_EXIT_STATUS=%s\n' "$version_status" >&2
+  printf '%s\n' "$version_output" | head -c 1024 >&2
+  exit 80
+fi
 case "$version_output" in
   *'Debian 1:7.2+dfsg-7+deb12u18'*) ;;
   *) printf '%s\n' 'QEMU version output did not match the pinned package' >&2; exit 80 ;;
