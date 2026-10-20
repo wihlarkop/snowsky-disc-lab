@@ -27,8 +27,11 @@ The fixture is a static Linux MIPS O32 executable, matching QEMU 7.2's
 documented `qemu-mipsel` user-mode target and avoiding a target dynamic loader.
 If the success attempt exits unsuccessfully or produces different stdout, the
 same fixed guest is retried once with `QEMU_STRACE=1`, a five-second deadline,
-and the same container restrictions. The workflow reports an error category,
-stdout byte count and digest, and at most 768 sanitized stderr characters.
+and the same container restrictions. QEMU guest-error logging is also captured
+to the existing noexec temporary filesystem and capped at 4 KiB before it is
+combined with bounded syscall trace output. The workflow reports an error
+category, stdout byte count and digest, and at most 768 sanitized diagnostic
+characters.
 Categories distinguish ELF loading, permissions, memory or address mapping,
 syscall failure, QEMU process failure, and stdout mismatch. This diagnostic
 retry does not increase the container's 256 MiB memory, one-CPU, 16-process, or

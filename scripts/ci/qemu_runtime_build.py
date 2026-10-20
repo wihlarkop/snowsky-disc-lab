@@ -1045,10 +1045,16 @@ set +e
 timeout --signal=TERM --kill-after=1s 5s "$qemu" "$guest" >/tmp/success.stdout 2>/tmp/success.stderr
 success_status=$?
 if [[ "$success_status" -ne 0 ]] || ! cmp -s /tmp/expected-success /tmp/success.stdout; then
-  QEMU_STRACE=1 timeout --signal=TERM --kill-after=1s 5s "$qemu" "$guest" \
+  QEMU_LOG=guest_errors QEMU_LOG_FILENAME=/tmp/success.qemu.log QEMU_STRACE=1 \
+    timeout --signal=TERM --kill-after=1s 5s "$qemu" "$guest" \
     >/tmp/success.trace.stdout 2>/tmp/success.trace.stderr
   trace_status=$?
   printf '\nQEMU_STRACE_EXIT_STATUS=%s\n' "$trace_status" >>/tmp/success.stderr
+  if [[ -f /tmp/success.qemu.log ]]; then
+    printf 'QEMU_DEBUG_LOG_BEGIN\n' >>/tmp/success.stderr
+    head -c 4096 /tmp/success.qemu.log >>/tmp/success.stderr
+    printf '\nQEMU_DEBUG_LOG_END\n' >>/tmp/success.stderr
+  fi
   printf 'QEMU_STRACE_OUTPUT_BEGIN\n' >>/tmp/success.stderr
   cat /tmp/success.trace.stdout >>/tmp/success.stderr
   printf '\n' >>/tmp/success.stderr

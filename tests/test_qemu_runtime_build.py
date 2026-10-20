@@ -229,7 +229,10 @@ def test_execution_smoke_command_checks_success_failure_and_timeout() -> None:
     assert 'timeout --signal=TERM --kill-after=1s 5s "$qemu" --version' in command
     assert "version_status=$?" in command
     assert "QEMU_VERSION_EXIT_STATUS=%s" in command
-    assert 'QEMU_STRACE=1 timeout --signal=TERM --kill-after=1s 5s "$qemu" "$guest"' in command
+    assert "QEMU_STRACE=1" in command
+    assert 'timeout --signal=TERM --kill-after=1s 5s "$qemu" "$guest"' in command
+    assert "QEMU_LOG=guest_errors QEMU_LOG_FILENAME=/tmp/success.qemu.log" in command
+    assert "head -c 4096 /tmp/success.qemu.log" in command
     assert "cat /tmp/success.trace.stdout >>/tmp/success.stderr" in command
     assert "cat /tmp/success.trace.stderr >>/tmp/success.stderr" in command
     assert "SYNTHETIC_SUCCESS_DIAGNOSTIC_STDERR=%s\\n" in command
