@@ -1049,7 +1049,11 @@ if [[ "$success_status" -ne 0 ]] || ! cmp -s /tmp/expected-success /tmp/success.
     >/tmp/success.trace.stdout 2>/tmp/success.trace.stderr
   trace_status=$?
   printf '\nQEMU_STRACE_EXIT_STATUS=%s\n' "$trace_status" >>/tmp/success.stderr
+  printf 'QEMU_STRACE_OUTPUT_BEGIN\n' >>/tmp/success.stderr
+  cat /tmp/success.trace.stdout >>/tmp/success.stderr
+  printf '\n' >>/tmp/success.stderr
   cat /tmp/success.trace.stderr >>/tmp/success.stderr
+  printf '\nQEMU_STRACE_OUTPUT_END\n' >>/tmp/success.stderr
 fi
 timeout --signal=TERM --kill-after=1s 5s "$qemu" "$guest" --fail \
   >/tmp/failure.stdout 2>/tmp/failure.stderr
