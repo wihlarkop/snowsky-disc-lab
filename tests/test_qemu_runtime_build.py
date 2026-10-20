@@ -35,6 +35,8 @@ def test_source_audit_exports_container_owned_evidence_without_writable_host_mou
     tmpfs_index = create.index("--tmpfs")
     assert create[tmpfs_index + 1] == "/tmp:rw,nosuid,nodev,noexec,size=512m,mode=1777"
     assert "install -d -m 0700 /audit" in create[-1]
+    assert "install -d -m 0700 /audit/source" in create[-1]
+    assert "install -d -m 0700 /audit/source /audit/unpacked" not in create[-1]
     assert "-o APT::Sandbox::User=root" in create[-1]
     assert 'source_tmp="$(mktemp -d /tmp/qemu-source-download.XXXXXX)"' in create[-1]
     assert 'cd "$source_tmp"' in create[-1]

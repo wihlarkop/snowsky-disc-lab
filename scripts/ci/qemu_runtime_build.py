@@ -430,7 +430,7 @@ done
 apt-get "${apt_opts[@]}" install -y --no-install-recommends dpkg-dev >/audit/apt-install.log 2>&1
 sha256sum "$keyring" | awk '{print $1}' > /audit/archive-keyring-after.sha256
 cmp /audit/archive-keyring-before.sha256 /audit/archive-keyring-after.sha256
-install -d -m 0700 /audit/source /audit/unpacked
+install -d -m 0700 /audit/source
 source_tmp="$(mktemp -d /tmp/qemu-source-download.XXXXXX)"
 cd "$source_tmp"
 apt-get "${apt_opts[@]}" source --download-only --only-source \
