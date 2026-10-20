@@ -1,6 +1,7 @@
 name: Firmware-free QEMU MIPS32LE execution smoke
 
 on:
+  workflow_dispatch:
   pull_request:
     branches:
       - codex/firmware-free-qemu-runtime-build
@@ -16,9 +17,13 @@ permissions:
 jobs:
   qemu-mips32le-execution-smoke:
     if: >-
-      github.event.pull_request.head.repo.full_name == 'wihlarkop/snowsky-disc-lab' &&
-      github.event.pull_request.head.ref == 'codex/qemu-mips32-execution-smoke' &&
-      github.event.pull_request.base.ref == 'codex/firmware-free-qemu-runtime-build'
+      (github.event_name == 'pull_request' &&
+       github.event.pull_request.head.repo.full_name == 'wihlarkop/snowsky-disc-lab' &&
+       github.event.pull_request.head.ref == 'codex/qemu-mips32-execution-smoke' &&
+       github.event.pull_request.base.ref == 'codex/firmware-free-qemu-runtime-build') ||
+      (github.event_name == 'workflow_dispatch' &&
+       github.repository == 'wihlarkop/snowsky-disc-lab' &&
+       github.ref == 'refs/heads/main')
     runs-on: ubuntu-24.04
     timeout-minutes: 45
     steps:
