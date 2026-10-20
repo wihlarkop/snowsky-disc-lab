@@ -8,6 +8,7 @@ import json
 import os
 import platform
 import re
+import shlex
 import shutil
 import subprocess
 import sys
@@ -24,6 +25,7 @@ ROOT = Path(__file__).resolve().parents[2]
 REFERENCE = ROOT / "docs" / "m1-01-runtime-preparation.json"
 UPSTREAM = "https://github.com/eudj1n/snowsky-disc-qemu.git"
 UPSTREAM_COMMIT = "85ab00deb08ac112066377fd8083cc8727ed859a"
+SOURCE_PROJECTION_DIGEST = "ef1f0b45f86d4724a7359694b2c3bc4c"
 BASE_IMAGE = (
     "docker.io/library/debian:12@sha256:"
     "6ebd97fa83deb272194a2cf015b3d26a4d538e9ad3a7a79d544c8af5b0a01443"
@@ -41,6 +43,11 @@ QEMU_ARCHIVES = {
         405_636,
         "28a1c86310ee53b6bf1854cffe6f6be6ed29a08db7d05759f8ac57b8d6a6cb2f",
     ),
+}
+DEBIAN_SIGNING_FINGERPRINTS = {
+    "bookworm": "4CB50190207B4758A3F73A796ED0E7B82643E131",
+    "bookworm-updates": "4CB50190207B4758A3F73A796ED0E7B82643E131",
+    "bookworm-security": "ED541312A33F1128F10B1C6C54404762BBB6E853",
 }
 REVIEWED_SOURCE_IDENTITIES = {
     "LICENSE": (
@@ -119,6 +126,47 @@ AUDIT_LOG_FILES = tuple(
         "source-extract.log",
     )
 )
+NATIVE_BUILD_PACKAGES = (
+    "dpkg-dev",
+    "build-essential",
+    "ninja-build",
+    "meson",
+    "python3",
+    "pkg-config",
+    "libglib2.0-dev",
+    "libpcre2-dev",
+    "zlib1g-dev",
+    "libffi-dev",
+    "libmount-dev",
+    "libblkid-dev",
+    "libselinux1-dev",
+    "libcap-ng-dev",
+    "libattr1-dev",
+)
+CROSS_SHIM_PACKAGES = (
+    "gcc-mipsel-linux-gnu",
+    "binutils-mipsel-linux-gnu",
+    "libc6-dev-mipsel-cross",
+)
+QEMU_CONFIGURE_FLAGS = (
+    "--static",
+    "--disable-system",
+    "--disable-tools",
+    "--disable-guest-agent",
+    "--disable-docs",
+    "--disable-werror",
+    "--target-list=mipsel-linux-user",
+    "--with-pkgversion=Debian 1:7.2+dfsg-7+deb12u18, snowsky-disc-devices",
+)
+BUILD_EVIDENCE_FILES = (("/audit/build-evidence.json", "build-evidence.json"),)
+BUILD_EVIDENCE_MAX_BYTES = 1024 * 1024
+EXPECTED_BUILD_ARTIFACTS = {
+    "qemu-mipsel",
+    "fbshim.so",
+    "asndshim.so",
+    "tinyshim.so",
+    "mqshim.so",
+}
 AUDIT_FILE_MAX_BYTES = {
     "inrelease.tsv": 4 * 1024,
     "archive-keyring-before.sha256": 128,
@@ -129,6 +177,7 @@ AUDIT_FILE_MAX_BYTES = {
     ][0],
     "unpacked/debian/copyright": 4 * 1024 * 1024,
     "copying-hashes.txt": 128 * 1024,
+    "build-evidence.json": BUILD_EVIDENCE_MAX_BYTES,
     **{name: 1024 * 1024 for _, name in AUDIT_LOG_FILES},
 }
 
@@ -173,9 +222,21 @@ def digest(path: Path) -> str:
 
 def read_reference() -> dict[str, Any]:
     reference = json.loads(REFERENCE.read_text(encoding="utf-8"))
-    if reference.get("integrationSource", {}).get("commit") != UPSTREAM_COMMIT:
+    integration_source = reference.get("integrationSource", {})
+    if (
+        integration_source.get("commit") != UPSTREAM_COMMIT
+        or integration_source.get("projectionDigest") != SOURCE_PROJECTION_DIGEST
+        or integration_source.get("sourceLockChanged") is not False
+    ):
         raise StopBuild("M1-01 QEMU source identity differs from the workflow pin")
     inputs = reference.get("buildInputs", {})
+    if tuple(inputs.get("nativeBuildPackageRequests", [])) != NATIVE_BUILD_PACKAGES:
+        raise StopBuild("M1-01 QEMU build package requests differ from the reviewed set")
+    shim = inputs.get("shimToolchain", {})
+    if tuple(shim.get("packages", [])) != CROSS_SHIM_PACKAGES:
+        raise StopBuild("M1-01 shim toolchain package requests differ from the reviewed set")
+    if shim.get("recipe") != "emulator/shims/build_shims.sh":
+        raise StopBuild("M1-01 shim build recipe identity changed")
     if inputs.get("baseImage", {}).get("reference") != BASE_IMAGE:
         raise StopBuild("M1-01 base image reference differs from the workflow pin")
     if inputs.get("baseImage", {}).get("platformManifest") != f"sha256:{BASE_AMD64_MANIFEST}":
@@ -184,8 +245,11 @@ def read_reference() -> dict[str, Any]:
     if (
         qemu.get("debianSourceVersion") != QEMU_VERSION
         or qemu.get("sourceDescriptor", {}).get("sha256") != QEMU_DSC_SHA256
+        or tuple(qemu.get("configureFlags", [])) != QEMU_CONFIGURE_FLAGS
     ):
-        raise StopBuild("M1-01 Debian QEMU source identity differs from the workflow pin")
+        raise StopBuild(
+            "M1-01 Debian QEMU source or configure identity differs from the workflow pin"
+        )
     reference_archives = {
         item["name"]: (item["bytes"], item["sha256"]) for item in qemu.get("sourceArchives", [])
     }
@@ -255,8 +319,8 @@ def resource_report() -> dict[str, Any]:
             "minimum_docker_free_bytes": MIN_DOCKER_FREE,
             "minimum_temporary_storage_free_bytes": MIN_TEMP_FREE,
             "basis": (
-                "Estimate for a pinned two-stage QEMU source build, Debian toolchain "
-                "packages, final runtime image layers, and 2 GiB disk headroom."
+                "Estimate for the pinned QEMU source build and cross-toolchain packages "
+                "with temporary build storage and 2 GiB disk headroom; no runtime image."
             ),
         },
     }
@@ -394,6 +458,10 @@ def source_audit_container(sources_file: Path, audit_dir: Path) -> None:
         f"printf '%s  %s\\n' '{sha256}' '/audit/source/{name}' | sha256sum --check --status"
         for name, (size, sha256) in QEMU_ARCHIVES.items()
     )
+    signature_case = "\n".join(
+        f"    {suite}) expected_fingerprint='{fingerprint}' ;;"
+        for suite, fingerprint in DEBIAN_SIGNING_FINGERPRINTS.items()
+    )
     command = (
         r"""
 set -euo pipefail
@@ -422,6 +490,11 @@ for f in /var/lib/apt/lists/*_InRelease; do
   test -n "$fingerprint"
   codename="$(grep -m1 '^Codename:' "$f" | cut -d: -f2- | xargs)"
   test -n "$codename"
+  case "$codename" in
+__DEBIAN_SIGNATURE_ALLOWLIST__
+    *) exit 1 ;;
+  esac
+  test "$fingerprint" = "$expected_fingerprint"
   file_hash="$(sha256sum "$f" | awk '{print $1}')"
   printf '%s\t%s\t%s\t%s\n' \
     "$(basename "$f")" "$codename" "$fingerprint" "$file_hash" \
@@ -455,7 +528,7 @@ find /audit/unpacked -maxdepth 1 -type f -name 'COPYING*' -print0 \
   | sort -z \
   | xargs -0 -r sha256sum > /audit/copying-hashes.txt
 """
-    )
+    ).replace("__DEBIAN_SIGNATURE_ALLOWLIST__", signature_case)
     container_name = f"qemu-source-audit-{uuid.uuid4().hex[:16]}"
     command_args = [
         "docker",
@@ -572,6 +645,41 @@ def read_audit_diagnostics(audit_dir: Path) -> list[str]:
     return diagnostics
 
 
+def debian_license_inventory(copyright_text: str) -> dict[str, Any]:
+    lines = copyright_text.splitlines()
+    expressions: set[str] = set()
+    full_text_hashes: set[str] = set()
+    empty_entries = 0
+    license_field_count = 0
+    for index, line in enumerate(lines):
+        if not line.startswith("License:"):
+            continue
+        license_field_count += 1
+        value = line.partition(":")[2].strip()
+        if value:
+            expressions.add(value.split()[0][:160])
+            continue
+        continuation = []
+        for following in lines[index + 1 :]:
+            if not following.strip():
+                break
+            if not following.startswith((" ", "\t")):
+                break
+            continuation.append(following[1:])
+        if continuation:
+            text = "\n".join(continuation).encode("utf-8")
+            full_text_hashes.add(hashlib.sha256(text).hexdigest())
+        else:
+            empty_entries += 1
+    return {
+        "license_field_count": license_field_count,
+        "license_expressions": sorted(expressions),
+        "full_text_license_block_count": len(full_text_hashes),
+        "full_text_license_block_sha256": sorted(full_text_hashes),
+        "empty_license_field_count": empty_entries,
+    }
+
+
 def verify_source_audit(audit_dir: Path) -> dict[str, Any]:
     files = {path.name: path for path in (audit_dir / "source").iterdir() if path.is_file()}
     dscs = [path for path in files.values() if path.suffix == ".dsc"]
@@ -619,13 +727,7 @@ def verify_source_audit(audit_dir: Path) -> dict[str, Any]:
         raise StopBuild("the three expected Debian snapshot InRelease suites were not all verified")
     copyright_path = audit_dir / "unpacked" / "debian" / "copyright"
     copyright_text = copyright_path.read_text(encoding="utf-8", errors="replace")
-    license_fields = sorted(
-        set(
-            line.split(":", 1)[1].strip()
-            for line in copyright_text.splitlines()
-            if line.startswith("License:")
-        )
-    )
+    license_inventory = debian_license_inventory(copyright_text)
     return {
         "debian_snapshot_inrelease": signatures,
         "debian_archive_keyring_sha256": (audit_dir / "archive-keyring-before.sha256")
@@ -642,13 +744,531 @@ def verify_source_audit(audit_dir: Path) -> dict[str, Any]:
             "maintainer script executed"
         ),
         "debian_copyright_sha256": digest(copyright_path),
-        "debian_copyright_license_field_count": len(license_fields),
-        "debian_copyright_license_labels": [label[:160] for label in license_fields[:80]],
+        "debian_copyright_license_inventory": license_inventory,
         "top_level_copying_file_hashes": [
             line.strip()
             for line in (audit_dir / "copying-hashes.txt").read_text(encoding="utf-8").splitlines()
         ],
     }
+
+
+def prepare_build_inputs(
+    upstream: Path,
+    audit_dir: Path,
+    destination: Path,
+    source_hashes: dict[str, str],
+) -> str:
+    source_paths = {
+        "LICENSE": upstream / "LICENSE",
+        "emulator/docker/Dockerfile": upstream / "emulator/docker/Dockerfile",
+        "emulator/docker/debian.sources": upstream / "emulator/docker/debian.sources",
+        "emulator/docker/qemu/snowsky-disc-devices.patch": (
+            upstream / "emulator/docker/qemu/snowsky-disc-devices.patch"
+        ),
+        **{
+            f"emulator/shims/{name}": upstream / "emulator/shims" / name
+            for name in (
+                "asndshim.c",
+                "asound.cards",
+                "build_shims.sh",
+                "capture.h",
+                "fbshim.c",
+                "mqshim.c",
+                "tinyshim.c",
+            )
+        },
+    }
+    destination.mkdir(parents=True, exist_ok=True)
+    expected_hashes: dict[str, str] = {}
+    for relative, source in source_paths.items():
+        expected = REVIEWED_SOURCE_IDENTITIES[relative][1]
+        if source_hashes.get(relative) != expected or source.is_symlink() or not source.is_file():
+            raise StopBuild(f"reviewed build input is missing or changed: {relative}")
+        target = destination / "upstream" / relative
+        target.parent.mkdir(parents=True, exist_ok=True)
+        shutil.copyfile(source, target)
+        if digest(target) != expected:
+            raise StopBuild(f"copied build input did not retain its reviewed identity: {relative}")
+        expected_hashes[f"upstream/{relative}"] = expected
+
+    source_dir = destination / "qemu"
+    source_dir.mkdir(exist_ok=True)
+    source_files = {
+        "qemu_7.2+dfsg-7+deb12u18.dsc": (QEMU_DSC_SHA256, 1024 * 1024),
+        **{name: (sha256, size) for name, (size, sha256) in QEMU_ARCHIVES.items()},
+    }
+    for name, (expected, max_bytes) in source_files.items():
+        source = audit_dir / "source" / name
+        if source.is_symlink() or not source.is_file() or source.stat().st_size > max_bytes:
+            raise StopBuild(f"verified QEMU source input is missing or oversized: {name}")
+        if digest(source) != expected:
+            raise StopBuild(f"verified QEMU source input changed before the build: {name}")
+        shutil.copyfile(source, source_dir / name)
+        expected_hashes[f"qemu/{name}"] = expected
+
+    helper = ROOT / "scripts" / "ci" / "qemu_runtime_build.py"
+    if helper.is_symlink() or not helper.is_file():
+        raise StopBuild("Lab build evidence helper is missing or unsafe")
+    helper_target = destination / "lab" / "qemu_runtime_build.py"
+    helper_target.parent.mkdir(parents=True, exist_ok=True)
+    shutil.copyfile(helper, helper_target)
+    helper_hash = digest(helper)
+    if digest(helper_target) != helper_hash:
+        raise StopBuild("Lab build evidence helper changed while preparing the build")
+    expected_hashes["lab/qemu_runtime_build.py"] = helper_hash
+
+    lines = [f"{value}  {name}" for name, value in sorted(expected_hashes.items())]
+    manifest = destination / "SHA256SUMS"
+    manifest.write_text("\n".join(lines) + "\n", encoding="ascii", newline="\n")
+    return digest(manifest)
+
+
+def build_container_args(inputs_dir: Path, command: str, container_name: str) -> list[str]:
+    return [
+        "docker",
+        "create",
+        "--name",
+        container_name,
+        "--network",
+        "bridge",
+        "--cap-drop=ALL",
+        "--security-opt",
+        "no-new-privileges:true",
+        "--pids-limit",
+        "256",
+        "--memory",
+        "6g",
+        "--cpus",
+        "2",
+        "--tmpfs",
+        "/tmp:rw,nosuid,nodev,noexec,size=512m,mode=1777",
+        "--tmpfs",
+        "/build:rw,nosuid,nodev,size=6g,mode=0755",
+        "--mount",
+        f"type=bind,src={inputs_dir.resolve()},dst=/inputs,readonly",
+        BASE_IMAGE,
+        "/bin/bash",
+        "-euc",
+        command,
+    ]
+
+
+def build_container_command(reference: dict[str, Any]) -> str:
+    inputs = reference["buildInputs"]
+    native_packages = tuple(inputs["nativeBuildPackageRequests"])
+    cross_packages = tuple(inputs["shimToolchain"]["packages"])
+    configure_flags = tuple(inputs["qemu"]["configureFlags"])
+    if native_packages != NATIVE_BUILD_PACKAGES or cross_packages != CROSS_SHIM_PACKAGES:
+        raise StopBuild("build package set differs from the reviewed M1-01 manifest")
+    if configure_flags != QEMU_CONFIGURE_FLAGS:
+        raise StopBuild("QEMU configure flags differ from the reviewed M1-01 manifest")
+
+    package_args = " ".join(shlex.quote(item) for item in (*native_packages, *cross_packages))
+    configure_args = " ".join(shlex.quote(item) for item in configure_flags)
+    archive_checks = "\n".join(
+        f"printf '%s  %s\\n' '{sha256}' '/inputs/qemu/{name}' | sha256sum --check --status"
+        for name, (_, sha256) in QEMU_ARCHIVES.items()
+    )
+    signature_case = "\n".join(
+        f"    {suite}) expected_fingerprint='{fingerprint}' ;;"
+        for suite, fingerprint in DEBIAN_SIGNING_FINGERPRINTS.items()
+    )
+    script = r"""set -euo pipefail
+install -d -m 0700 /audit
+install -d -m 0755 /etc/apt/sources.list.d
+cp /inputs/upstream/emulator/docker/debian.sources /etc/apt/sources.list.d/debian.sources
+test ! -e /etc/apt/sources.list
+test -f /etc/apt/sources.list.d/debian.sources
+test "$(find /etc/apt/sources.list.d -maxdepth 1 -type f | wc -l)" -eq 1
+cd /inputs
+sha256sum --check /inputs/SHA256SUMS >/audit/input-hash-check.log 2>&1
+export DEBIAN_FRONTEND=noninteractive
+apt() {
+  apt-get \
+    -o APT::Sandbox::User=root \
+    -o Dir::Etc::sourcelist=/dev/null \
+    -o Dir::Etc::sourceparts=/etc/apt/sources.list.d \
+    -o Acquire::Languages=none \
+    -o Acquire::AllowInsecureRepositories=false \
+    -o Acquire::AllowDowngradeToInsecureRepositories=false \
+    -o Acquire::AllowWeakRepositories=false \
+    -o APT::Get::AllowUnauthenticated=false "$@"
+}
+apt update >/audit/apt-update.log 2>&1
+keyring=/usr/share/keyrings/debian-archive-keyring.gpg
+sha256sum "$keyring" | awk '{print $1}' > /audit/archive-keyring-before.sha256
+: > /audit/inrelease.tsv
+for f in /var/lib/apt/lists/*_InRelease; do
+  status="$(gpgv --status-fd 1 --keyring "$keyring" "$f" 2>&1)"
+  fingerprint="$(printf '%s\n' "$status" | awk '$2 == "VALIDSIG" {print $3; exit}')"
+  test -n "$fingerprint"
+  codename="$(grep -m1 '^Codename:' "$f" | cut -d: -f2- | xargs)"
+  test -n "$codename"
+  case "$codename" in
+__DEBIAN_SIGNATURE_ALLOWLIST__
+    *) exit 1 ;;
+  esac
+  test "$fingerprint" = "$expected_fingerprint"
+  file_hash="$(sha256sum "$f" | awk '{print $1}')"
+  printf '%s\t%s\t%s\t%s\n' "$(basename "$f")" "$codename" "$fingerprint" "$file_hash" \
+    >> /audit/inrelease.tsv
+done
+for suite in bookworm bookworm-updates bookworm-security; do
+  grep -q "$(printf '\t%s\t' "$suite")" /audit/inrelease.tsv
+done
+apt install -y --no-install-recommends __BUILD_PACKAGES__ >/audit/apt-install.log 2>&1
+sha256sum "$keyring" | awk '{print $1}' > /audit/archive-keyring-after.sha256
+cmp /audit/archive-keyring-before.sha256 /audit/archive-keyring-after.sha256
+dpkg-query -W -f='${db:Status-Abbrev}\t${binary:Package}\t${Version}\t${Architecture}\n' \
+  | awk -F '\t' '$1 ~ /^ii/ {print $2 "\t" $3 "\t" $4}' \
+  | LC_ALL=C sort > /audit/package-bom.tsv
+apt clean
+rm -rf /var/lib/apt/lists/*
+printf '%s\n' "$(date +%s)" > /audit/build-start-epoch
+cd /inputs/qemu
+test "$(stat -c %s qemu_7.2+dfsg-7+deb12u18.dsc)" -le 1048576
+printf '%s  %s\n' '__DSC_SHA256__' qemu_7.2+dfsg-7+deb12u18.dsc \
+  | sha256sum --check --status
+__ARCHIVE_CHECKS__
+dpkg-source -x qemu_7.2+dfsg-7+deb12u18.dsc /build/qemu-7.2+dfsg \
+  >/audit/source-extract.log 2>&1
+patch --batch --forward --fuzz=0 -p1 --directory=/build/qemu-7.2+dfsg \
+  < /inputs/upstream/emulator/docker/qemu/snowsky-disc-devices.patch \
+  >/audit/patch-application.log 2>&1
+if grep -Eiq 'fuzz|offset|reversed|previously applied|skipping' /audit/patch-application.log; then
+  printf '%s\n' 'QEMU patch did not apply cleanly at exact context' >&2
+  exit 1
+fi
+cd /build/qemu-7.2+dfsg
+./configure __CONFIGURE_ARGS__ >/audit/qemu-configure.log 2>&1
+ninja -j2 -C build qemu-mipsel >/audit/qemu-build.log 2>&1
+mkdir -p /build/shims
+WORK=/build/shims bash /inputs/upstream/emulator/shims/build_shims.sh \
+  >/audit/shim-build.log 2>&1
+python3 /inputs/lab/qemu_runtime_build.py measure
+"""
+    return (
+        script.replace("__BUILD_PACKAGES__", package_args)
+        .replace("__DSC_SHA256__", QEMU_DSC_SHA256)
+        .replace("__ARCHIVE_CHECKS__", archive_checks)
+        .replace("__DEBIAN_SIGNATURE_ALLOWLIST__", signature_case)
+        .replace("__CONFIGURE_ARGS__", configure_args)
+    )
+
+
+def validate_build_artifacts(artifacts: Any) -> None:
+    if (
+        not isinstance(artifacts, list)
+        or len(artifacts) != len(EXPECTED_BUILD_ARTIFACTS)
+        or any(not isinstance(item, dict) for item in artifacts)
+        or {item.get("name") for item in artifacts} != EXPECTED_BUILD_ARTIFACTS
+    ):
+        raise StopBuild("build artifact set does not contain QEMU and all four reviewed shims")
+    for item in artifacts:
+        machine = item.get("machine")
+        if (
+            not isinstance(item.get("name"), str)
+            or not isinstance(item.get("bytes"), int)
+            or item["bytes"] <= 0
+            or not isinstance(item.get("sha256"), str)
+            or not re.fullmatch(r"[0-9a-f]{64}", item["sha256"])
+            or item.get("has_interpreter") is not False
+            or not isinstance(machine, str)
+        ):
+            raise StopBuild("build artifact identity or static ELF report is invalid")
+        if item["name"] == "qemu-mipsel":
+            if (
+                item.get("elf_class") != "ELF64"
+                or item.get("elf_data") != "little endian"
+                or "x86-64" not in machine.lower()
+            ):
+                raise StopBuild("QEMU artifact is not the expected static Linux x86_64 executable")
+        elif (
+            item.get("elf_class") != "ELF32"
+            or item.get("elf_data") != "little endian"
+            or "mips" not in machine.lower()
+            or item.get("flags") != "0x70001407"
+        ):
+            raise StopBuild("shim ABI or NaN2008 ELF flags differ from the reviewed MIPS profile")
+
+
+def run_build_container(
+    inputs_dir: Path,
+    report_path: Path,
+    reference: dict[str, Any],
+    *,
+    timeout_seconds: int = 2100,
+) -> dict[str, Any]:
+    command = build_container_command(reference)
+    container_name = f"qemu-runtime-build-{uuid.uuid4().hex[:16]}"
+    create_attempted = False
+    container_created = False
+    try:
+        create_attempted = True
+        run(build_container_args(inputs_dir, command, container_name), capture=True, timeout=120)
+        container_created = True
+        run(
+            ["docker", "start", "--attach", container_name],
+            capture=True,
+            timeout=timeout_seconds,
+        )
+        copy_audit_files(container_name, report_path.parent, BUILD_EVIDENCE_FILES, required=True)
+        if report_path.is_symlink() or not report_path.is_file():
+            raise StopBuild("build evidence receipt is not a regular file")
+        try:
+            evidence = json.loads(report_path.read_text(encoding="utf-8"))
+        except (OSError, json.JSONDecodeError) as exc:
+            raise StopBuild("build evidence receipt is malformed") from exc
+        if not isinstance(evidence, dict) or evidence.get("schema_version") != (
+            "firmware-free-qemu-runtime-build/v1"
+        ):
+            raise StopBuild("build evidence receipt has an unsupported schema")
+        if evidence.get("status") != "build-passed-binaries-ephemeral":
+            raise StopBuild("build evidence receipt does not record a successful build")
+        validate_build_artifacts(evidence.get("artifacts"))
+        if evidence.get("retention", {}).get("compiled_binaries_published") is not False:
+            raise StopBuild(
+                "build evidence does not confirm that compiled binaries were not published"
+            )
+        return evidence
+    finally:
+        if create_attempted:
+            active_error = sys.exc_info()[1]
+            try:
+                cleanup = run(
+                    ["docker", "rm", "--force", container_name],
+                    capture=True,
+                    check=False,
+                    timeout=60,
+                )
+                cleanup_failed = cleanup.returncode != 0
+            except (OSError, subprocess.SubprocessError):
+                cleanup_failed = True
+            if cleanup_failed:
+                if active_error is None and container_created:
+                    raise StopBuild("failed to remove the temporary QEMU build container")
+                if active_error is not None:
+                    print(
+                        "CLEANUP_WARNING: temporary QEMU build container could not be removed",
+                        file=sys.stderr,
+                    )
+
+
+def _tool_output(args: list[str]) -> str:
+    result = subprocess.run(
+        args,
+        check=False,
+        text=True,
+        stdout=subprocess.PIPE,
+        stderr=subprocess.STDOUT,
+        timeout=30,
+    )
+    if result.returncode:
+        raise StopBuild(f"build evidence command failed: {args[0]}")
+    return result.stdout.strip()
+
+
+def _tree_digest(root: Path) -> tuple[str, int, int]:
+    if root.is_symlink() or not root.is_dir():
+        raise StopBuild("cross toolchain sysroot directory is missing")
+    entries = sorted(root.rglob("*"), key=lambda path: path.relative_to(root).as_posix())
+    if len(entries) > 100_000:
+        raise StopBuild("cross toolchain sysroot exceeds the 100000-entry evidence limit")
+    value = hashlib.sha256()
+    file_count = 0
+    for path in entries:
+        relative = path.relative_to(root).as_posix()
+        if path.is_symlink():
+            record = f"L\t{relative}\t{os.readlink(path)}\n".encode()
+        elif path.is_file():
+            record = f"F\t{relative}\t{path.stat().st_size}\t{digest(path)}\n".encode()
+            file_count += 1
+        elif path.is_dir():
+            record = f"D\t{relative}\n".encode()
+        else:
+            raise StopBuild("cross toolchain sysroot contains a special file")
+        value.update(record)
+    return value.hexdigest(), file_count, len(entries)
+
+
+def _elf_evidence(name: str, path: Path) -> dict[str, Any]:
+    if path.is_symlink() or not path.is_file():
+        raise StopBuild(f"expected regular build output is missing: {name}")
+    max_bytes = 150 * 1024 * 1024 if name == "qemu-mipsel" else 16 * 1024 * 1024
+    size = path.stat().st_size
+    if size <= 0 or size > max_bytes:
+        raise StopBuild(f"build output is outside its documented size bound: {name}")
+    header = _tool_output(["readelf", "-h", str(path)])
+    program_headers = _tool_output(["readelf", "-l", str(path)])
+    fields: dict[str, str] = {}
+    for line in header.splitlines():
+        key, separator, value = line.partition(":")
+        if separator:
+            fields[key.strip()] = value.strip()
+    flags_match = re.match(r"(0x[0-9a-fA-F]+)", fields.get("Flags", ""))
+    data = fields.get("Data", "").lower()
+    return {
+        "name": name,
+        "bytes": size,
+        "sha256": digest(path),
+        "elf_class": fields.get("Class", ""),
+        "elf_data": "little endian" if "little endian" in data else data,
+        "machine": fields.get("Machine", ""),
+        "flags": flags_match.group(1).lower() if flags_match else "",
+        "has_interpreter": bool(re.search(r"(?m)^\s*INTERP\s", program_headers)),
+    }
+
+
+def measure_build_evidence() -> None:
+    package_bom = Path("/audit/package-bom.tsv")
+    package_raw = package_bom.read_bytes()
+    packages = []
+    for row in package_raw.decode("utf-8", errors="strict").splitlines():
+        fields = row.split("\t")
+        if len(fields) != 3:
+            raise StopBuild("installed package BOM is malformed")
+        packages.append({"package": fields[0], "version": fields[1], "architecture": fields[2]})
+    if not packages:
+        raise StopBuild("installed package BOM is empty")
+
+    sysroot = Path("/usr/mipsel-linux-gnu")
+    sysroot_sha256, sysroot_file_count, sysroot_entry_count = _tree_digest(sysroot)
+    tool_names = (
+        "gcc",
+        "ld",
+        "ninja",
+        "meson",
+        "mipsel-linux-gnu-gcc",
+        "mipsel-linux-gnu-ld",
+        "mipsel-linux-gnu-readelf",
+    )
+    executable_evidence = {}
+    for name in tool_names:
+        located = shutil.which(name)
+        if located is None:
+            raise StopBuild(f"reviewed build tool is missing: {name}")
+        resolved = Path(located).resolve(strict=True)
+        executable_evidence[name] = {
+            "path": str(Path(located).as_posix()),
+            "sha256": digest(resolved),
+        }
+
+    artifacts = [
+        _elf_evidence("qemu-mipsel", Path("/build/qemu-7.2+dfsg/build/qemu-mipsel")),
+        _elf_evidence("fbshim.so", Path("/build/shims/fbshim.so")),
+        _elf_evidence("asndshim.so", Path("/build/shims/asndshim.so")),
+        _elf_evidence("tinyshim.so", Path("/build/shims/tinyshim.so")),
+        _elf_evidence("mqshim.so", Path("/build/shims/mqshim.so")),
+    ]
+    validate_build_artifacts(artifacts)
+
+    signatures = []
+    for row in Path("/audit/inrelease.tsv").read_text(encoding="utf-8").splitlines():
+        fields = row.split("\t")
+        if len(fields) != 4:
+            raise StopBuild("signed Debian snapshot evidence is malformed")
+        name, codename, fingerprint, file_hash = fields
+        signatures.append(
+            {
+                "file": name,
+                "codename": codename,
+                "valid_signature_fingerprint": fingerprint,
+                "sha256": file_hash,
+                "verified": True,
+            }
+        )
+    expected_suites = {"bookworm", "bookworm-updates", "bookworm-security"}
+    if {item["codename"] for item in signatures} != expected_suites:
+        raise StopBuild("the three expected Debian signed snapshot suites are not present")
+
+    build_logs = {}
+    for label, name in (
+        ("apt_update", "apt-update.log"),
+        ("apt_install", "apt-install.log"),
+        ("source_hash_check", "input-hash-check.log"),
+        ("source_extract", "source-extract.log"),
+        ("patch_application", "patch-application.log"),
+        ("qemu_configure", "qemu-configure.log"),
+        ("qemu_build", "qemu-build.log"),
+        ("shim_build", "shim-build.log"),
+    ):
+        path = Path("/audit") / name
+        if path.is_symlink() or not path.is_file():
+            raise StopBuild(f"bounded build log is missing: {name}")
+        build_logs[label] = {"bytes": path.stat().st_size, "sha256": digest(path)}
+
+    cross_packages = [
+        item for item in packages if item["package"].split(":", 1)[0] in CROSS_SHIM_PACKAGES
+    ]
+    if {item["package"].split(":", 1)[0] for item in cross_packages} != set(CROSS_SHIM_PACKAGES):
+        raise StopBuild("the three reviewed shim toolchain packages are not installed")
+
+    started = int(Path("/audit/build-start-epoch").read_text(encoding="ascii").strip())
+    evidence = {
+        "schema_version": "firmware-free-qemu-runtime-build/v1",
+        "status": "build-passed-binaries-ephemeral",
+        "artifacts": artifacts,
+        "debian_snapshot_inrelease": signatures,
+        "debian_archive_keyring_sha256": Path("/audit/archive-keyring-before.sha256")
+        .read_text(encoding="ascii")
+        .strip(),
+        "package_bom_sha256": hashlib.sha256(package_raw).hexdigest(),
+        "package_count": len(packages),
+        "installed_packages": packages,
+        "toolchain": {
+            "native": {
+                "gcc_version": _tool_output(["gcc", "-dumpfullversion", "-dumpversion"]),
+                "binutils_version": _tool_output(["ld", "--version"]).splitlines()[0],
+                "meson_version": _tool_output(["meson", "--version"]).splitlines()[0],
+                "ninja_version": _tool_output(["ninja", "--version"]).splitlines()[0],
+                "python_version": _tool_output(["python3", "--version"]).splitlines()[0],
+            },
+            "mipsel": {
+                "compiler": "mipsel-linux-gnu-gcc",
+                "compiler_version": _tool_output(
+                    ["mipsel-linux-gnu-gcc", "--version"]
+                ).splitlines()[0],
+                "version": _tool_output(
+                    ["mipsel-linux-gnu-gcc", "-dumpfullversion", "-dumpversion"]
+                ),
+                "target": _tool_output(["mipsel-linux-gnu-gcc", "-dumpmachine"]),
+                "reported_sysroot": _tool_output(["mipsel-linux-gnu-gcc", "-print-sysroot"]),
+                "sysroot_tree": "/usr/mipsel-linux-gnu",
+                "sysroot_sha256": sysroot_sha256,
+                "sysroot_file_count": sysroot_file_count,
+                "sysroot_entry_count": sysroot_entry_count,
+                "compiler_packages": cross_packages,
+            },
+            "executable_sha256": executable_evidence,
+        },
+        "build_logs": build_logs,
+        "input_manifest_sha256": digest(Path("/inputs/SHA256SUMS")),
+        "configure_flags": list(QEMU_CONFIGURE_FLAGS),
+        "elapsed_seconds": max(0, int(time.time()) - started),
+        "limits": {
+            "container_memory_bytes": 6 * 1024**3,
+            "container_cpus": 2,
+            "build_tmpfs_bytes": 6 * 1024**3,
+            "temporary_storage_bytes": 512 * 1024**2,
+            "input_mount": "read-only",
+            "capabilities": "all dropped",
+            "no_new_privileges": True,
+            "network_mode": "bridge; runner egress is not isolated at network level",
+        },
+        "retention": {
+            "copied_out": ["sanitized JSON build evidence only"],
+            "compiled_binaries_published": False,
+            "container_image_built_or_published": False,
+        },
+    }
+    validate_build_artifacts(evidence["artifacts"])
+    report_path = Path("/audit/build-evidence.json")
+    if report_path.exists() or report_path.is_symlink():
+        raise StopBuild("build evidence path already exists")
+    report_path.write_text(
+        json.dumps(evidence, sort_keys=True, separators=(",", ":")) + "\n",
+        encoding="utf-8",
+    )
 
 
 def write_summary(title: str, receipt: dict[str, Any]) -> None:
@@ -707,12 +1327,276 @@ def preflight() -> None:
     write_summary("Firmware-free QEMU build preflight", receipt)
 
 
+def verify_license_evidence(
+    upstream: Path, source_hashes: dict[str, str], qemu_source_review: dict[str, Any]
+) -> dict[str, Any]:
+    license_path = upstream / "LICENSE"
+    expected_hash = REVIEWED_SOURCE_IDENTITIES["LICENSE"][1]
+    if (
+        source_hashes.get("LICENSE") != expected_hash
+        or license_path.is_symlink()
+        or not license_path.is_file()
+        or digest(license_path) != expected_hash
+    ):
+        raise StopBuild("pinned upstream license evidence did not match its reviewed identity")
+    license_text = license_path.read_text(encoding="utf-8", errors="strict")
+    if license_text.splitlines()[0] != "MIT License":
+        raise StopBuild("pinned upstream LICENSE declaration changed")
+    debian_copyright_hash = qemu_source_review.get("debian_copyright_sha256")
+    license_inventory = qemu_source_review.get("debian_copyright_license_inventory", {})
+    if not isinstance(debian_copyright_hash, str) or not re.fullmatch(
+        r"[0-9a-f]{64}", debian_copyright_hash
+    ):
+        raise StopBuild("Debian QEMU copyright evidence is missing")
+    if (
+        not isinstance(license_inventory, dict)
+        or license_inventory.get("license_field_count", 0) <= 0
+    ):
+        raise StopBuild("Debian QEMU copyright file did not yield a license inventory")
+    return {
+        "status": "evidence-collected-review-required",
+        "upstream_repository_license": {
+            "declared": "MIT",
+            "sha256": expected_hash,
+            "scope": "pinned upstream repository LICENSE only",
+        },
+        "debian_qemu_copyright": {
+            "sha256": debian_copyright_hash,
+            "inventory": license_inventory,
+        },
+        "distribution_clearance": False,
+        "note": (
+            "QEMU source, Debian packaging, patch, and transitive build dependency "
+            "provenance has not received a redistribution clearance decision. "
+            "This build is ephemeral and outputs are not published."
+        ),
+    }
+
+
+def _artifact_hashes(evidence: dict[str, Any]) -> dict[str, str]:
+    return {item["name"]: item["sha256"] for item in evidence["artifacts"]}
+
+
+def compare_clean_builds(first: dict[str, Any], second: dict[str, Any]) -> dict[str, Any]:
+    differences = []
+    first_artifacts = _artifact_hashes(first)
+    second_artifacts = _artifact_hashes(second)
+    for name in sorted(EXPECTED_BUILD_ARTIFACTS):
+        if first_artifacts.get(name) != second_artifacts.get(name):
+            differences.append(f"artifact:{name}")
+    if first.get("package_bom_sha256") != second.get("package_bom_sha256"):
+        differences.append("installed-package-bom")
+    first_toolchain = first.get("toolchain", {})
+    second_toolchain = second.get("toolchain", {})
+    if first_toolchain.get("mipsel", {}).get("sysroot_sha256") != second_toolchain.get(
+        "mipsel", {}
+    ).get("sysroot_sha256"):
+        differences.append("mipsel-sysroot")
+    if first_toolchain.get("executable_sha256") != second_toolchain.get("executable_sha256"):
+        differences.append("tool-executables")
+    if first.get("input_manifest_sha256") != second.get("input_manifest_sha256"):
+        differences.append("source-input-manifest")
+    return {
+        "status": "identical" if not differences else "different",
+        "compared": [
+            "QEMU and four shim SHA-256 values",
+            "installed package BOM SHA-256",
+            "MIPS sysroot SHA-256",
+            "tool executable SHA-256 values",
+            "reviewed input manifest SHA-256",
+        ],
+        "differences": differences,
+        "second_artifact_sha256": second_artifacts,
+        "second_package_bom_sha256": second.get("package_bom_sha256"),
+        "second_sysroot_sha256": second_toolchain.get("mipsel", {}).get("sysroot_sha256"),
+    }
+
+
+def build_status_for_repeat(repeat_status: str) -> str:
+    suffix = {
+        "identical": "identical",
+        "different": "different",
+        "attempted-failed": "failed",
+    }.get(repeat_status, "not-run")
+    return f"firmware-free-build-passed-repeat-{suffix}"
+
+
+def build() -> None:
+    started = time.monotonic()
+    reference = read_reference()
+    resources = resource_report()
+    if resources["capacity_status"] != "sufficient":
+        receipt = {
+            "schema_version": "firmware-free-qemu-runtime-build/v1",
+            "status": "stopped-insufficient-runner-resources",
+            "host_resources": resources,
+            "build": "not run; runner capacity did not meet the documented estimate",
+        }
+        write_summary("Firmware-free QEMU build stopped before image pull", receipt)
+        raise StopBuild("runner resources are below the documented build estimate")
+
+    with tempfile.TemporaryDirectory(prefix="qemu-runtime-build-") as temporary:
+        workdir = Path(temporary)
+        upstream, source_hashes, source_sizes = fetch_reviewed_upstream(workdir, reference)
+        base = verify_base_image()
+        audit = workdir / "debian-audit"
+        source_audit_container(upstream / "emulator" / "docker" / "debian.sources", audit)
+        debian = verify_source_audit(audit)
+        license_report = verify_license_evidence(upstream, source_hashes, debian)
+        inputs_dir = workdir / "build-inputs"
+        input_manifest_sha256 = prepare_build_inputs(upstream, audit, inputs_dir, source_hashes)
+        build_started = time.monotonic()
+        first = run_build_container(inputs_dir, workdir / "build-evidence.json", reference)
+        first_elapsed = round(time.monotonic() - build_started, 1)
+        if first.get("debian_archive_keyring_sha256") != debian.get(
+            "debian_archive_keyring_sha256"
+        ):
+            raise StopBuild("Debian archive keyring identity changed between preflight and build")
+
+        repeat: dict[str, Any] = {
+            "status": "not-run",
+            "reason": (
+                "second clean build requires sufficient measured resources and remaining "
+                "45-minute job budget"
+            ),
+        }
+        second_resource_report: dict[str, Any] | None = None
+        try:
+            second_resource_report = resource_report()
+        except (StopBuild, OSError, subprocess.SubprocessError) as exc:
+            repeat["reason"] = "resource recheck failed after first build: " + str(exc)[:300]
+        job_budget_seconds = 42 * 60
+        reserve_seconds = 120
+        estimate_seconds = max(5 * 60, int(first_elapsed * 1.25))
+        available_seconds = int(job_budget_seconds - (time.monotonic() - started) - reserve_seconds)
+        if (
+            second_resource_report is not None
+            and second_resource_report["capacity_status"] == "sufficient"
+            and available_seconds >= estimate_seconds
+        ):
+            second_started = time.monotonic()
+            second_path = workdir / "second" / "build-evidence.json"
+            try:
+                second = run_build_container(
+                    inputs_dir,
+                    second_path,
+                    reference,
+                    timeout_seconds=min(estimate_seconds, available_seconds),
+                )
+                repeat = compare_clean_builds(first, second)
+                repeat["elapsed_seconds"] = round(time.monotonic() - second_started, 1)
+                repeat["resource_recheck"] = second_resource_report
+            except (StopBuild, OSError, subprocess.SubprocessError, json.JSONDecodeError) as exc:
+                repeat = {
+                    "status": "attempted-failed",
+                    "reason": str(exc).replace(str(workdir), "<build>")[:500],
+                    "elapsed_seconds": round(time.monotonic() - second_started, 1),
+                    "resource_recheck": second_resource_report,
+                }
+        elif second_resource_report is not None:
+            repeat["resource_recheck"] = second_resource_report
+            if second_resource_report["capacity_status"] != "sufficient":
+                repeat["reason"] = (
+                    "runner resources fell below the documented gate after the first build"
+                )
+            else:
+                repeat["reason"] = (
+                    "insufficient time remained for a bounded clean rebuild and 2-minute cleanup "
+                    "reserve within the 45-minute job"
+                )
+
+        repeat_status = repeat.get("status", "not-run")
+        receipt_status = build_status_for_repeat(repeat_status)
+
+        receipt = {
+            "schema_version": "firmware-free-qemu-runtime-build/v1",
+            "status": receipt_status,
+            "primary_build_status": "passed",
+            "repeat_build_status": repeat_status,
+            "host_resources_before_build": resources,
+            "host_resources_before_optional_repeat": second_resource_report,
+            "source_identity": {
+                "repository": UPSTREAM,
+                "commit": UPSTREAM_COMMIT,
+                "projection_digest": reference["integrationSource"]["projectionDigest"],
+                "source_lock_changed": reference["integrationSource"]["sourceLockChanged"],
+                "firmware_tree_fetched": False,
+                "reviewed_file_sha256": source_hashes,
+                "reviewed_file_bytes": source_sizes,
+                "build_input_manifest_sha256": input_manifest_sha256,
+            },
+            "base_image": base,
+            "qemu_source_review": debian,
+            "license_review": license_report,
+            "build": {
+                "qemu_version": QEMU_VERSION,
+                "qemu_descriptor_sha256": QEMU_DSC_SHA256,
+                "qemu_archives": debian["source_archives"],
+                "qemu_patch_sha256": source_hashes[
+                    "emulator/docker/qemu/snowsky-disc-devices.patch"
+                ],
+                "qemu_configure_flags": list(QEMU_CONFIGURE_FLAGS),
+                "shim_recipe_sha256": source_hashes["emulator/shims/build_shims.sh"],
+                "shim_source_sha256": {
+                    name: source_hashes[f"emulator/shims/{name}"]
+                    for name in (
+                        "asndshim.c",
+                        "asound.cards",
+                        "capture.h",
+                        "fbshim.c",
+                        "mqshim.c",
+                        "tinyshim.c",
+                    )
+                },
+                "artifact_sha256_and_elf": first["artifacts"],
+                "debian_snapshot_inrelease": first["debian_snapshot_inrelease"],
+                "debian_archive_keyring_sha256": first["debian_archive_keyring_sha256"],
+                "installed_package_bom_sha256": first["package_bom_sha256"],
+                "installed_package_count": first["package_count"],
+                "installed_packages": first["installed_packages"],
+                "toolchain": first["toolchain"],
+                "container_limits": first["limits"],
+                "build_logs": first["build_logs"],
+                "elapsed_seconds": first_elapsed,
+                "temporary_container_cleanup": "verified",
+                "repeated_clean_build_comparison": repeat,
+            },
+            "network_boundary": (
+                "Dependency fetches used the pinned GitHub source files, the dated Debian "
+                "snapshot in debian.sources, and the exact Debian base image registry digest. "
+                "GitHub-hosted runner networking is not network-level egress isolation."
+            ),
+            "apt_sandbox": (
+                "APT ran as container UID 0 because SETUID/SETGID capabilities are dropped; "
+                "the container retained --cap-drop=ALL and no-new-privileges."
+            ),
+            "runtime_and_device_boundaries": {
+                "firmware_processed": False,
+                "qemu_executable_invoked": False,
+                "guest_booted": False,
+                "binfmt_registered": False,
+                "runtime_image_built": False,
+                "container_image_published": False,
+                "compiled_binary_published": False,
+                "usb_or_hardware_accessed": False,
+                "compatibility_claimed": False,
+            },
+            "elapsed_seconds": round(time.monotonic() - started, 1),
+        }
+    write_summary("Firmware-free QEMU and MIPS shim build", receipt)
+
+
 def main() -> int:
-    if len(sys.argv) != 2 or sys.argv[1] != "preflight":
-        print("usage: qemu_runtime_build.py preflight", file=sys.stderr)
+    if len(sys.argv) != 2 or sys.argv[1] not in {"preflight", "build", "measure"}:
+        print("usage: qemu_runtime_build.py {preflight|build|measure}", file=sys.stderr)
         return 2
     try:
-        preflight()
+        if sys.argv[1] == "preflight":
+            preflight()
+        elif sys.argv[1] == "build":
+            build()
+        else:
+            measure_build_evidence()
     except (StopBuild, OSError, subprocess.SubprocessError, json.JSONDecodeError) as exc:
         message = str(exc).replace(str(ROOT), "<workspace>")
         print(f"PREBUILD_STOP: {message}", file=sys.stderr)
