@@ -464,8 +464,22 @@ def source_audit_container(sources_file: Path, audit_dir: Path) -> None:
     )
     command = (
         r"""
-set -euo pipefail
+set -eEuo pipefail
 install -d -m 0700 /audit
+phase=container-initialization
+failure_log=
+report_failure() {
+  failure_status=$?
+  trap - ERR
+  printf 'FIRMWARE_FREE_PHASE_FAILURE phase=%s exit=%s\n' "$phase" "$failure_status" >&2
+  if [[ -n "$failure_log" && -f "$failure_log" ]]; then
+    printf '%s\n' 'FIRMWARE_FREE_LOG_TAIL_BEGIN' >&2
+    tail -n 12 "$failure_log" | sed -E 's/[[:cntrl:]]/ /g' | cut -c1-500 >&2
+    printf '%s\n' 'FIRMWARE_FREE_LOG_TAIL_END' >&2
+  fi
+  exit "$failure_status"
+}
+trap report_failure ERR
 export DEBIAN_FRONTEND=noninteractive
 apt_opts=(
   -o APT::Sandbox::User=root
@@ -481,9 +495,13 @@ test ! -e /etc/apt/sources.list
 source_files=(/etc/apt/sources.list.d/*)
 test "${#source_files[@]}" -eq 1
 test "${source_files[0]}" = /etc/apt/sources.list.d/debian.sources
+phase=debian-index-update
+failure_log=/audit/apt-update.log
 apt-get "${apt_opts[@]}" update >/audit/apt-update.log 2>&1
 keyring=/usr/share/keyrings/debian-archive-keyring.gpg
 sha256sum "$keyring" | awk '{print $1}' > /audit/archive-keyring-before.sha256
+phase=debian-signature-verification
+failure_log=/audit/apt-update.log
 for f in /var/lib/apt/lists/*_InRelease; do
   status="$(gpgv --status-fd 1 --keyring "$keyring" "$f" 2>&1)"
   fingerprint="$(printf '%s\n' "$status" | awk '$2 == "VALIDSIG" {print $3; exit}')"
@@ -494,18 +512,26 @@ for f in /var/lib/apt/lists/*_InRelease; do
 __DEBIAN_SIGNATURE_ALLOWLIST__
     *) exit 1 ;;
   esac
-  test "$fingerprint" = "$expected_fingerprint"
+  if test "$fingerprint" != "$expected_fingerprint"; then
+    printf 'DEBIAN_SIGNATURE_REJECTED suite=%s observed=%s expected=%s\n' \
+      "$codename" "$fingerprint" "$expected_fingerprint" >&2
+    exit 1
+  fi
   file_hash="$(sha256sum "$f" | awk '{print $1}')"
   printf '%s\t%s\t%s\t%s\n' \
     "$(basename "$f")" "$codename" "$fingerprint" "$file_hash" \
     >> /audit/inrelease.tsv
 done
+phase=dpkg-dev-install
+failure_log=/audit/apt-install.log
 apt-get "${apt_opts[@]}" install -y --no-install-recommends dpkg-dev >/audit/apt-install.log 2>&1
 sha256sum "$keyring" | awk '{print $1}' > /audit/archive-keyring-after.sha256
 cmp /audit/archive-keyring-before.sha256 /audit/archive-keyring-after.sha256
 install -d -m 0700 /audit/source
 source_tmp="$(mktemp -d /tmp/qemu-source-download.XXXXXX)"
 cd "$source_tmp"
+phase=qemu-source-download
+failure_log=/audit/source-download.log
 apt-get "${apt_opts[@]}" source --download-only --only-source \
   'qemu=1:7.2+dfsg-7+deb12u18' >/audit/source-download.log 2>&1
 dsc=(qemu_7.2+dfsg-7+deb12u18.dsc)
@@ -520,6 +546,8 @@ mv qemu_7.2+dfsg.orig.tar.xz qemu_7.2+dfsg-7+deb12u18.debian.tar.xz /audit/sourc
 """
         + archive_checks
         + r"""
+phase=qemu-source-extract
+failure_log=/audit/source-extract.log
 dpkg-source -x /audit/source/qemu_7.2+dfsg-7+deb12u18.dsc /audit/unpacked \
   >/audit/source-extract.log 2>&1
 test -f /audit/unpacked/debian/copyright
@@ -873,7 +901,21 @@ def build_container_command(reference: dict[str, Any]) -> str:
         f"    {suite}) expected_fingerprint='{fingerprint}' ;;"
         for suite, fingerprint in DEBIAN_SIGNING_FINGERPRINTS.items()
     )
-    script = r"""set -euo pipefail
+    script = r"""set -eEuo pipefail
+phase=container-initialization
+failure_log=
+report_failure() {
+  failure_status=$?
+  trap - ERR
+  printf 'FIRMWARE_FREE_PHASE_FAILURE phase=%s exit=%s\n' "$phase" "$failure_status" >&2
+  if [[ -n "$failure_log" && -f "$failure_log" ]]; then
+    printf '%s\n' 'FIRMWARE_FREE_LOG_TAIL_BEGIN' >&2
+    tail -n 12 "$failure_log" | sed -E 's/[[:cntrl:]]/ /g' | cut -c1-500 >&2
+    printf '%s\n' 'FIRMWARE_FREE_LOG_TAIL_END' >&2
+  fi
+  exit "$failure_status"
+}
+trap report_failure ERR
 install -d -m 0700 /audit
 install -d -m 0755 /etc/apt/sources.list.d
 cp /inputs/upstream/emulator/docker/debian.sources /etc/apt/sources.list.d/debian.sources
@@ -881,6 +923,8 @@ test ! -e /etc/apt/sources.list
 test -f /etc/apt/sources.list.d/debian.sources
 test "$(find /etc/apt/sources.list.d -maxdepth 1 -type f | wc -l)" -eq 1
 cd /inputs
+phase=reviewed-input-integrity
+failure_log=/audit/input-hash-check.log
 sha256sum --check /inputs/SHA256SUMS >/audit/input-hash-check.log 2>&1
 export DEBIAN_FRONTEND=noninteractive
 apt() {
@@ -894,10 +938,14 @@ apt() {
     -o Acquire::AllowWeakRepositories=false \
     -o APT::Get::AllowUnauthenticated=false "$@"
 }
+phase=debian-index-update
+failure_log=/audit/apt-update.log
 apt update >/audit/apt-update.log 2>&1
 keyring=/usr/share/keyrings/debian-archive-keyring.gpg
 sha256sum "$keyring" | awk '{print $1}' > /audit/archive-keyring-before.sha256
 : > /audit/inrelease.tsv
+phase=debian-signature-verification
+failure_log=/audit/apt-update.log
 for f in /var/lib/apt/lists/*_InRelease; do
   status="$(gpgv --status-fd 1 --keyring "$keyring" "$f" 2>&1)"
   fingerprint="$(printf '%s\n' "$status" | awk '$2 == "VALIDSIG" {print $3; exit}')"
@@ -908,7 +956,11 @@ for f in /var/lib/apt/lists/*_InRelease; do
 __DEBIAN_SIGNATURE_ALLOWLIST__
     *) exit 1 ;;
   esac
-  test "$fingerprint" = "$expected_fingerprint"
+  if test "$fingerprint" != "$expected_fingerprint"; then
+    printf 'DEBIAN_SIGNATURE_REJECTED suite=%s observed=%s expected=%s\n' \
+      "$codename" "$fingerprint" "$expected_fingerprint" >&2
+    exit 1
+  fi
   file_hash="$(sha256sum "$f" | awk '{print $1}')"
   printf '%s\t%s\t%s\t%s\n' "$(basename "$f")" "$codename" "$fingerprint" "$file_hash" \
     >> /audit/inrelease.tsv
@@ -916,6 +968,8 @@ done
 for suite in bookworm bookworm-updates bookworm-security; do
   grep -q "$(printf '\t%s\t' "$suite")" /audit/inrelease.tsv
 done
+phase=build-package-install
+failure_log=/audit/apt-install.log
 apt install -y --no-install-recommends __BUILD_PACKAGES__ >/audit/apt-install.log 2>&1
 sha256sum "$keyring" | awk '{print $1}' > /audit/archive-keyring-after.sha256
 cmp /audit/archive-keyring-before.sha256 /audit/archive-keyring-after.sha256
@@ -926,12 +980,18 @@ apt clean
 rm -rf /var/lib/apt/lists/*
 printf '%s\n' "$(date +%s)" > /audit/build-start-epoch
 cd /inputs/qemu
+phase=qemu-source-integrity
+failure_log=
 test "$(stat -c %s qemu_7.2+dfsg-7+deb12u18.dsc)" -le 1048576
 printf '%s  %s\n' '__DSC_SHA256__' qemu_7.2+dfsg-7+deb12u18.dsc \
   | sha256sum --check --status
 __ARCHIVE_CHECKS__
+phase=qemu-source-extract
+failure_log=/audit/source-extract.log
 dpkg-source -x qemu_7.2+dfsg-7+deb12u18.dsc /build/qemu-7.2+dfsg \
   >/audit/source-extract.log 2>&1
+phase=qemu-patch-application
+failure_log=/audit/patch-application.log
 patch --batch --forward --fuzz=0 -p1 --directory=/build/qemu-7.2+dfsg \
   < /inputs/upstream/emulator/docker/qemu/snowsky-disc-devices.patch \
   >/audit/patch-application.log 2>&1
@@ -940,11 +1000,19 @@ if grep -Eiq 'fuzz|offset|reversed|previously applied|skipping' /audit/patch-app
   exit 1
 fi
 cd /build/qemu-7.2+dfsg
+phase=qemu-configure
+failure_log=/audit/qemu-configure.log
 ./configure __CONFIGURE_ARGS__ >/audit/qemu-configure.log 2>&1
+phase=qemu-build
+failure_log=/audit/qemu-build.log
 ninja -j2 -C build qemu-mipsel >/audit/qemu-build.log 2>&1
 mkdir -p /build/shims
+phase=mips-shim-build
+failure_log=/audit/shim-build.log
 WORK=/build/shims bash /inputs/upstream/emulator/shims/build_shims.sh \
   >/audit/shim-build.log 2>&1
+phase=build-evidence-collection
+failure_log=
 python3 /inputs/lab/qemu_runtime_build.py measure
 """
     return (

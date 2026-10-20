@@ -50,6 +50,8 @@ def test_source_audit_exports_container_owned_evidence_without_writable_host_mou
     assert "install -d -m 0700 /audit" in create[-1]
     assert "install -d -m 0700 /audit/source" in create[-1]
     assert "install -d -m 0700 /audit/source /audit/unpacked" not in create[-1]
+    assert "FIRMWARE_FREE_PHASE_FAILURE" in create[-1]
+    assert 'tail -n 12 "$failure_log"' in create[-1]
     assert "4CB50190207B4758A3F73A796ED0E7B82643E131" in create[-1]
     assert "ED541312A33F1128F10B1C6C54404762BBB6E853" in create[-1]
     assert "-o APT::Sandbox::User=root" in create[-1]
@@ -186,6 +188,8 @@ def test_build_recipe_uses_the_pinned_target_without_runtime_or_guest_commands()
     assert "dpkg-source -x qemu_7.2+dfsg-7+deb12u18.dsc" in command
     assert "patch --batch --forward --fuzz=0 -p1" in command
     assert "grep -Eiq 'fuzz|offset|reversed|previously applied|skipping'" in command
+    assert "FIRMWARE_FREE_PHASE_FAILURE" in command
+    assert 'tail -n 12 "$failure_log"' in command
     assert "./configure" in command
     assert "ninja -j2 -C build qemu-mipsel" in command
     assert "4CB50190207B4758A3F73A796ED0E7B82643E131" in command
