@@ -10,6 +10,7 @@ import platform
 import re
 import shlex
 import shutil
+import stat
 import subprocess
 import sys
 import tempfile
@@ -136,6 +137,11 @@ AUDIT_LOG_FILES += (
     ("/audit/qemu-build.log", "qemu-build.log"),
     ("/audit/shim-build.log", "shim-build.log"),
 )
+AUDIT_LOG_FILES += (
+    ("/audit/synthetic-guest-build.log", "synthetic-guest-build.log"),
+    ("/audit/synthetic-guest-evidence.log", "synthetic-guest-evidence.log"),
+    ("/audit/execution-input-staging.log", "execution-input-staging.log"),
+)
 FAKEROOT_BOOTSTRAP_PACKAGES = ("fakeroot", "libfakeroot")
 NATIVE_BUILD_PACKAGES = (
     "dpkg-dev",
@@ -171,7 +177,18 @@ QEMU_CONFIGURE_FLAGS = (
     "--with-pkgversion=Debian 1:7.2+dfsg-7+deb12u18, snowsky-disc-devices",
 )
 BUILD_EVIDENCE_FILES = (("/audit/build-evidence.json", "build-evidence.json"),)
+SMOKE_GUEST_EVIDENCE_FILES = (
+    ("/audit/synthetic-guest-evidence.json", "synthetic-guest-evidence.json"),
+)
 BUILD_EVIDENCE_MAX_BYTES = 1024 * 1024
+SMOKE_GUEST_SOURCE = "scripts/ci/fixtures/mips32le_execution_smoke.c"
+SMOKE_GUEST_SOURCE_PATH = ROOT / SMOKE_GUEST_SOURCE
+SMOKE_GUEST_ELF_PATH = "/build/smoke/mips32le-execution-smoke.elf"
+SMOKE_GUEST_TIMEOUT_SECONDS = 2
+SMOKE_EXECUTION_OUTER_TIMEOUT_SECONDS = 30
+EXECUTION_DIAGNOSTIC_MAX_CHARS = 768
+PR13_REPRODUCIBLE_BUILD_HEAD = "36864ecbe6ab1dfd5b6fd672c680c48d0708c422"
+PR13_REPRODUCIBLE_BUILD_RUN = 39442532057
 EXPECTED_BUILD_ARTIFACTS = {
     "qemu-mipsel",
     "fbshim.so",
@@ -190,6 +207,7 @@ AUDIT_FILE_MAX_BYTES = {
     "unpacked/debian/copyright": 4 * 1024 * 1024,
     "copying-hashes.txt": 128 * 1024,
     "build-evidence.json": BUILD_EVIDENCE_MAX_BYTES,
+    "synthetic-guest-evidence.json": 16 * 1024,
     **{name: 1024 * 1024 for _, name in AUDIT_LOG_FILES},
 }
 
@@ -842,6 +860,8 @@ def prepare_build_inputs(
     audit_dir: Path,
     destination: Path,
     source_hashes: dict[str, str],
+    *,
+    include_smoke_guest: bool = False,
 ) -> str:
     source_paths = {
         "LICENSE": upstream / "LICENSE",
@@ -891,6 +911,21 @@ def prepare_build_inputs(
         shutil.copyfile(source, source_dir / name)
         expected_hashes[f"qemu/{name}"] = expected
 
+    if include_smoke_guest:
+        if (
+            SMOKE_GUEST_SOURCE_PATH.is_symlink()
+            or not SMOKE_GUEST_SOURCE_PATH.is_file()
+            or SMOKE_GUEST_SOURCE_PATH.stat().st_size > 16 * 1024
+        ):
+            raise StopBuild("first-party synthetic MIPS guest source is missing or oversized")
+        guest_source_target = destination / "lab" / "fixtures" / "mips32le_execution_smoke.c"
+        guest_source_target.parent.mkdir(parents=True, exist_ok=True)
+        shutil.copyfile(SMOKE_GUEST_SOURCE_PATH, guest_source_target)
+        guest_source_hash = digest(SMOKE_GUEST_SOURCE_PATH)
+        if digest(guest_source_target) != guest_source_hash:
+            raise StopBuild("copied first-party synthetic MIPS guest source changed")
+        expected_hashes["lab/fixtures/mips32le_execution_smoke.c"] = guest_source_hash
+
     helper = ROOT / "scripts" / "ci" / "qemu_runtime_build.py"
     if helper.is_symlink() or not helper.is_file():
         raise StopBuild("Lab build evidence helper is missing or unsafe")
@@ -938,7 +973,590 @@ def build_container_args(inputs_dir: Path, command: str, container_name: str) ->
     ]
 
 
-def build_container_command(reference: dict[str, Any]) -> str:
+def execution_container_args(inputs_dir: Path, command: str, container_name: str) -> list[str]:
+    if inputs_dir.is_symlink() or not inputs_dir.is_dir():
+        raise StopBuild("temporary QEMU execution inputs directory is missing or unsafe")
+    if os.name == "posix" and not inputs_dir.stat().st_mode & stat.S_IXOTH:
+        raise StopBuild(
+            "temporary QEMU execution inputs directory is not traversable by the isolated user"
+        )
+    return [
+        "docker",
+        "create",
+        "--name",
+        container_name,
+        "--network",
+        "none",
+        "--cap-drop=ALL",
+        "--security-opt",
+        "no-new-privileges:true",
+        "--pids-limit",
+        "16",
+        "--memory",
+        "256m",
+        "--memory-swap",
+        "256m",
+        "--cpus",
+        "1",
+        "--read-only",
+        "--user",
+        "65534:65534",
+        "--tmpfs",
+        "/tmp:rw,nosuid,nodev,noexec,size=32m,mode=1777",
+        "--mount",
+        f"type=bind,src={inputs_dir.resolve()},dst=/inputs,readonly",
+        BASE_IMAGE,
+        "/bin/bash",
+        "-euc",
+        command,
+    ]
+
+
+def execution_smoke_container_command() -> str:
+    return r"""set -euo pipefail
+ulimit -c 0
+qemu=/inputs/qemu-mipsel
+guest=/inputs/mips32le-execution-smoke.elf
+if [[ ! -x "$qemu" ]]; then
+  printf '%s\n' 'QEMU_INPUT_NOT_EXECUTABLE' >&2
+  exit 79
+fi
+if [[ ! -r "$guest" ]]; then
+  printf '%s\n' 'SYNTHETIC_GUEST_INPUT_NOT_READABLE' >&2
+  exit 79
+fi
+set +e
+version_output="$(timeout --signal=TERM --kill-after=1s 5s "$qemu" --version 2>&1)"
+version_status=$?
+set -e
+if [[ "$version_status" -ne 0 ]]; then
+  printf 'QEMU_VERSION_EXIT_STATUS=%s\n' "$version_status" >&2
+  printf '%s\n' "$version_output" | head -c 1024 >&2
+  exit 80
+fi
+case "$version_output" in
+  *'Debian 1:7.2+dfsg-7+deb12u18'*) ;;
+  *) printf '%s\n' 'QEMU version output did not match the pinned package' >&2; exit 80 ;;
+esac
+version_line="${version_output%%$'\n'*}"
+printf '%s\n' 'SNOWSKY_MIPS32LE_EXECUTION_OK' >/tmp/expected-success
+printf '%s\n' 'SNOWSKY_MIPS32LE_EXPECTED_FAILURE' >/tmp/expected-failure
+set +e
+timeout --signal=TERM --kill-after=1s 5s "$qemu" "$guest" >/tmp/success.stdout 2>/tmp/success.stderr
+success_status=$?
+if [[ "$success_status" -ne 0 ]] || ! cmp -s /tmp/expected-success /tmp/success.stdout; then
+  (
+    ulimit -f 8192
+    QEMU_LOG=guest_errors,in_asm QEMU_LOG_FILENAME=/tmp/success.qemu.log QEMU_STRACE=1 \
+      timeout --signal=TERM --kill-after=1s 5s "$qemu" "$guest"
+  ) >/tmp/success.trace.stdout 2>/tmp/success.trace.stderr
+  trace_status=$?
+  printf '\nQEMU_STRACE_EXIT_STATUS=%s\n' "$trace_status" >>/tmp/success.stderr
+  if [[ -f /tmp/success.qemu.log ]]; then
+    printf 'QEMU_DEBUG_LOG_BEGIN\n' >>/tmp/success.stderr
+    head -c 4096 /tmp/success.qemu.log >>/tmp/success.stderr
+    printf '\nQEMU_DEBUG_LOG_END\n' >>/tmp/success.stderr
+  fi
+  printf 'QEMU_STRACE_OUTPUT_BEGIN\n' >>/tmp/success.stderr
+  cat /tmp/success.trace.stdout >>/tmp/success.stderr
+  printf '\n' >>/tmp/success.stderr
+  cat /tmp/success.trace.stderr >>/tmp/success.stderr
+  printf '\nQEMU_STRACE_OUTPUT_END\n' >>/tmp/success.stderr
+fi
+timeout --signal=TERM --kill-after=1s 5s "$qemu" "$guest" --fail \
+  >/tmp/failure.stdout 2>/tmp/failure.stderr
+failure_status=$?
+timeout --signal=TERM --kill-after=1s 2s "$qemu" "$guest" --timeout \
+  >/tmp/timeout.stdout 2>/tmp/timeout.stderr
+timeout_status=$?
+set -e
+if [[ "$success_status" -ne 0 ]] || ! cmp -s /tmp/expected-success /tmp/success.stdout; then
+  if cmp -s /tmp/expected-success /tmp/success.stdout; then
+    success_stdout_matches=true
+  else
+    success_stdout_matches=false
+  fi
+  success_stdout_bytes="$(wc -c </tmp/success.stdout | tr -d ' ')"
+  success_stdout_sha256="$(sha256sum /tmp/success.stdout | awk '{print $1}')"
+  success_stdout_text="$(head -c 4096 /tmp/success.stdout \
+    | LC_ALL=C tr '\000-\010\013\014\016-\037\177' ' ' \
+    | tr '\r\n\t' ' ' \
+    | cut -c 1-768)"
+  success_stderr="$(head -c 4096 /tmp/success.stderr \
+    | LC_ALL=C tr '\000-\010\013\014\016-\037\177' ' ' \
+    | tr '\r\n\t' ' ' \
+    | cut -c 1-768)"
+  printf 'SYNTHETIC_SUCCESS_DIAGNOSTIC_EXIT_STATUS=%s\n' "$success_status" >&2
+  printf 'SYNTHETIC_SUCCESS_DIAGNOSTIC_STDOUT_MATCH=%s\n' "$success_stdout_matches" >&2
+  printf 'SYNTHETIC_SUCCESS_DIAGNOSTIC_STDOUT_BYTES=%s\n' "$success_stdout_bytes" >&2
+  printf 'SYNTHETIC_SUCCESS_DIAGNOSTIC_STDOUT_SHA256=%s\n' "$success_stdout_sha256" >&2
+  printf 'SYNTHETIC_SUCCESS_DIAGNOSTIC_STDOUT_TEXT=%s\n' "$success_stdout_text" >&2
+  printf 'SYNTHETIC_SUCCESS_DIAGNOSTIC_STDERR=%s\n' "$success_stderr" >&2
+  exit 81
+fi
+if [[ "$failure_status" -ne 23 ]] || ! cmp -s /tmp/expected-failure /tmp/failure.stdout; then
+  printf 'synthetic failure case did not report the expected status and output: %s\n' \
+    "$failure_status" >&2
+  exit 82
+fi
+if [[ "$timeout_status" -ne 124 ]]; then
+  printf 'synthetic timeout case did not stop at its deadline: %s\n' "$timeout_status" >&2
+  exit 83
+fi
+printf 'QEMU_VERSION=%s\n' "$version_line"
+printf 'SUCCESS_EXIT_STATUS=%s\n' "$success_status"
+printf 'SUCCESS_STDOUT_BYTES=%s\n' "$(wc -c </tmp/success.stdout | tr -d ' ')"
+printf 'SUCCESS_STDOUT_SHA256=%s\n' "$(sha256sum /tmp/success.stdout | awk '{print $1}')"
+printf 'EXPECTED_FAILURE_EXIT_STATUS=%s\n' "$failure_status"
+printf 'TIMEOUT_EXIT_STATUS=%s\n' "$timeout_status"
+printf 'TIMEOUT_SECONDS=2\n'
+"""
+
+
+def validate_execution_container_inspect(inspection: Any, inputs_dir: Path) -> dict[str, Any]:
+    if not isinstance(inspection, list) or len(inspection) != 1:
+        raise StopBuild("QEMU execution container inspection returned an invalid result")
+    container = inspection[0]
+    if not isinstance(container, dict):
+        raise StopBuild("QEMU execution container inspection is malformed")
+    host = container.get("HostConfig", {})
+    config = container.get("Config", {})
+    mounts = container.get("Mounts", [])
+    tmpfs = host.get("Tmpfs", {}) if isinstance(host, dict) else {}
+    if not isinstance(host, dict) or not isinstance(config, dict) or not isinstance(mounts, list):
+        raise StopBuild("QEMU execution container inspection is malformed")
+    cap_drop = host.get("CapDrop", [])
+    security_options = host.get("SecurityOpt", [])
+    if (
+        not isinstance(cap_drop, list)
+        or not isinstance(security_options, list)
+        or host.get("NetworkMode") != "none"
+        or "ALL" not in cap_drop
+        or "no-new-privileges:true" not in security_options
+        or host.get("ReadonlyRootfs") is not True
+        or host.get("Privileged") is not False
+        or host.get("Memory") != 256 * 1024**2
+        or host.get("MemorySwap") != 256 * 1024**2
+        or host.get("NanoCpus") != 1_000_000_000
+        or host.get("PidsLimit") != 16
+        or host.get("Devices") not in ([], None)
+        or host.get("DeviceRequests") not in ([], None)
+        or host.get("PortBindings") not in ({}, None)
+        or config.get("User") != "65534:65534"
+        or config.get("Image") != BASE_IMAGE
+        or not isinstance(tmpfs, dict)
+        or tmpfs.get("/tmp") != "rw,nosuid,nodev,noexec,size=32m,mode=1777"
+    ):
+        raise StopBuild("QEMU execution container does not match the reviewed isolation limits")
+    bind_mounts = [item for item in mounts if isinstance(item, dict) and item.get("Type") == "bind"]
+    if (
+        len(bind_mounts) != 1
+        or bind_mounts[0].get("Destination") != "/inputs"
+        or Path(str(bind_mounts[0].get("Source", ""))).resolve() != inputs_dir.resolve()
+        or bind_mounts[0].get("RW") is not False
+    ):
+        raise StopBuild("QEMU execution container input mount is not the expected read-only bind")
+    if any(
+        not isinstance(item, dict)
+        or item.get("Destination") not in {"/inputs", "/tmp"}
+        or (item.get("Destination") == "/tmp" and item.get("Type") != "tmpfs")
+        for item in mounts
+    ):
+        raise StopBuild("QEMU execution container has an unexpected mount")
+    return {
+        "network_mode": "none",
+        "read_only_root_filesystem": True,
+        "input_mount": "read-only",
+        "temporary_mount": "32 MiB noexec tmpfs",
+        "user": "65534:65534",
+        "memory_bytes": host["Memory"],
+        "memory_swap_bytes": host["MemorySwap"],
+        "cpu_limit": 1,
+        "pid_limit": host["PidsLimit"],
+        "capabilities": "all dropped",
+        "no_new_privileges": True,
+        "devices": "no host device or USB passthrough",
+        "host_device_passthrough": False,
+        "privileged": False,
+        "published_ports": "none",
+    }
+
+
+def parse_execution_smoke_output(output: str) -> dict[str, Any]:
+    if len(output.encode("utf-8", errors="replace")) > 4096:
+        raise StopBuild("synthetic QEMU execution output exceeded the 4 KiB receipt limit")
+    expected_keys = {
+        "QEMU_VERSION",
+        "SUCCESS_EXIT_STATUS",
+        "SUCCESS_STDOUT_BYTES",
+        "SUCCESS_STDOUT_SHA256",
+        "EXPECTED_FAILURE_EXIT_STATUS",
+        "TIMEOUT_EXIT_STATUS",
+        "TIMEOUT_SECONDS",
+    }
+    values: dict[str, str] = {}
+    for line in output.splitlines():
+        key, separator, value = line.partition("=")
+        if not separator or key not in expected_keys or key in values or len(value) > 512:
+            raise StopBuild("synthetic QEMU execution returned malformed bounded output")
+        values[key] = value
+    if set(values) != expected_keys:
+        raise StopBuild("synthetic QEMU execution omitted required result fields")
+    try:
+        success_status = int(values["SUCCESS_EXIT_STATUS"])
+        success_bytes = int(values["SUCCESS_STDOUT_BYTES"])
+        failure_status = int(values["EXPECTED_FAILURE_EXIT_STATUS"])
+        timeout_status = int(values["TIMEOUT_EXIT_STATUS"])
+        timeout_seconds = int(values["TIMEOUT_SECONDS"])
+    except ValueError as exc:
+        raise StopBuild("synthetic QEMU execution returned invalid status values") from exc
+    expected_stdout = b"SNOWSKY_MIPS32LE_EXECUTION_OK\n"
+    if (
+        "Debian " + QEMU_VERSION not in values["QEMU_VERSION"]
+        or success_status != 0
+        or success_bytes != len(expected_stdout)
+        or values["SUCCESS_STDOUT_SHA256"] != hashlib.sha256(expected_stdout).hexdigest()
+        or failure_status != 23
+        or timeout_status != 124
+        or timeout_seconds != SMOKE_GUEST_TIMEOUT_SECONDS
+        or not re.fullmatch(r"[0-9a-f]{64}", values["SUCCESS_STDOUT_SHA256"])
+    ):
+        raise StopBuild("synthetic QEMU execution result did not match the expected outcomes")
+    return {
+        "qemu_version_output": values["QEMU_VERSION"],
+        "success": {
+            "exit_status": success_status,
+            "stdout_bytes": success_bytes,
+            "stdout_sha256": values["SUCCESS_STDOUT_SHA256"],
+            "stdout_matches_expected": True,
+        },
+        "expected_failure": {
+            "exit_status": failure_status,
+            "expected_exit_status": 23,
+            "reported": True,
+        },
+        "timeout": {
+            "exit_status": timeout_status,
+            "expected_exit_status": 124,
+            "deadline_seconds": timeout_seconds,
+            "kill_after_seconds": 1,
+            "reported": True,
+        },
+    }
+
+
+def sanitize_execution_diagnostic(value: str) -> str:
+    value = re.sub(r"\x1b\[[0-?]*[ -/]*[@-~]", "", value)
+    value = re.sub(r"[\x00-\x1f\x7f]+", " ", value)
+    value = re.sub(r"/inputs/mips32le-execution-smoke\.elf", "<synthetic-guest>", value)
+    value = re.sub(r"/inputs/qemu-mipsel", "<qemu-mipsel>", value)
+    return re.sub(r"\s+", " ", value).strip()[:EXECUTION_DIAGNOSTIC_MAX_CHARS]
+
+
+def classify_execution_failure(exit_status: int, stderr: str, stdout_matches: bool) -> str:
+    detail = stderr.lower()
+    if any(
+        marker in detail for marker in ("permission denied", "eacces", "operation not permitted")
+    ):
+        return "permission-error"
+    if any(
+        marker in detail
+        for marker in (
+            "cannot allocate memory",
+            "out of memory",
+            "enomem",
+            "mmap",
+            "virtual address",
+            "guest base",
+            "reserved va",
+        )
+    ):
+        return "memory-or-address-mapping"
+    if any(
+        marker in detail
+        for marker in (
+            "invalid elf",
+            "elf image",
+            "elf interpreter",
+            "error while loading",
+            "could not open",
+            "exec format",
+            "wrong elf",
+        )
+    ):
+        return "guest-elf-loading"
+    if re.search(r"\b(?:getpid|write)\([^\n]*\)\s*=\s*-1\b", detail) or re.search(
+        r"\b(?:getpid|write)\([^\n]*\)\s*=\s*-1\s+errno=", detail
+    ):
+        return "guest-syscall-failure"
+    if "uncaught target signal" in detail or "qemu: fatal" in detail:
+        return "qemu-process-failure"
+    if exit_status == 0 and not stdout_matches:
+        return "stdout-mismatch"
+    return "guest-process-failure" if exit_status else "unclassified-execution-failure"
+
+
+def parse_execution_failure_diagnostic(output: str) -> dict[str, Any] | None:
+    if len(output.encode("utf-8", errors="replace")) > 4096:
+        raise StopBuild("synthetic QEMU failure diagnostics exceeded the 4 KiB limit")
+    expected = {
+        "SYNTHETIC_SUCCESS_DIAGNOSTIC_EXIT_STATUS",
+        "SYNTHETIC_SUCCESS_DIAGNOSTIC_STDOUT_MATCH",
+        "SYNTHETIC_SUCCESS_DIAGNOSTIC_STDOUT_BYTES",
+        "SYNTHETIC_SUCCESS_DIAGNOSTIC_STDOUT_SHA256",
+        "SYNTHETIC_SUCCESS_DIAGNOSTIC_STDOUT_TEXT",
+        "SYNTHETIC_SUCCESS_DIAGNOSTIC_STDERR",
+    }
+    values: dict[str, str] = {}
+    for line in output.splitlines():
+        key, separator, value = line.partition("=")
+        if key not in expected:
+            continue
+        if not separator or key in values or len(value) > EXECUTION_DIAGNOSTIC_MAX_CHARS:
+            raise StopBuild("synthetic QEMU failure diagnostics were malformed")
+        values[key] = value
+    if not values:
+        return None
+    if set(values) != expected:
+        raise StopBuild("synthetic QEMU failure diagnostics omitted required fields")
+    try:
+        exit_status = int(values["SYNTHETIC_SUCCESS_DIAGNOSTIC_EXIT_STATUS"])
+        stdout_bytes = int(values["SYNTHETIC_SUCCESS_DIAGNOSTIC_STDOUT_BYTES"])
+    except ValueError as exc:
+        raise StopBuild("synthetic QEMU failure diagnostics had invalid numeric fields") from exc
+    stdout_matches = values["SYNTHETIC_SUCCESS_DIAGNOSTIC_STDOUT_MATCH"]
+    stdout_sha256 = values["SYNTHETIC_SUCCESS_DIAGNOSTIC_STDOUT_SHA256"]
+    if (
+        exit_status < 0
+        or stdout_bytes < 0
+        or stdout_matches not in {"true", "false"}
+        or not re.fullmatch(r"[0-9a-f]{64}", stdout_sha256)
+    ):
+        raise StopBuild("synthetic QEMU failure diagnostics contained invalid evidence")
+    stdout = sanitize_execution_diagnostic(values["SYNTHETIC_SUCCESS_DIAGNOSTIC_STDOUT_TEXT"])
+    stderr = sanitize_execution_diagnostic(values["SYNTHETIC_SUCCESS_DIAGNOSTIC_STDERR"])
+    matches = stdout_matches == "true"
+    return {
+        "exit_status": exit_status,
+        "stdout_matches": matches,
+        "stdout_bytes": stdout_bytes,
+        "stdout_sha256": stdout_sha256,
+        "stdout": stdout,
+        "stderr": stderr,
+        "category": classify_execution_failure(exit_status, f"{stdout} {stderr}", matches),
+    }
+
+
+def run_execution_smoke_container(
+    inputs_dir: Path, build_evidence: dict[str, Any]
+) -> dict[str, Any]:
+    qemu_artifacts = [
+        item
+        for item in build_evidence.get("artifacts", [])
+        if isinstance(item, dict) and item.get("name") == "qemu-mipsel"
+    ]
+    guest_receipt = build_evidence.get("synthetic_guest", {})
+    guest_elf = guest_receipt.get("elf", {}) if isinstance(guest_receipt, dict) else {}
+    if (
+        len(qemu_artifacts) != 1
+        or not isinstance(guest_elf, dict)
+        or inputs_dir.is_symlink()
+        or not inputs_dir.is_dir()
+    ):
+        raise StopBuild("QEMU execution inputs are missing their measured build identities")
+    expected_inputs = {
+        "qemu-mipsel": str(qemu_artifacts[0].get("sha256", "")),
+        "mips32le-execution-smoke.elf": str(guest_elf.get("sha256", "")),
+    }
+    for name, expected_sha256 in expected_inputs.items():
+        path = inputs_dir / name
+        if (
+            path.is_symlink()
+            or not path.is_file()
+            or not re.fullmatch(r"[0-9a-f]{64}", expected_sha256)
+            or digest(path) != expected_sha256
+        ):
+            raise StopBuild("QEMU execution input hash differs from its measured build identity")
+
+    container_name = f"qemu-mipsel-smoke-{uuid.uuid4().hex[:16]}"
+    container_created = False
+    try:
+        run(
+            execution_container_args(
+                inputs_dir, execution_smoke_container_command(), container_name
+            ),
+            capture=True,
+            timeout=120,
+        )
+        container_created = True
+        inspect_result = run(["docker", "inspect", container_name], capture=True, timeout=60)
+        try:
+            inspection = json.loads(inspect_result.stdout or "")
+        except json.JSONDecodeError as exc:
+            raise StopBuild("QEMU execution container inspection JSON is malformed") from exc
+        isolation = validate_execution_container_inspect(inspection, inputs_dir)
+
+        execution_started = time.monotonic()
+        try:
+            result = run(
+                ["docker", "start", "--attach", container_name],
+                capture=True,
+                check=False,
+                timeout=SMOKE_EXECUTION_OUTER_TIMEOUT_SECONDS,
+            )
+        except subprocess.TimeoutExpired as exc:
+            raise StopBuild(
+                "synthetic QEMU execution exceeded its 30-second outer deadline; "
+                "container cleanup required"
+            ) from exc
+        duration = round(time.monotonic() - execution_started, 3)
+        if result.returncode != 0:
+            failure = parse_execution_failure_diagnostic(result.stdout or "")
+            if failure is not None:
+                raise StopBuild(
+                    "synthetic success case failed: "
+                    f"category={failure['category']}; "
+                    f"exit_status={failure['exit_status']}; "
+                    f"stdout_matches={failure['stdout_matches']}; "
+                    f"stdout_bytes={failure['stdout_bytes']}; "
+                    f"stdout_sha256={failure['stdout_sha256']}; "
+                    f"qemu_stdout={failure['stdout'] or '<empty>'}; "
+                    f"qemu_stderr={failure['stderr'] or '<empty>'}"
+                )
+            detail = sanitize_execution_diagnostic((result.stdout or "")[:4096])
+            raise StopBuild(
+                f"synthetic QEMU execution container exited {result.returncode}"
+                + (f"; bounded output: {detail}" if detail else "")
+            )
+        after_result = run(["docker", "inspect", container_name], capture=True, timeout=60)
+        try:
+            after = json.loads(after_result.stdout or "")
+            state = after[0]["State"]
+        except (json.JSONDecodeError, IndexError, KeyError, TypeError) as exc:
+            raise StopBuild("QEMU execution container final state is malformed") from exc
+        if state.get("Running") is not False or state.get("ExitCode") != 0:
+            raise StopBuild("QEMU execution container did not terminate cleanly")
+        outcome = parse_execution_smoke_output(result.stdout or "")
+        outcome.update(
+            {
+                "command": [
+                    "timeout --signal=TERM --kill-after=1s 5s /inputs/qemu-mipsel --version",
+                    "timeout --signal=TERM --kill-after=1s 5s /inputs/qemu-mipsel "
+                    "/inputs/mips32le-execution-smoke.elf",
+                    "timeout --signal=TERM --kill-after=1s 5s /inputs/qemu-mipsel "
+                    "/inputs/mips32le-execution-smoke.elf --fail",
+                    "timeout --signal=TERM --kill-after=1s 2s /inputs/qemu-mipsel "
+                    "/inputs/mips32le-execution-smoke.elf --timeout",
+                ],
+                "duration_seconds": duration,
+                "container_exit_status": state["ExitCode"],
+                "process_terminated_cleanly": True,
+                "isolation": isolation,
+            }
+        )
+        return outcome
+    finally:
+        if container_created:
+            active_error = sys.exc_info()[1]
+            try:
+                cleanup = run(
+                    ["docker", "rm", "--force", container_name],
+                    capture=True,
+                    check=False,
+                    timeout=60,
+                )
+                cleanup_failed = cleanup.returncode != 0
+            except (OSError, subprocess.SubprocessError):
+                cleanup_failed = True
+            if cleanup_failed:
+                if active_error is None:
+                    raise StopBuild("failed to remove the temporary QEMU execution container")
+                print(
+                    "CLEANUP_WARNING: temporary QEMU execution container could not be removed",
+                    file=sys.stderr,
+                )
+
+
+def build_execution_smoke_receipt(
+    build_evidence: dict[str, Any],
+    execution: dict[str, Any],
+    resources: dict[str, Any],
+    base_image: dict[str, Any],
+    source_hashes: dict[str, str],
+    debian_evidence: dict[str, Any],
+) -> dict[str, Any]:
+    qemu = next(item for item in build_evidence["artifacts"] if item["name"] == "qemu-mipsel")
+    guest = build_evidence["synthetic_guest"]
+    mipsel_toolchain = build_evidence["toolchain"]["mipsel"]
+    return {
+        "schema_version": "firmware-free-mips32le-execution-smoke/v1",
+        "status": "synthetic-execution-passed",
+        "host_runner": {
+            "os": os.environ.get("RUNNER_OS", platform.system()),
+            "architecture": os.environ.get("RUNNER_ARCH", platform.machine()),
+            "runs_on": "ubuntu-24.04",
+            "image_os": os.environ.get("ImageOS", "unreported"),
+            "image_version": os.environ.get("ImageVersion", "unreported"),
+            "resources": resources,
+        },
+        "toolchain": {
+            "qemu_package_version": QEMU_VERSION,
+            "qemu_source_descriptor_sha256": QEMU_DSC_SHA256,
+            "qemu_source_archives": debian_evidence["source_archives"],
+            "qemu_binary": {"bytes": qemu["bytes"], "sha256": qemu["sha256"]},
+            "base_image": BASE_IMAGE,
+            "base_image_index_sha256": base_image["index_digest"],
+            "base_image_amd64_manifest": f"sha256:{BASE_AMD64_MANIFEST}",
+            "upstream_commit": UPSTREAM_COMMIT,
+            "upstream_projection_digest": SOURCE_PROJECTION_DIGEST,
+            "device_patch_sha256": source_hashes["emulator/docker/qemu/snowsky-disc-devices.patch"],
+            "mipsel_cross_toolchain": mipsel_toolchain,
+            "build_input_manifest_sha256": build_evidence["input_manifest_sha256"],
+            "prior_reproducible_build": {
+                "head": PR13_REPRODUCIBLE_BUILD_HEAD,
+                "workflow_run": PR13_REPRODUCIBLE_BUILD_RUN,
+                "result": "matching second clean build",
+                "match_scope": (
+                    "QEMU and shim binaries, package BOM, MIPS sysroot, toolchain identities, "
+                    "and pinned sources; this run adds guest compilation after those builds"
+                ),
+                "reused": True,
+            },
+        },
+        "guest": guest,
+        "execution": execution,
+        "verified_capabilities": [
+            "pinned qemu-mipsel --version output",
+            "static MIPS32 little-endian O32 guest process execution",
+            "getpid and write syscall behavior under QEMU user mode",
+            "deterministic guest stdout and zero exit status",
+            "expected guest exit status reporting",
+            "bounded guest timeout and process termination",
+        ],
+        "unverified_capabilities": [
+            "stock V2.57 firmware compatibility or boot",
+            "vendor firmware authenticity",
+            "dynamic vendor loader or rootfs behavior",
+            "framebuffer, UI, audio, player, or device behavior",
+            "hardware or USB compatibility",
+        ],
+        "runtime_boundaries": {
+            "firmware_processed": False,
+            "stock_binary_executed": False,
+            "qemu_guest_booted": False,
+            "binfmt_registered": False,
+            "host_devices_mounted": False,
+            "network_during_guest_execution": False,
+            "docker_socket_mounted": False,
+            "privileged_container": False,
+            "compiled_binaries_published": False,
+            "temporary_execution_inputs_removed": True,
+            "compatibility_claimed": False,
+        },
+    }
+
+
+def build_container_command(reference: dict[str, Any], *, include_smoke_guest: bool = False) -> str:
     inputs = reference["buildInputs"]
     native_packages = tuple(inputs["nativeBuildPackageRequests"])
     cross_packages = tuple(inputs["shimToolchain"]["packages"])
@@ -950,6 +1568,32 @@ def build_container_command(reference: dict[str, Any]) -> str:
 
     package_args = " ".join(shlex.quote(item) for item in (*native_packages, *cross_packages))
     configure_args = " ".join(shlex.quote(item) for item in configure_flags)
+    smoke_guest_steps = ""
+    if include_smoke_guest:
+        smoke_guest_steps = r"""
+install -d -m 0700 /build/smoke
+mark_phase synthetic-guest-build /audit/synthetic-guest-build.log
+mipsel-linux-gnu-gcc -static -march=mips32 -mabi=32 -EL -O2 -fno-pie -no-pie \
+  -Wl,--build-id=none -o /build/smoke/mips32le-execution-smoke.elf \
+  /inputs/lab/fixtures/mips32le_execution_smoke.c \
+  >/audit/synthetic-guest-build.log 2>&1
+mark_phase synthetic-guest-evidence /audit/synthetic-guest-evidence.log
+python3 /inputs/lab/qemu_runtime_build.py measure-smoke-guest \
+  >/audit/synthetic-guest-evidence.log 2>&1
+mark_phase synthetic-guest-artifact-staging /audit/execution-input-staging.log
+{
+  install -d -m 0700 /audit/execution-inputs
+  install -m 0555 /build/qemu-7.2+dfsg/build/qemu-mipsel \
+    /audit/execution-inputs/qemu-mipsel
+  install -m 0444 /build/smoke/mips32le-execution-smoke.elf \
+    /audit/execution-inputs/mips32le-execution-smoke.elf
+  cmp -s /build/qemu-7.2+dfsg/build/qemu-mipsel /audit/execution-inputs/qemu-mipsel
+  cmp -s /build/smoke/mips32le-execution-smoke.elf \
+    /audit/execution-inputs/mips32le-execution-smoke.elf
+  test -s /audit/execution-inputs/qemu-mipsel
+  test -s /audit/execution-inputs/mips32le-execution-smoke.elf
+} >/audit/execution-input-staging.log 2>&1
+"""
     archive_checks = "\n".join(
         f"printf '%s  %s\\n' '{sha256}' '/inputs/qemu/{name}' | sha256sum --check --status"
         for name, (_, sha256) in QEMU_ARCHIVES.items()
@@ -1115,6 +1759,7 @@ mkdir -p /build/shims
 mark_phase mips-shim-build /audit/shim-build.log
 WORK=/build/shims bash /inputs/upstream/emulator/shims/build_shims.sh \
   >/audit/shim-build.log 2>&1
+__SMOKE_GUEST_STEPS__
 mark_phase build-evidence-collection ""
 python3 /inputs/lab/qemu_runtime_build.py measure
 """
@@ -1124,6 +1769,7 @@ python3 /inputs/lab/qemu_runtime_build.py measure
         .replace("__ARCHIVE_CHECKS__", archive_checks)
         .replace("__DEBIAN_SIGNATURE_ALLOWLIST__", signature_case)
         .replace("__CONFIGURE_ARGS__", configure_args)
+        .replace("__SMOKE_GUEST_STEPS__", smoke_guest_steps)
     )
 
 
@@ -1204,14 +1850,36 @@ def read_fakeroot_bootstrap_evidence(path: Path) -> list[dict[str, Any]]:
     return sorted(packages, key=lambda item: item["package"])
 
 
+def copy_execution_binary(
+    container_name: str,
+    container_path: str,
+    target: Path,
+    expected_sha256: str,
+    maximum_bytes: int,
+    *,
+    executable: bool,
+) -> None:
+    if target.exists() or target.is_symlink():
+        raise StopBuild("temporary QEMU execution input already exists")
+    run(["docker", "cp", f"{container_name}:{container_path}", str(target)], capture=True)
+    if target.is_symlink() or not target.is_file():
+        raise StopBuild("copied QEMU execution input is not a regular file")
+    if target.stat().st_size <= 0 or target.stat().st_size > maximum_bytes:
+        raise StopBuild("copied QEMU execution input exceeds its documented size bound")
+    if digest(target) != expected_sha256:
+        raise StopBuild("copied QEMU execution input hash differs from build evidence")
+    target.chmod(0o555 if executable else 0o444)
+
+
 def run_build_container(
     inputs_dir: Path,
     report_path: Path,
     reference: dict[str, Any],
     *,
     timeout_seconds: int = 2100,
+    smoke_inputs_dir: Path | None = None,
 ) -> dict[str, Any]:
-    command = build_container_command(reference)
+    command = build_container_command(reference, include_smoke_guest=smoke_inputs_dir is not None)
     container_name = f"qemu-runtime-build-{uuid.uuid4().hex[:16]}"
     create_attempted = False
     container_created = False
@@ -1256,6 +1924,66 @@ def run_build_container(
             raise StopBuild(
                 "build evidence does not confirm that compiled binaries were not published"
             )
+        if smoke_inputs_dir is not None:
+            if smoke_inputs_dir.is_symlink() or not smoke_inputs_dir.is_dir():
+                raise StopBuild("temporary QEMU execution inputs directory is unsafe")
+            copy_audit_files(
+                container_name,
+                report_path.parent,
+                SMOKE_GUEST_EVIDENCE_FILES,
+                required=True,
+            )
+            guest_receipt_path = report_path.parent / "synthetic-guest-evidence.json"
+            try:
+                guest_receipt = json.loads(guest_receipt_path.read_text(encoding="utf-8"))
+            except (OSError, json.JSONDecodeError) as exc:
+                raise StopBuild("synthetic guest build evidence is malformed") from exc
+            if (
+                not isinstance(guest_receipt, dict)
+                or guest_receipt.get("schema_version")
+                != "firmware-free-mips32le-synthetic-guest/v1"
+                or guest_receipt.get("status") != "synthetic-static-guest-built"
+                or guest_receipt.get("source", {}).get("sha256") != digest(SMOKE_GUEST_SOURCE_PATH)
+            ):
+                raise StopBuild("synthetic guest build evidence does not match its source")
+            elf = guest_receipt.get("elf", {})
+            if (
+                not isinstance(elf, dict)
+                or elf.get("elf_class") != "ELF32"
+                or elf.get("elf_data") != "little endian"
+                or not isinstance(elf.get("machine"), str)
+                or not elf["machine"].startswith("MIPS")
+                or elf.get("abi") != "o32"
+                or elf.get("isa") not in {"mips32", "mips32r2"}
+                or elf.get("has_interpreter") is not False
+            ):
+                raise StopBuild(
+                    "synthetic guest ELF evidence is not static MIPS32 little-endian O32"
+                )
+            qemu_artifact = next(
+                (item for item in evidence["artifacts"] if item["name"] == "qemu-mipsel"),
+                None,
+            )
+            if not isinstance(qemu_artifact, dict):
+                raise StopBuild("built QEMU binary identity is missing")
+            copy_execution_binary(
+                container_name,
+                "/audit/execution-inputs/qemu-mipsel",
+                smoke_inputs_dir / "qemu-mipsel",
+                str(qemu_artifact.get("sha256", "")),
+                150 * 1024 * 1024,
+                executable=True,
+            )
+            copy_execution_binary(
+                container_name,
+                "/audit/execution-inputs/mips32le-execution-smoke.elf",
+                smoke_inputs_dir / "mips32le-execution-smoke.elf",
+                str(elf.get("sha256", "")),
+                16 * 1024 * 1024,
+                executable=True,
+            )
+            smoke_inputs_dir.chmod(0o711)
+            evidence["synthetic_guest"] = guest_receipt
         return evidence
     finally:
         if create_attempted:
@@ -1345,6 +2073,76 @@ def _elf_evidence(name: str, path: Path) -> dict[str, Any]:
     }
 
 
+def synthetic_guest_elf_evidence(path: Path) -> dict[str, Any]:
+    if path.is_symlink() or not path.is_file():
+        raise StopBuild("first-party synthetic MIPS guest ELF is missing or unsafe")
+    size = path.stat().st_size
+    if size <= 0 or size > 16 * 1024 * 1024:
+        raise StopBuild("first-party synthetic MIPS guest ELF exceeds its 16 MiB limit")
+    header = _tool_output(["mipsel-linux-gnu-readelf", "-h", str(path)])
+    program_headers = _tool_output(["mipsel-linux-gnu-readelf", "-l", str(path)])
+    fields: dict[str, str] = {}
+    for line in header.splitlines():
+        key, separator, value = line.partition(":")
+        if separator:
+            fields[key.strip()] = value.strip()
+    flags = fields.get("Flags", "").lower()
+    elf_data = fields.get("Data", "").lower()
+    elf_type = fields.get("Type", "").split(maxsplit=1)[0].upper()
+    has_interpreter = bool(re.search(r"(?m)^\s*INTERP\s", program_headers))
+    abi = "o32" if re.search(r"(?<![a-z0-9])o32(?![a-z0-9])", flags) else "unknown"
+    isa_match = re.search(r"(?<![a-z0-9])(mips32(?:r2)?)(?![a-z0-9])", flags)
+    isa = isa_match.group(1) if isa_match else "unknown"
+    evidence = {
+        "bytes": size,
+        "sha256": digest(path),
+        "elf_class": fields.get("Class", ""),
+        "elf_data": "little endian" if "little endian" in elf_data else elf_data,
+        "elf_type": elf_type,
+        "machine": fields.get("Machine", ""),
+        "flags": flags,
+        "abi": abi,
+        "isa": isa,
+        "has_interpreter": has_interpreter,
+    }
+    if (
+        evidence["elf_class"] != "ELF32"
+        or evidence["elf_data"] != "little endian"
+        or not evidence["machine"].startswith("MIPS")
+        or elf_type != "EXEC"
+        or abi != "o32"
+        or isa not in {"mips32", "mips32r2"}
+        or has_interpreter
+    ):
+        raise StopBuild(
+            "synthetic guest must be a static MIPS32 little-endian O32 ELF; "
+            f"observed class={evidence['elf_class']!r}, data={evidence['elf_data']!r}, "
+            f"type={elf_type!r}, machine={evidence['machine']!r}, abi={abi!r}, "
+            f"isa={isa!r}, interpreter={has_interpreter}"
+        )
+    evidence["architecture"] = "MIPS32 little-endian"
+    return evidence
+
+
+def measure_smoke_guest() -> None:
+    source = Path("/inputs/lab/fixtures/mips32le_execution_smoke.c")
+    if source.is_symlink() or not source.is_file() or source.stat().st_size > 16 * 1024:
+        raise StopBuild("first-party synthetic MIPS guest source is missing or oversized")
+    guest = Path(SMOKE_GUEST_ELF_PATH)
+    evidence = {
+        "schema_version": "firmware-free-mips32le-synthetic-guest/v1",
+        "status": "synthetic-static-guest-built",
+        "source": {
+            "path": SMOKE_GUEST_SOURCE,
+            "bytes": source.stat().st_size,
+            "sha256": digest(source),
+        },
+        "elf": synthetic_guest_elf_evidence(guest),
+    }
+    output = Path("/audit/synthetic-guest-evidence.json")
+    output.write_text(json.dumps(evidence, sort_keys=True, indent=2) + "\n", encoding="utf-8")
+
+
 def measure_build_evidence() -> None:
     package_bom = Path("/audit/package-bom.tsv")
     package_raw = package_bom.read_bytes()
@@ -1425,6 +2223,15 @@ def measure_build_evidence() -> None:
         if path.is_symlink() or not path.is_file():
             raise StopBuild(f"bounded build log is missing: {name}")
         build_logs[label] = {"bytes": path.stat().st_size, "sha256": digest(path)}
+    for label, name in (
+        ("synthetic_guest_build", "synthetic-guest-build.log"),
+        ("synthetic_guest_evidence", "synthetic-guest-evidence.log"),
+    ):
+        path = Path("/audit") / name
+        if path.exists():
+            if path.is_symlink() or not path.is_file():
+                raise StopBuild(f"bounded build log is not a regular file: {name}")
+            build_logs[label] = {"bytes": path.stat().st_size, "sha256": digest(path)}
 
     cross_packages = [
         item for item in packages if item["package"].split(":", 1)[0] in CROSS_SHIM_PACKAGES
@@ -1651,7 +2458,7 @@ def build_status_for_repeat(repeat_status: str) -> str:
     return f"firmware-free-build-passed-repeat-{suffix}"
 
 
-def build() -> None:
+def build(*, execution_smoke: bool = False) -> None:
     started = time.monotonic()
     reference = read_reference()
     resources = resource_report()
@@ -1674,33 +2481,60 @@ def build() -> None:
         debian = verify_source_audit(audit)
         license_report = verify_license_evidence(upstream, source_hashes, debian)
         inputs_dir = workdir / "build-inputs"
-        input_manifest_sha256 = prepare_build_inputs(upstream, audit, inputs_dir, source_hashes)
+        input_manifest_sha256 = prepare_build_inputs(
+            upstream,
+            audit,
+            inputs_dir,
+            source_hashes,
+            include_smoke_guest=execution_smoke,
+        )
         build_started = time.monotonic()
-        first = run_build_container(inputs_dir, workdir / "build-evidence.json", reference)
+        smoke_inputs_dir = workdir / "execution-inputs" if execution_smoke else None
+        if smoke_inputs_dir is not None:
+            smoke_inputs_dir.mkdir(mode=0o700)
+        first = run_build_container(
+            inputs_dir,
+            workdir / "build-evidence.json",
+            reference,
+            smoke_inputs_dir=smoke_inputs_dir,
+        )
         first_elapsed = round(time.monotonic() - build_started, 1)
         if first.get("debian_archive_keyring_sha256") != debian.get(
             "debian_archive_keyring_sha256"
         ):
             raise StopBuild("Debian archive keyring identity changed between preflight and build")
 
+        execution_receipt = None
+        if smoke_inputs_dir is not None:
+            execution = run_execution_smoke_container(smoke_inputs_dir, first)
+            execution_receipt = build_execution_smoke_receipt(
+                first, execution, resources, base, source_hashes, debian
+            )
+
         repeat: dict[str, Any] = {
             "status": "not-run",
             "reason": (
-                "second clean build requires sufficient measured resources and remaining "
+                "PR #13 already recorded a matching second clean build for unchanged pinned "
+                "QEMU, Debian, shim, patch, and toolchain inputs; this task adds only the "
+                "first-party guest build and isolated execution"
+                if execution_smoke
+                else "second clean build requires sufficient measured resources and remaining "
                 "45-minute job budget"
             ),
         }
         second_resource_report: dict[str, Any] | None = None
-        try:
-            second_resource_report = resource_report()
-        except (StopBuild, OSError, subprocess.SubprocessError) as exc:
-            repeat["reason"] = "resource recheck failed after first build: " + str(exc)[:300]
+        if not execution_smoke:
+            try:
+                second_resource_report = resource_report()
+            except (StopBuild, OSError, subprocess.SubprocessError) as exc:
+                repeat["reason"] = "resource recheck failed after first build: " + str(exc)[:300]
         job_budget_seconds = 42 * 60
         reserve_seconds = 120
         estimate_seconds = max(5 * 60, int(first_elapsed * 1.25))
         available_seconds = int(job_budget_seconds - (time.monotonic() - started) - reserve_seconds)
         if (
-            second_resource_report is not None
+            not execution_smoke
+            and second_resource_report is not None
             and second_resource_report["capacity_status"] == "sufficient"
             and available_seconds >= estimate_seconds
         ):
@@ -1806,7 +2640,8 @@ def build() -> None:
             ),
             "runtime_and_device_boundaries": {
                 "firmware_processed": False,
-                "qemu_executable_invoked": False,
+                "qemu_executable_invoked": execution_smoke,
+                "synthetic_guest_executed": execution_smoke,
                 "guest_booted": False,
                 "binfmt_registered": False,
                 "runtime_image_built": False,
@@ -1815,20 +2650,43 @@ def build() -> None:
                 "usb_or_hardware_accessed": False,
                 "compatibility_claimed": False,
             },
+            **(
+                {"synthetic_execution_smoke": execution_receipt}
+                if execution_receipt is not None
+                else {}
+            ),
             "elapsed_seconds": round(time.monotonic() - started, 1),
         }
-    write_summary("Firmware-free QEMU and MIPS shim build", receipt)
+    write_summary(
+        "Firmware-free QEMU and MIPS32LE synthetic execution smoke"
+        if execution_smoke
+        else "Firmware-free QEMU and MIPS shim build",
+        receipt,
+    )
 
 
 def main() -> int:
-    if len(sys.argv) != 2 or sys.argv[1] not in {"preflight", "build", "measure"}:
-        print("usage: qemu_runtime_build.py {preflight|build|measure}", file=sys.stderr)
+    if len(sys.argv) != 2 or sys.argv[1] not in {
+        "preflight",
+        "build",
+        "smoke",
+        "measure",
+        "measure-smoke-guest",
+    }:
+        print(
+            "usage: qemu_runtime_build.py {preflight|build|smoke|measure|measure-smoke-guest}",
+            file=sys.stderr,
+        )
         return 2
     try:
         if sys.argv[1] == "preflight":
             preflight()
         elif sys.argv[1] == "build":
             build()
+        elif sys.argv[1] == "smoke":
+            build(execution_smoke=True)
+        elif sys.argv[1] == "measure-smoke-guest":
+            measure_smoke_guest()
         else:
             measure_build_evidence()
     except (StopBuild, OSError, subprocess.SubprocessError, json.JSONDecodeError) as exc:

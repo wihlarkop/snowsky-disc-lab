@@ -1,0 +1,35 @@
+name: Firmware-free QEMU MIPS32LE execution smoke
+
+on:
+  workflow_dispatch:
+  pull_request:
+    branches:
+      - codex/firmware-free-qemu-runtime-build
+      - main # Native Stack evaluates PR branch filters against the stack trunk.
+    paths:
+      - .github/workflows/qemu-execution-smoke.yml
+      - scripts/ci/qemu_runtime_build.py
+      - scripts/ci/fixtures/mips32le_execution_smoke.c
+      - docs/m1-01-runtime-preparation.json
+
+permissions:
+  contents: read
+
+jobs:
+  qemu-mips32le-execution-smoke:
+    if: >-
+      (github.event_name == 'pull_request' &&
+       github.event.pull_request.head.repo.full_name == 'wihlarkop/snowsky-disc-lab' &&
+       github.event.pull_request.head.ref == 'codex/qemu-mips32-execution-smoke' &&
+       github.event.pull_request.base.ref == 'codex/firmware-free-qemu-runtime-build') ||
+      (github.event_name == 'workflow_dispatch' &&
+       github.repository == 'wihlarkop/snowsky-disc-lab' &&
+       github.ref == 'refs/heads/main')
+    runs-on: ubuntu-24.04
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+        with:
+          persist-credentials: false
+      - name: Check runner capacity, verify pinned sources and execute a synthetic MIPS32LE guest
+        run: python3 scripts/ci/qemu_runtime_build.py smoke
