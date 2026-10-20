@@ -5,6 +5,7 @@ on:
   pull_request:
     branches:
       - codex/firmware-free-qemu-runtime-build
+      - main # Native Stack evaluates PR branch filters against the stack trunk.
     paths:
       - .github/workflows/qemu-execution-smoke.yml
       - scripts/ci/qemu_runtime_build.py
