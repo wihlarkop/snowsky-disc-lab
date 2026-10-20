@@ -33,13 +33,13 @@
       "libselinux1-dev",
       "libcap-ng-dev",
       "libattr1-dev",
-      "fakeroot-sysv",
+      "fakeroot",
       "libfakeroot"
     ],
     "packageInstallStrategy": {
       "installer": "fakeroot",
       "bootstrapPackages": [
-        "fakeroot-sysv",
+        "fakeroot",
         "libfakeroot"
       ],
       "download": "APT download from the signed, pinned Debian snapshot",

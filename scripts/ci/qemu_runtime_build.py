@@ -136,7 +136,7 @@ AUDIT_LOG_FILES += (
     ("/audit/qemu-build.log", "qemu-build.log"),
     ("/audit/shim-build.log", "shim-build.log"),
 )
-FAKEROOT_BOOTSTRAP_PACKAGES = ("fakeroot-sysv", "libfakeroot")
+FAKEROOT_BOOTSTRAP_PACKAGES = ("fakeroot", "libfakeroot")
 NATIVE_BUILD_PACKAGES = (
     "dpkg-dev",
     "build-essential",
@@ -1040,9 +1040,9 @@ fakeroot_deb_dir=/build/fakeroot-debs
 fakeroot_root=/build/fakeroot-root
 install -d -m 0700 "$fakeroot_deb_dir" "$fakeroot_root"
 cd "$fakeroot_deb_dir"
-apt download fakeroot-sysv libfakeroot >>/audit/apt-install.log 2>&1
+apt download fakeroot libfakeroot >>/audit/apt-install.log 2>&1
 shopt -s nullglob
-fakeroot_debs=(fakeroot-sysv_*.deb libfakeroot_*.deb)
+fakeroot_debs=(fakeroot_*.deb libfakeroot_*.deb)
 test "${#fakeroot_debs[@]}" -eq 2
 declare -A fakeroot_seen=()
 : > /audit/fakeroot-bootstrap.tsv
@@ -1054,7 +1054,7 @@ for package_file in "${fakeroot_debs[@]}"; do
   package_bytes="$(stat -c %s "$package_file")"
   package_sha256="$(sha256sum "$package_file" | awk '{print $1}')"
   case "$package_name" in
-    fakeroot-sysv|libfakeroot) ;;
+    fakeroot|libfakeroot) ;;
     *) exit 1 ;;
   esac
   test -z "${fakeroot_seen[$package_name]:-}"
@@ -1066,7 +1066,7 @@ for package_file in "${fakeroot_debs[@]}"; do
     "$package_name" "$package_version" "$package_architecture" "$package_bytes" \
     "$package_sha256" >> /audit/fakeroot-bootstrap.tsv
 done
-test -n "${fakeroot_seen[fakeroot-sysv]:-}"
+test -n "${fakeroot_seen[fakeroot]:-}"
 test -n "${fakeroot_seen[libfakeroot]:-}"
 for package_file in "${fakeroot_debs[@]}"; do
   dpkg-deb --fsys-tarfile "$package_file" \
