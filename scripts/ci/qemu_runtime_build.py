@@ -675,6 +675,10 @@ def copy_audit_files(
 
 def read_audit_diagnostics(audit_dir: Path) -> list[str]:
     diagnostics = []
+    failure_pattern = re.compile(
+        r"(?i)\b(?:error|fatal|failed|failure|unable|cannot|denied|not permitted|chown)\b"
+        r"|(?:^|\s)[EW]:"
+    )
     for _, name in AUDIT_LOG_FILES:
         path = audit_dir / name
         if path.is_file() and not path.is_symlink():
@@ -686,9 +690,14 @@ def read_audit_diagnostics(audit_dir: Path) -> list[str]:
                     .decode("utf-8", errors="replace")
                     .splitlines()
                 )
-            useful_lines = [line for line in lines if not line.startswith("FIRMWARE_FREE_")]
-            if useful_lines:
-                diagnostics.extend(f"{name}: {line[:500]}" for line in useful_lines[-8:])
+            failures = [line for line in lines if failure_pattern.search(line)]
+            selected = list(dict.fromkeys([*failures[-16:], *lines[-8:]]))[-24:]
+            for line in selected:
+                sanitized = re.sub(r"(?i)(https?://)[^/\s@]+@", r"\1[redacted]@", line)
+                sanitized = re.sub(r"[\x00-\x1f\x7f]+", " ", sanitized)
+                sanitized = sanitized.replace(str(ROOT), "<workspace>")
+                if not sanitized.startswith("FIRMWARE_FREE_"):
+                    diagnostics.append(f"{name}: {sanitized[:500]}")
     return diagnostics[-24:]
 
 

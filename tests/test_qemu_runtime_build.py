@@ -323,6 +323,22 @@ def test_container_diagnostics_redact_url_credentials_and_limit_lines(monkeypatc
     assert "https://[redacted]@example.invalid/path" in diagnostics[-1]
 
 
+def test_audit_diagnostics_preserve_package_error_lines_outside_the_log_tail(
+    tmp_path: Path,
+) -> None:
+    audit = tmp_path / "audit"
+    audit.mkdir()
+    (audit / "apt-install.log").write_text(
+        "dpkg: error processing archive package.deb (--unpack): Operation not permitted\n"
+        + "\n".join(f"Selecting package {index}" for index in range(24)),
+        encoding="utf-8",
+    )
+
+    diagnostics = qemu_runtime_build.read_audit_diagnostics(audit)
+
+    assert any("dpkg: error processing archive" in line for line in diagnostics)
+
+
 def test_build_artifact_validation_requires_qemu_and_all_four_mips_shims() -> None:
     artifacts = [
         {
