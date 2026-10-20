@@ -186,6 +186,7 @@ SMOKE_GUEST_SOURCE_PATH = ROOT / SMOKE_GUEST_SOURCE
 SMOKE_GUEST_ELF_PATH = "/build/smoke/mips32le-execution-smoke.elf"
 SMOKE_GUEST_TIMEOUT_SECONDS = 2
 SMOKE_EXECUTION_OUTER_TIMEOUT_SECONDS = 30
+EXECUTION_DIAGNOSTIC_MAX_CHARS = 768
 PR13_REPRODUCIBLE_BUILD_HEAD = "36864ecbe6ab1dfd5b6fd672c680c48d0708c422"
 PR13_REPRODUCIBLE_BUILD_RUN = 39442532057
 EXPECTED_BUILD_ARTIFACTS = {
@@ -1043,6 +1044,13 @@ printf '%s\n' 'SNOWSKY_MIPS32LE_EXPECTED_FAILURE' >/tmp/expected-failure
 set +e
 timeout --signal=TERM --kill-after=1s 5s "$qemu" "$guest" >/tmp/success.stdout 2>/tmp/success.stderr
 success_status=$?
+if [[ "$success_status" -ne 0 ]] || ! cmp -s /tmp/expected-success /tmp/success.stdout; then
+  QEMU_STRACE=1 timeout --signal=TERM --kill-after=1s 5s "$qemu" "$guest" \
+    >/tmp/success.trace.stdout 2>/tmp/success.trace.stderr
+  trace_status=$?
+  printf '\nQEMU_STRACE_EXIT_STATUS=%s\n' "$trace_status" >>/tmp/success.stderr
+  cat /tmp/success.trace.stderr >>/tmp/success.stderr
+fi
 timeout --signal=TERM --kill-after=1s 5s "$qemu" "$guest" --fail \
   >/tmp/failure.stdout 2>/tmp/failure.stderr
 failure_status=$?
@@ -1051,7 +1059,22 @@ timeout --signal=TERM --kill-after=1s 2s "$qemu" "$guest" --timeout \
 timeout_status=$?
 set -e
 if [[ "$success_status" -ne 0 ]] || ! cmp -s /tmp/expected-success /tmp/success.stdout; then
-  printf 'synthetic success case failed with exit status %s\n' "$success_status" >&2
+  if cmp -s /tmp/expected-success /tmp/success.stdout; then
+    success_stdout_matches=true
+  else
+    success_stdout_matches=false
+  fi
+  success_stdout_bytes="$(wc -c </tmp/success.stdout | tr -d ' ')"
+  success_stdout_sha256="$(sha256sum /tmp/success.stdout | awk '{print $1}')"
+  success_stderr="$(head -c 4096 /tmp/success.stderr \
+    | LC_ALL=C tr '\000-\010\013\014\016-\037\177' ' ' \
+    | tr '\r\n\t' ' ' \
+    | cut -c 1-768)"
+  printf 'SYNTHETIC_SUCCESS_DIAGNOSTIC_EXIT_STATUS=%s\n' "$success_status" >&2
+  printf 'SYNTHETIC_SUCCESS_DIAGNOSTIC_STDOUT_MATCH=%s\n' "$success_stdout_matches" >&2
+  printf 'SYNTHETIC_SUCCESS_DIAGNOSTIC_STDOUT_BYTES=%s\n' "$success_stdout_bytes" >&2
+  printf 'SYNTHETIC_SUCCESS_DIAGNOSTIC_STDOUT_SHA256=%s\n' "$success_stdout_sha256" >&2
+  printf 'SYNTHETIC_SUCCESS_DIAGNOSTIC_STDERR=%s\n' "$success_stderr" >&2
   exit 81
 fi
 if [[ "$failure_status" -ne 23 ]] || ! cmp -s /tmp/expected-failure /tmp/failure.stdout; then
@@ -1205,6 +1228,105 @@ def parse_execution_smoke_output(output: str) -> dict[str, Any]:
     }
 
 
+def sanitize_execution_diagnostic(value: str) -> str:
+    value = re.sub(r"\x1b\[[0-?]*[ -/]*[@-~]", "", value)
+    value = re.sub(r"[\x00-\x1f\x7f]+", " ", value)
+    value = re.sub(r"/inputs/mips32le-execution-smoke\.elf", "<synthetic-guest>", value)
+    value = re.sub(r"/inputs/qemu-mipsel", "<qemu-mipsel>", value)
+    return re.sub(r"\s+", " ", value).strip()[:EXECUTION_DIAGNOSTIC_MAX_CHARS]
+
+
+def classify_execution_failure(exit_status: int, stderr: str, stdout_matches: bool) -> str:
+    detail = stderr.lower()
+    if any(
+        marker in detail for marker in ("permission denied", "eacces", "operation not permitted")
+    ):
+        return "permission-error"
+    if any(
+        marker in detail
+        for marker in (
+            "cannot allocate memory",
+            "out of memory",
+            "enomem",
+            "mmap",
+            "virtual address",
+            "guest base",
+            "reserved va",
+        )
+    ):
+        return "memory-or-address-mapping"
+    if any(
+        marker in detail
+        for marker in (
+            "invalid elf",
+            "elf image",
+            "elf interpreter",
+            "error while loading",
+            "could not open",
+            "exec format",
+            "wrong elf",
+        )
+    ):
+        return "guest-elf-loading"
+    if re.search(r"\b(?:getpid|write)\([^\n]*\)\s*=\s*-1\b", detail) or re.search(
+        r"\b(?:getpid|write)\([^\n]*\)\s*=\s*-1\s+errno=", detail
+    ):
+        return "guest-syscall-failure"
+    if "uncaught target signal" in detail or "qemu: fatal" in detail:
+        return "qemu-process-failure"
+    if exit_status == 0 and not stdout_matches:
+        return "stdout-mismatch"
+    return "guest-process-failure" if exit_status else "unclassified-execution-failure"
+
+
+def parse_execution_failure_diagnostic(output: str) -> dict[str, Any] | None:
+    if len(output.encode("utf-8", errors="replace")) > 4096:
+        raise StopBuild("synthetic QEMU failure diagnostics exceeded the 4 KiB limit")
+    expected = {
+        "SYNTHETIC_SUCCESS_DIAGNOSTIC_EXIT_STATUS",
+        "SYNTHETIC_SUCCESS_DIAGNOSTIC_STDOUT_MATCH",
+        "SYNTHETIC_SUCCESS_DIAGNOSTIC_STDOUT_BYTES",
+        "SYNTHETIC_SUCCESS_DIAGNOSTIC_STDOUT_SHA256",
+        "SYNTHETIC_SUCCESS_DIAGNOSTIC_STDERR",
+    }
+    values: dict[str, str] = {}
+    for line in output.splitlines():
+        key, separator, value = line.partition("=")
+        if key not in expected:
+            continue
+        if not separator or key in values or len(value) > EXECUTION_DIAGNOSTIC_MAX_CHARS:
+            raise StopBuild("synthetic QEMU failure diagnostics were malformed")
+        values[key] = value
+    if not values:
+        return None
+    if set(values) != expected:
+        raise StopBuild("synthetic QEMU failure diagnostics omitted required fields")
+    try:
+        exit_status = int(values["SYNTHETIC_SUCCESS_DIAGNOSTIC_EXIT_STATUS"])
+        stdout_bytes = int(values["SYNTHETIC_SUCCESS_DIAGNOSTIC_STDOUT_BYTES"])
+    except ValueError as exc:
+        raise StopBuild("synthetic QEMU failure diagnostics had invalid numeric fields") from exc
+    stdout_matches = values["SYNTHETIC_SUCCESS_DIAGNOSTIC_STDOUT_MATCH"]
+    stdout_sha256 = values["SYNTHETIC_SUCCESS_DIAGNOSTIC_STDOUT_SHA256"]
+    if (
+        exit_status < 0
+        or stdout_bytes < 0
+        or stdout_matches not in {"true", "false"}
+        or not re.fullmatch(r"[0-9a-f]{64}", stdout_sha256)
+    ):
+        raise StopBuild("synthetic QEMU failure diagnostics contained invalid evidence")
+    stderr = sanitize_execution_diagnostic(values["SYNTHETIC_SUCCESS_DIAGNOSTIC_STDERR"])
+    matches = stdout_matches == "true"
+    return {
+        "exit_status": exit_status,
+        "stdout_matches": matches,
+        "stdout_bytes": stdout_bytes,
+        "stdout_sha256": stdout_sha256,
+        "stderr": stderr,
+        "category": classify_execution_failure(exit_status, stderr, matches),
+    }
+
+
 def run_execution_smoke_container(
     inputs_dir: Path, build_evidence: dict[str, Any]
 ) -> dict[str, Any]:
@@ -1269,7 +1391,18 @@ def run_execution_smoke_container(
             ) from exc
         duration = round(time.monotonic() - execution_started, 3)
         if result.returncode != 0:
-            detail = (result.stdout or "").strip().replace("\n", " | ")[:1000]
+            failure = parse_execution_failure_diagnostic(result.stdout or "")
+            if failure is not None:
+                raise StopBuild(
+                    "synthetic success case failed: "
+                    f"category={failure['category']}; "
+                    f"exit_status={failure['exit_status']}; "
+                    f"stdout_matches={failure['stdout_matches']}; "
+                    f"stdout_bytes={failure['stdout_bytes']}; "
+                    f"stdout_sha256={failure['stdout_sha256']}; "
+                    f"qemu_stderr={failure['stderr'] or '<empty>'}"
+                )
+            detail = sanitize_execution_diagnostic((result.stdout or "")[:4096])
             raise StopBuild(
                 f"synthetic QEMU execution container exited {result.returncode}"
                 + (f"; bounded output: {detail}" if detail else "")

@@ -192,12 +192,13 @@ def test_execution_container_is_networkless_read_only_and_resource_bounded(
 ) -> None:
     inputs = tmp_path / "inputs"
     inputs.mkdir()
+    inputs.chmod(0o700)
     if os.name == "posix":
         with pytest.raises(qemu_runtime_build.StopBuild, match="not traversable"):
             qemu_runtime_build.execution_container_args(
                 inputs, "set -euo pipefail\ntrue", "qemu-smoke-test"
             )
-        inputs.chmod(0o711)
+    inputs.chmod(0o711)
     args = qemu_runtime_build.execution_container_args(
         inputs, "set -euo pipefail\ntrue", "qemu-smoke-test"
     )
@@ -228,11 +229,65 @@ def test_execution_smoke_command_checks_success_failure_and_timeout() -> None:
     assert 'timeout --signal=TERM --kill-after=1s 5s "$qemu" --version' in command
     assert "version_status=$?" in command
     assert "QEMU_VERSION_EXIT_STATUS=%s" in command
+    assert 'QEMU_STRACE=1 timeout --signal=TERM --kill-after=1s 5s "$qemu" "$guest"' in command
+    assert "SYNTHETIC_SUCCESS_DIAGNOSTIC_STDERR=%s\\n" in command
     assert "/inputs/mips32le-execution-smoke.elf" in command
     assert "--fail" in command
     assert "--timeout" in command
     assert "timeout --signal=TERM --kill-after=1s 2s" in command
     assert "--network" not in command
+
+
+@pytest.mark.parametrize(
+    ("exit_status", "stderr", "stdout_matches", "expected"),
+    [
+        (1, "qemu: Invalid ELF image for this architecture", False, "guest-elf-loading"),
+        (1, "qemu: error while loading: Permission denied", False, "permission-error"),
+        (1, "mmap: Cannot allocate memory", False, "memory-or-address-mapping"),
+        (1, "write(1, ...) = -1 errno=13", False, "guest-syscall-failure"),
+        (
+            139,
+            "qemu: uncaught target signal 11 (Segmentation fault)",
+            False,
+            "qemu-process-failure",
+        ),
+        (0, "", False, "stdout-mismatch"),
+    ],
+)
+def test_execution_failure_diagnostic_distinguishes_qemu_failure_classes(
+    exit_status: int, stderr: str, stdout_matches: bool, expected: str
+) -> None:
+    assert (
+        qemu_runtime_build.classify_execution_failure(exit_status, stderr, stdout_matches)
+        == expected
+    )
+
+
+def test_execution_failure_diagnostic_is_bounded_and_removes_control_characters() -> None:
+    sanitized = qemu_runtime_build.sanitize_execution_diagnostic("bad\x1b[31m ELF\n" + "x" * 900)
+
+    assert len(sanitized) <= qemu_runtime_build.EXECUTION_DIAGNOSTIC_MAX_CHARS
+    assert "\x1b" not in sanitized
+    assert "\n" not in sanitized
+
+
+def test_execution_failure_diagnostic_parser_reports_sanitized_memory_failure() -> None:
+    output = "\n".join(
+        [
+            "SYNTHETIC_SUCCESS_DIAGNOSTIC_EXIT_STATUS=1",
+            "SYNTHETIC_SUCCESS_DIAGNOSTIC_STDOUT_MATCH=false",
+            "SYNTHETIC_SUCCESS_DIAGNOSTIC_STDOUT_BYTES=0",
+            "SYNTHETIC_SUCCESS_DIAGNOSTIC_STDOUT_SHA256=" + "a" * 64,
+            "SYNTHETIC_SUCCESS_DIAGNOSTIC_STDERR=mmap failed at "
+            "/inputs/mips32le-execution-smoke.elf: ENOMEM",
+        ]
+    )
+
+    diagnostic = qemu_runtime_build.parse_execution_failure_diagnostic(output)
+
+    assert diagnostic is not None
+    assert diagnostic["category"] == "memory-or-address-mapping"
+    assert diagnostic["stderr"] == "mmap failed at <synthetic-guest>: ENOMEM"
 
 
 def test_only_execution_build_compiles_the_first_party_guest() -> None:

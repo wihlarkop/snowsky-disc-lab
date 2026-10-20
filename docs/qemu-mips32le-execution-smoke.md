@@ -23,6 +23,18 @@ have five-second deadlines; the deliberate busy-loop case has a two-second
 deadline and a one-second forced-kill grace period. A 30-second host-side
 deadline also bounds the complete runtime container.
 
+The fixture is a static Linux MIPS O32 executable, matching QEMU 7.2's
+documented `qemu-mipsel` user-mode target and avoiding a target dynamic loader.
+If the success attempt exits unsuccessfully or produces different stdout, the
+same fixed guest is retried once with `QEMU_STRACE=1`, a five-second deadline,
+and the same container restrictions. The workflow reports an error category,
+stdout byte count and digest, and at most 768 sanitized stderr characters.
+Categories distinguish ELF loading, permissions, memory or address mapping,
+syscall failure, QEMU process failure, and stdout mismatch. This diagnostic
+retry does not increase the container's 256 MiB memory, one-CPU, 16-process, or
+network restrictions. These behaviors follow the [QEMU 7.2 user-mode
+documentation](https://qemu.googlesource.com/qemu/+/6f2ffa080f70c72db023283c487996efe188a911/docs/user/main.rst).
+
 The workflow summary contains a JSON receipt with the measured QEMU and guest
 hashes, guest ELF class/endian/ABI, QEMU version output, deterministic stdout
 digest, observed exit statuses, duration, runner and toolchain identities,
