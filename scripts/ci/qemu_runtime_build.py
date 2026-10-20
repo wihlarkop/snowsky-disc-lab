@@ -592,11 +592,13 @@ find /audit/unpacked -maxdepth 1 -type f -name 'COPYING*' -print0 \
         try:
             run(["docker", "start", "--attach", container_name], capture=True, timeout=900)
         except (StopBuild, OSError, subprocess.SubprocessError) as exc:
+            container_diagnostics = read_container_diagnostics(container_name)
             try:
                 copy_audit_files(container_name, audit_dir, AUDIT_LOG_FILES, required=False)
             except (StopBuild, OSError, subprocess.SubprocessError):
                 pass
             diagnostics = read_audit_diagnostics(audit_dir)
+            diagnostics.extend(container_diagnostics)
             detail = " | ".join(diagnostics).replace(str(audit_dir), "<audit>")
             raise StopBuild(
                 f"{exc}" + (f"; sanitized apt diagnostic: {detail}" if detail else "")
@@ -671,6 +673,25 @@ def read_audit_diagnostics(audit_dir: Path) -> list[str]:
             if lines:
                 diagnostics = lines[-10:]
     return diagnostics
+
+
+def read_container_diagnostics(container_name: str) -> list[str]:
+    try:
+        result = run(
+            ["docker", "logs", container_name],
+            capture=True,
+            check=False,
+            timeout=30,
+        )
+    except (OSError, subprocess.SubprocessError):
+        return []
+    lines = []
+    for line in (result.stdout or "").splitlines()[-12:]:
+        sanitized = re.sub(r"(?i)(https?://)[^/\s@]+@", r"\1[redacted]@", line)
+        sanitized = re.sub(r"[\x00-\x1f\x7f]+", " ", sanitized)
+        sanitized = sanitized.replace(str(ROOT), "<workspace>")
+        lines.append(sanitized[:500])
+    return lines
 
 
 def debian_license_inventory(copyright_text: str) -> dict[str, Any]:
@@ -1075,11 +1096,17 @@ def run_build_container(
         create_attempted = True
         run(build_container_args(inputs_dir, command, container_name), capture=True, timeout=120)
         container_created = True
-        run(
-            ["docker", "start", "--attach", container_name],
-            capture=True,
-            timeout=timeout_seconds,
-        )
+        try:
+            run(
+                ["docker", "start", "--attach", container_name],
+                capture=True,
+                timeout=timeout_seconds,
+            )
+        except (StopBuild, OSError, subprocess.SubprocessError) as exc:
+            detail = " | ".join(read_container_diagnostics(container_name))
+            if detail:
+                raise StopBuild(f"{exc}; bounded container diagnostic: {detail}") from exc
+            raise
         copy_audit_files(container_name, report_path.parent, BUILD_EVIDENCE_FILES, required=True)
         if report_path.is_symlink() or not report_path.is_file():
             raise StopBuild("build evidence receipt is not a regular file")

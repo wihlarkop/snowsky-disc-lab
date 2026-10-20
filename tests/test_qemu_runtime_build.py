@@ -260,6 +260,54 @@ def test_build_container_copies_only_validated_json_then_removes_container(
     assert [args[:2] for args in calls][-1] == ["docker", "rm"]
 
 
+def test_failed_build_reports_bounded_container_logs_before_cleanup(
+    monkeypatch, tmp_path: Path
+) -> None:
+    calls: list[list[str]] = []
+
+    def fake_run(args: list[str], **_kwargs: object) -> subprocess.CompletedProcess[str]:
+        calls.append(args)
+        if args[:2] == ["docker", "start"]:
+            raise qemu_runtime_build.StopBuild("command failed (100): docker start")
+        if args[:2] == ["docker", "logs"]:
+            return subprocess.CompletedProcess(
+                args,
+                0,
+                stdout="FIRMWARE_FREE_PHASE_FAILURE phase=debian-signature-verification exit=1\n",
+            )
+        return subprocess.CompletedProcess(args, 0, stdout="")
+
+    monkeypatch.setattr(qemu_runtime_build, "run", fake_run)
+    inputs = tmp_path / "inputs"
+    inputs.mkdir()
+
+    with pytest.raises(qemu_runtime_build.StopBuild, match="bounded container diagnostic"):
+        qemu_runtime_build.run_build_container(
+            inputs, tmp_path / "report" / "build-evidence.json", qemu_runtime_build.read_reference()
+        )
+
+    assert [args[:2] for args in calls][-1] == ["docker", "rm"]
+    assert [args[:2] for args in calls].index(["docker", "logs"]) < len(calls) - 1
+
+
+def test_container_diagnostics_redact_url_credentials_and_limit_lines(monkeypatch) -> None:
+    def fake_run(args: list[str], **_kwargs: object) -> subprocess.CompletedProcess[str]:
+        return subprocess.CompletedProcess(
+            args,
+            0,
+            stdout="\n".join([f"line {index}" for index in range(13)])
+            + "\nhttps://user:secret@example.invalid/path\n",
+        )
+
+    monkeypatch.setattr(qemu_runtime_build, "run", fake_run)
+
+    diagnostics = qemu_runtime_build.read_container_diagnostics("test-container")
+
+    assert len(diagnostics) == 12
+    assert "secret" not in " ".join(diagnostics)
+    assert "https://[redacted]@example.invalid/path" in diagnostics[-1]
+
+
 def test_build_artifact_validation_requires_qemu_and_all_four_mips_shims() -> None:
     artifacts = [
         {
