@@ -47,6 +47,26 @@
       "purpose": "simulate package file ownership operations without granting CAP_CHOWN",
       "containerCapabilities": "all dropped"
     },
+    "containerMounts": {
+      "build": {
+        "path": "/build",
+        "type": "tmpfs",
+        "size": "6g",
+        "options": ["rw", "nosuid", "nodev", "exec"],
+        "purpose": "isolated build workspace for pinned tool and generated build execution"
+      },
+      "temporary": {
+        "path": "/tmp",
+        "type": "tmpfs",
+        "size": "512m",
+        "options": ["rw", "nosuid", "nodev", "noexec"]
+      },
+      "sourceInputs": {
+        "path": "/inputs",
+        "type": "bind",
+        "readOnly": true
+      }
+    },
     "runtimePackageRequests": [
       "qemu-user-static",
       "binfmt-support",

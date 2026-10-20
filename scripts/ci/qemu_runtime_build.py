@@ -928,7 +928,7 @@ def build_container_args(inputs_dir: Path, command: str, container_name: str) ->
         "--tmpfs",
         "/tmp:rw,nosuid,nodev,noexec,size=512m,mode=1777",
         "--tmpfs",
-        "/build:rw,nosuid,nodev,size=6g,mode=0755",
+        "/build:rw,nosuid,nodev,exec,size=6g,mode=0755",
         "--mount",
         f"type=bind,src={inputs_dir.resolve()},dst=/inputs,readonly",
         BASE_IMAGE,

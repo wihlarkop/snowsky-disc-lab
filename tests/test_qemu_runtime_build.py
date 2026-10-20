@@ -170,6 +170,11 @@ def test_build_container_uses_only_hardened_read_only_source_mount(tmp_path: Pat
     mounts = [arg for arg in args if arg.startswith("type=bind,")]
     assert len(mounts) == 1
     assert mounts[0].endswith(",dst=/inputs,readonly")
+    tmpfs_mounts = [args[index + 1] for index, arg in enumerate(args) if arg == "--tmpfs"]
+    assert tmpfs_mounts == [
+        "/tmp:rw,nosuid,nodev,noexec,size=512m,mode=1777",
+        "/build:rw,nosuid,nodev,exec,size=6g,mode=0755",
+    ]
     assert not any(arg.startswith("--device") for arg in args)
     assert "--privileged" not in args
     assert "-p" not in args
