@@ -122,6 +122,7 @@ AUDIT_LOG_FILES = tuple(
     for name in (
         "apt-update.log",
         "apt-install.log",
+        "fakeroot-bootstrap.tsv",
         "source-download.log",
         "source-extract.log",
     )
@@ -135,6 +136,7 @@ AUDIT_LOG_FILES += (
     ("/audit/qemu-build.log", "qemu-build.log"),
     ("/audit/shim-build.log", "shim-build.log"),
 )
+FAKEROOT_BOOTSTRAP_PACKAGES = ("fakeroot-sysv", "libfakeroot")
 NATIVE_BUILD_PACKAGES = (
     "dpkg-dev",
     "build-essential",
@@ -151,6 +153,7 @@ NATIVE_BUILD_PACKAGES = (
     "libselinux1-dev",
     "libcap-ng-dev",
     "libattr1-dev",
+    *FAKEROOT_BOOTSTRAP_PACKAGES,
 )
 CROSS_SHIM_PACKAGES = (
     "gcc-mipsel-linux-gnu",
@@ -241,6 +244,13 @@ def read_reference() -> dict[str, Any]:
     inputs = reference.get("buildInputs", {})
     if tuple(inputs.get("nativeBuildPackageRequests", [])) != NATIVE_BUILD_PACKAGES:
         raise StopBuild("M1-01 QEMU build package requests differ from the reviewed set")
+    package_strategy = inputs.get("packageInstallStrategy", {})
+    if (
+        package_strategy.get("installer") != "fakeroot"
+        or tuple(package_strategy.get("bootstrapPackages", [])) != FAKEROOT_BOOTSTRAP_PACKAGES
+        or package_strategy.get("containerCapabilities") != "all dropped"
+    ):
+        raise StopBuild("M1-01 capability-free package installation strategy changed")
     shim = inputs.get("shimToolchain", {})
     if tuple(shim.get("packages", [])) != CROSS_SHIM_PACKAGES:
         raise StopBuild("M1-01 shim toolchain package requests differ from the reviewed set")
@@ -981,18 +991,20 @@ cd /inputs
 mark_phase reviewed-input-integrity /audit/input-hash-check.log
 sha256sum --check /inputs/SHA256SUMS >/audit/input-hash-check.log 2>&1
 export DEBIAN_FRONTEND=noninteractive
+apt_opts=(
+  -o APT::Sandbox::User=root
+  -o Dpkg::Use-Pty=false
+  -o Dir::Log=/dev/null
+  -o Dir::Etc::sourcelist=/dev/null
+  -o Dir::Etc::sourceparts=/etc/apt/sources.list.d
+  -o Acquire::Languages=none
+  -o Acquire::AllowInsecureRepositories=false
+  -o Acquire::AllowDowngradeToInsecureRepositories=false
+  -o Acquire::AllowWeakRepositories=false
+  -o APT::Get::AllowUnauthenticated=false
+)
 apt() {
-  apt-get \
-    -o APT::Sandbox::User=root \
-    -o Dpkg::Use-Pty=false \
-    -o Dir::Log=/dev/null \
-    -o Dir::Etc::sourcelist=/dev/null \
-    -o Dir::Etc::sourceparts=/etc/apt/sources.list.d \
-    -o Acquire::Languages=none \
-    -o Acquire::AllowInsecureRepositories=false \
-    -o Acquire::AllowDowngradeToInsecureRepositories=false \
-    -o Acquire::AllowWeakRepositories=false \
-    -o APT::Get::AllowUnauthenticated=false "$@"
+  apt-get "${apt_opts[@]}" "$@"
 }
 mark_phase debian-index-update /audit/apt-update.log
 apt update >/audit/apt-update.log 2>&1
@@ -1022,8 +1034,53 @@ done
 for suite in bookworm bookworm-updates bookworm-security; do
   grep -q "$(printf '\t%s\t' "$suite")" /audit/inrelease.tsv
 done
+mark_phase fakeroot-bootstrap /audit/apt-install.log
+: > /audit/apt-install.log
+fakeroot_deb_dir=/build/fakeroot-debs
+fakeroot_root=/build/fakeroot-root
+install -d -m 0700 "$fakeroot_deb_dir" "$fakeroot_root"
+cd "$fakeroot_deb_dir"
+apt download fakeroot-sysv libfakeroot >>/audit/apt-install.log 2>&1
+shopt -s nullglob
+fakeroot_debs=(fakeroot-sysv_*.deb libfakeroot_*.deb)
+test "${#fakeroot_debs[@]}" -eq 2
+declare -A fakeroot_seen=()
+: > /audit/fakeroot-bootstrap.tsv
+for package_file in "${fakeroot_debs[@]}"; do
+  test -f "$package_file" && test ! -L "$package_file"
+  package_name="$(dpkg-deb -f "$package_file" Package)"
+  package_version="$(dpkg-deb -f "$package_file" Version)"
+  package_architecture="$(dpkg-deb -f "$package_file" Architecture)"
+  package_bytes="$(stat -c %s "$package_file")"
+  package_sha256="$(sha256sum "$package_file" | awk '{print $1}')"
+  case "$package_name" in
+    fakeroot-sysv|libfakeroot) ;;
+    *) exit 1 ;;
+  esac
+  test -z "${fakeroot_seen[$package_name]:-}"
+  fakeroot_seen[$package_name]=1
+  test "$package_architecture" = amd64
+  test -n "$package_version"
+  test "$package_bytes" -gt 0 && test "$package_bytes" -le 4194304
+  printf '%s\t%s\t%s\t%s\t%s\n' \
+    "$package_name" "$package_version" "$package_architecture" "$package_bytes" \
+    "$package_sha256" >> /audit/fakeroot-bootstrap.tsv
+done
+test -n "${fakeroot_seen[fakeroot-sysv]:-}"
+test -n "${fakeroot_seen[libfakeroot]:-}"
+for package_file in "${fakeroot_debs[@]}"; do
+  dpkg-deb --fsys-tarfile "$package_file" \
+    | tar --no-same-owner -xf - -C "$fakeroot_root"
+done
+fakeroot_bin="$fakeroot_root/usr/bin/fakeroot-sysv"
+fakeroot_daemon="$fakeroot_root/usr/bin/faked-sysv"
+fakeroot_library="$fakeroot_root/usr/lib/x86_64-linux-gnu/libfakeroot/libfakeroot-sysv.so"
+test -x "$fakeroot_bin" && test -x "$fakeroot_daemon" && test -f "$fakeroot_library"
+cd /inputs
 mark_phase build-package-install /audit/apt-install.log
-apt install -y --no-install-recommends __BUILD_PACKAGES__ >/audit/apt-install.log 2>&1
+"$fakeroot_bin" --lib "$fakeroot_library" --faked "$fakeroot_daemon" -- \
+  apt-get "${apt_opts[@]}" install -y --no-install-recommends __BUILD_PACKAGES__ \
+  >>/audit/apt-install.log 2>&1
 sha256sum "$keyring" | awk '{print $1}' > /audit/archive-keyring-after.sha256
 cmp /audit/archive-keyring-before.sha256 /audit/archive-keyring-after.sha256
 dpkg-query -W -f='${db:Status-Abbrev}\t${binary:Package}\t${Version}\t${Architecture}\n' \
@@ -1104,6 +1161,47 @@ def validate_build_artifacts(artifacts: Any) -> None:
             or item.get("flags") != "0x70001407"
         ):
             raise StopBuild("shim ABI or NaN2008 ELF flags differ from the reviewed MIPS profile")
+
+
+def read_fakeroot_bootstrap_evidence(path: Path) -> list[dict[str, Any]]:
+    packages = []
+    names = set()
+    try:
+        rows = path.read_text(encoding="utf-8").splitlines()
+    except (OSError, UnicodeDecodeError) as exc:
+        raise StopBuild("fakeroot bootstrap package evidence is missing or invalid") from exc
+    for row in rows:
+        fields = row.split("\t")
+        if len(fields) != 5:
+            raise StopBuild("fakeroot bootstrap package evidence is malformed")
+        name, version, architecture, byte_text, sha256 = fields
+        try:
+            size = int(byte_text)
+        except ValueError as exc:
+            raise StopBuild("fakeroot bootstrap package size is malformed") from exc
+        if (
+            name not in FAKEROOT_BOOTSTRAP_PACKAGES
+            or name in names
+            or not version
+            or len(version) > 128
+            or architecture != "amd64"
+            or not 0 < size <= 4 * 1024 * 1024
+            or not re.fullmatch(r"[0-9a-f]{64}", sha256)
+        ):
+            raise StopBuild("fakeroot bootstrap package identity is invalid")
+        names.add(name)
+        packages.append(
+            {
+                "package": name,
+                "version": version,
+                "architecture": architecture,
+                "bytes": size,
+                "sha256": sha256,
+            }
+        )
+    if names != set(FAKEROOT_BOOTSTRAP_PACKAGES):
+        raise StopBuild("fakeroot bootstrap package set is incomplete")
+    return sorted(packages, key=lambda item: item["package"])
 
 
 def run_build_container(
@@ -1258,6 +1356,9 @@ def measure_build_evidence() -> None:
         packages.append({"package": fields[0], "version": fields[1], "architecture": fields[2]})
     if not packages:
         raise StopBuild("installed package BOM is empty")
+    fakeroot_bootstrap_packages = read_fakeroot_bootstrap_evidence(
+        Path("/audit/fakeroot-bootstrap.tsv")
+    )
 
     sysroot = Path("/usr/mipsel-linux-gnu")
     sysroot_sha256, sysroot_file_count, sysroot_entry_count = _tree_digest(sysroot)
@@ -1343,6 +1444,7 @@ def measure_build_evidence() -> None:
         "package_bom_sha256": hashlib.sha256(package_raw).hexdigest(),
         "package_count": len(packages),
         "installed_packages": packages,
+        "fakeroot_bootstrap_packages": fakeroot_bootstrap_packages,
         "toolchain": {
             "native": {
                 "gcc_version": _tool_output(["gcc", "-dumpfullversion", "-dumpversion"]),
@@ -1696,9 +1798,11 @@ def build() -> None:
             ),
             "apt_sandbox": (
                 "APT ran as container UID 0 because SETUID/SETGID capabilities are dropped; "
-                "Dpkg::Use-Pty=false and Dir::Log=/dev/null avoid APT's term.log ownership "
-                "change, while explicit audit logs retain package diagnostics. The container "
-                "retained --cap-drop=ALL and no-new-privileges."
+                "fakeroot simulated dpkg file ownership metadata from two packages downloaded "
+                "through the signed pinned snapshot, avoiding CAP_CHOWN. Dpkg::Use-Pty=false "
+                "and Dir::Log=/dev/null avoid APT's term.log ownership change; explicit audit "
+                "logs retain diagnostics. The container retained --cap-drop=ALL and "
+                "no-new-privileges."
             ),
             "runtime_and_device_boundaries": {
                 "firmware_processed": False,

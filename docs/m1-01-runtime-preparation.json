@@ -32,8 +32,21 @@
       "libblkid-dev",
       "libselinux1-dev",
       "libcap-ng-dev",
-      "libattr1-dev"
+      "libattr1-dev",
+      "fakeroot-sysv",
+      "libfakeroot"
     ],
+    "packageInstallStrategy": {
+      "installer": "fakeroot",
+      "bootstrapPackages": [
+        "fakeroot-sysv",
+        "libfakeroot"
+      ],
+      "download": "APT download from the signed, pinned Debian snapshot",
+      "unpack": "dpkg-deb --fsys-tarfile piped to tar --no-same-owner in the build tmpfs",
+      "purpose": "simulate package file ownership operations without granting CAP_CHOWN",
+      "containerCapabilities": "all dropped"
+    },
     "runtimePackageRequests": [
       "qemu-user-static",
       "binfmt-support",

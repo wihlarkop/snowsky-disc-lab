@@ -206,10 +206,61 @@ def test_build_recipe_uses_the_pinned_target_without_runtime_or_guest_commands()
     assert "APT::Sandbox::User=root" in command
     assert "Dpkg::Use-Pty=false" in command
     assert "Dir::Log=/dev/null" in command
+    assert "apt download fakeroot-sysv libfakeroot" in command
+    assert "dpkg-deb --fsys-tarfile" in command
+    assert "tar --no-same-owner" in command
+    assert '"$fakeroot_bin" --lib "$fakeroot_library" --faked "$fakeroot_daemon" --' in command
+    assert 'apt-get "${apt_opts[@]}" install -y --no-install-recommends' in command
     assert "binfmt" not in command
     assert "qemu-user-static" not in command
     assert "qemu-mipsel -version" not in command
     assert "qemu-mipsel-static" not in command
+
+
+def test_build_reference_pins_capability_free_dpkg_bootstrap() -> None:
+    reference = qemu_runtime_build.read_reference()
+    build_inputs = reference["buildInputs"]
+
+    assert set(qemu_runtime_build.FAKEROOT_BOOTSTRAP_PACKAGES).issubset(
+        build_inputs["nativeBuildPackageRequests"]
+    )
+    strategy = build_inputs["packageInstallStrategy"]
+    assert tuple(strategy["bootstrapPackages"]) == qemu_runtime_build.FAKEROOT_BOOTSTRAP_PACKAGES
+    assert strategy["installer"] == "fakeroot"
+    assert strategy["containerCapabilities"] == "all dropped"
+
+
+def test_fakeroot_bootstrap_receipt_requires_exact_package_hashes(tmp_path: Path) -> None:
+    receipt = tmp_path / "fakeroot-bootstrap.tsv"
+    receipt.write_text(
+        "fakeroot-sysv\t1.31-1.2\tamd64\t42000\t" + "a" * 64 + "\n"
+        "libfakeroot\t1.31-1.2\tamd64\t30000\t" + "b" * 64 + "\n",
+        encoding="utf-8",
+    )
+
+    assert qemu_runtime_build.read_fakeroot_bootstrap_evidence(receipt) == [
+        {
+            "package": "fakeroot-sysv",
+            "version": "1.31-1.2",
+            "architecture": "amd64",
+            "bytes": 42000,
+            "sha256": "a" * 64,
+        },
+        {
+            "package": "libfakeroot",
+            "version": "1.31-1.2",
+            "architecture": "amd64",
+            "bytes": 30000,
+            "sha256": "b" * 64,
+        },
+    ]
+
+    receipt.write_text(
+        "fakeroot-sysv\t1.31-1.2\tamd64\t42000\t" + "a" * 64 + "\n",
+        encoding="utf-8",
+    )
+    with pytest.raises(qemu_runtime_build.StopBuild, match="bootstrap package set"):
+        qemu_runtime_build.read_fakeroot_bootstrap_evidence(receipt)
 
 
 def test_build_container_copies_only_validated_json_then_removes_container(
