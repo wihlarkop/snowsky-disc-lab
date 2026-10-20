@@ -1,0 +1,28 @@
+name: Firmware-free QEMU runtime build
+
+on:
+  pull_request:
+    branches:
+      - codex/m1-extraction-toolchain-readiness
+    paths:
+      - .github/workflows/qemu-runtime-build.yml
+      - scripts/ci/qemu_runtime_build.py
+      - docs/m1-01-runtime-preparation.json
+
+permissions:
+  contents: read
+
+jobs:
+  qemu-runtime-build:
+    if: >-
+      github.event.pull_request.head.repo.full_name == 'wihlarkop/snowsky-disc-lab' &&
+      github.event.pull_request.head.ref == 'codex/firmware-free-qemu-runtime-build' &&
+      github.event.pull_request.base.ref == 'codex/m1-extraction-toolchain-readiness'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+        with:
+          persist-credentials: false
+      - name: Check runner capacity and verify pinned Debian source metadata
+        run: python3 scripts/ci/qemu_runtime_build.py preflight
