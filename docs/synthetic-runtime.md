@@ -127,8 +127,10 @@ timeout/termination/cleanup and unsupported capabilities. Per-session local
 receipts use `firmware-free-synthetic-runtime/v1`. No raw daemon errors, host paths,
 unreviewed guest diagnostics, binaries, images or firmware are exported.
 
-The smallest next step is to review the exact V2.57 path and syscall requirements
-against this enforced binding contract, recording each stock mapping that needs
-privileged functionality as blocked. Lawful firmware identity/authenticity and
-explicit firmware-backed runtime authorization remain separate gates before
-any stock integration or execution.
+The [V2.57 capability map](v257-runtime-capability-map.md) separates these verified
+observations from upstream path, syscall and privilege requirements. Its
+[test-only boundary contract](v257-runtime-boundary-contract.json) checks existing
+container refusals; it adds no runtime inputs or execution authority. The proposed
+smallest follow-up is a bounded first-party POSIX queue probe under unchanged
+isolation, not stock integration. Lawful firmware identity/authenticity, rights
+review and explicit firmware-backed runtime authorization remain separate gates.

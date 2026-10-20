@@ -1,0 +1,67 @@
+{
+  "schema_version": "lab-v257-runtime-boundary-review/v1",
+  "scope": "inspection-regressions-only; not a launch manifest or execution authority",
+  "upstream_commit": "85ab00deb08ac112066377fd8083cc8727ed859a",
+  "source_projection": "ef1f0b45f86d4724a7359694b2c3bc4c",
+  "lab_baseline": "d88f70d64ad6842c45fc9d45c0b30b451648602f",
+  "stock_v257_boot": "NOT RUN",
+  "allowed": {
+    "user": "65534:65534",
+    "binds": [
+      {"source_role": "verified-execution-inputs", "target": "/inputs", "read_only": true},
+      {"source_role": "owned-synthetic-input", "target": "/synthetic-rootfs", "read_only": true}
+    ],
+    "host_config": {
+      "NetworkMode": "none",
+      "IpcMode": "none",
+      "CapDrop": ["ALL"],
+      "SecurityOpt": ["no-new-privileges:true"],
+      "ReadonlyRootfs": true,
+      "Privileged": false,
+      "Memory": 268435456,
+      "MemorySwap": 268435456,
+      "NanoCpus": 1000000000,
+      "PidsLimit": 16,
+      "Tmpfs": {
+        "/session-data": "rw,nosuid,nodev,noexec,size=1m,mode=0700,uid=65534,gid=65534",
+        "/session-tmp": "rw,nosuid,nodev,noexec,size=1m,mode=0700,uid=65534,gid=65534",
+        "/session-diagnostics": "rw,nosuid,nodev,noexec,size=1m,mode=0700,uid=65534,gid=65534"
+      }
+    }
+  },
+  "refused": {
+    "extra_bind_targets": [
+      "/usr/data", "/tmp", "/tmp/sdcard", "/dev", "/dev/fb0", "/dev/input",
+      "/dev/snd", "/dev/mqueue", "/proc", "/sys", "/repo", "/work",
+      "/home", "/var/run/docker.sock"
+    ],
+    "extra_filesystems": [
+      {"type": "proc", "target": "/proc"},
+      {"type": "sysfs", "target": "/sys"},
+      {"type": "mqueue", "target": "/dev/mqueue"},
+      {"type": "volume", "target": "/usr/data"}
+    ],
+    "extra_tmpfs_targets": ["/usr/data", "/tmp", "/tmp/sdcard", "/dev/mqueue"],
+    "capability_additions": [
+      "SYS_ADMIN", "SYS_CHROOT", "MKNOD", "NET_ADMIN", "SYS_TIME",
+      "SYS_BOOT", "SYS_MODULE", "SYS_RESOURCE"
+    ],
+    "device_paths": [
+      "/dev/fb0", "/dev/input", "/dev/snd", "/dev/loop0", "/dev/loop-control", "/dev/net/tun"
+    ],
+    "host_config_changes": [
+      {"field": "Privileged", "value": true},
+      {"field": "ReadonlyRootfs", "value": false},
+      {"field": "CapDrop", "value": []},
+      {"field": "SecurityOpt", "value": []},
+      {"field": "IpcMode", "value": "host"},
+      {"field": "IpcMode", "value": "private"},
+      {"field": "IpcMode", "value": "shareable"},
+      {"field": "NetworkMode", "value": "host"},
+      {"field": "NetworkMode", "value": "bridge"},
+      {"field": "PidMode", "value": "host"},
+      {"field": "UTSMode", "value": "host"},
+      {"field": "VolumesFrom", "value": ["other-container"]}
+    ]
+  }
+}
