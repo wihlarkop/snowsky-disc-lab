@@ -1,0 +1,64 @@
+{
+  "schema_version": "firmware-free-qemu-runtime-preflight/v1",
+  "status": "stopped-insufficient-runner-resources",
+  "workflow": {
+    "repository": "wihlarkop/snowsky-disc-lab",
+    "run_id": 39419117978,
+    "head_commit": "be544d34274eadbaed6505da64251b57a64d0242",
+    "runner_image": "ubuntu-24.04",
+    "runner_os_release": "Ubuntu 24.04.5 LTS",
+    "runner_image_version": "20261012.334.1"
+  },
+  "host_resources": {
+    "architecture": "x86_64",
+    "cpus_available": 2,
+    "memory_total_bytes": 8323969024,
+    "memory_available_bytes": 7176183808,
+    "memory_available_gib_rounded": 6.68,
+    "workspace_free_bytes": 14115164160,
+    "temporary_storage_free_bytes": 14115164160,
+    "docker_free_bytes": 14115168256,
+    "docker_server_version": "28.0.4",
+    "docker_buildx_version": "github.com/docker/buildx v0.38.0 0dbe87f36ed472fe36b6796c3f70b4210a731fc5"
+  },
+  "estimated_requirements": {
+    "minimum_cpus": 2,
+    "minimum_available_memory_bytes": 8589934592,
+    "minimum_available_memory_gib": 8,
+    "minimum_docker_free_bytes": 10737418240,
+    "minimum_docker_free_gib": 10,
+    "minimum_temporary_storage_free_bytes": 1073741824,
+    "minimum_temporary_storage_free_gib": 1,
+    "basis": "Documented preflight estimate for the pinned two-stage QEMU source build, Debian toolchain packages, final image layers, and 2 GiB disk headroom."
+  },
+  "capacity_failures": [
+    "available memory was 7176183808 bytes (6.68 GiB), below the documented 8 GiB minimum"
+  ],
+  "preflight_checks": {
+    "runner_os_and_architecture_verified": true,
+    "cpu_memory_disk_and_docker_measured": true,
+    "docker_available": true,
+    "pinned_upstream_source_files_fetched_and_hash_verified": false,
+    "pinned_base_image_manifest_verified": false,
+    "pinned_base_image_pulled": false,
+    "debian_snapshot_signatures_verified": false,
+    "qemu_source_descriptor_and_archive_hashes_verified": false,
+    "debian_source_extracted_for_license_review": false,
+    "qemu_compiled": false,
+    "mips_shims_compiled": false,
+    "second_clean_build_attempted": false
+  },
+  "stop_point": "Capacity gate stopped the job before source fetch, image inspection or pull, Debian access, or compilation.",
+  "network_boundary": "No build dependency fetch occurred. The attempted job used the normal GitHub-hosted runner; this workflow does not provide network-level egress isolation.",
+  "retained_artifacts": "This sanitized JSON contains no firmware, compiled binaries, container image, secrets, local user paths, or runner-specific worker identifiers.",
+  "safety_boundaries": {
+    "proprietary_firmware_accessed": false,
+    "qemu_or_guest_executed": false,
+    "firmware_booted": false,
+    "usb_or_hardware_accessed": false,
+    "device_flashed": false,
+    "privileged_container_used": false,
+    "binfmt_registered": false,
+    "compiled_binaries_or_images_published": false
+  }
+}
