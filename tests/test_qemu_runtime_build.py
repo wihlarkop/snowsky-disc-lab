@@ -231,7 +231,8 @@ def test_execution_smoke_command_checks_success_failure_and_timeout() -> None:
     assert "QEMU_VERSION_EXIT_STATUS=%s" in command
     assert "QEMU_STRACE=1" in command
     assert 'timeout --signal=TERM --kill-after=1s 5s "$qemu" "$guest"' in command
-    assert "QEMU_LOG=guest_errors QEMU_LOG_FILENAME=/tmp/success.qemu.log" in command
+    assert "ulimit -f 8192" in command
+    assert "QEMU_LOG=guest_errors,in_asm QEMU_LOG_FILENAME=/tmp/success.qemu.log" in command
     assert "head -c 4096 /tmp/success.qemu.log" in command
     assert "cat /tmp/success.trace.stdout >>/tmp/success.stderr" in command
     assert "cat /tmp/success.trace.stderr >>/tmp/success.stderr" in command
@@ -283,6 +284,7 @@ def test_execution_failure_diagnostic_parser_reports_sanitized_memory_failure() 
             "SYNTHETIC_SUCCESS_DIAGNOSTIC_STDOUT_MATCH=false",
             "SYNTHETIC_SUCCESS_DIAGNOSTIC_STDOUT_BYTES=0",
             "SYNTHETIC_SUCCESS_DIAGNOSTIC_STDOUT_SHA256=" + "a" * 64,
+            "SYNTHETIC_SUCCESS_DIAGNOSTIC_STDOUT_TEXT=",
             "SYNTHETIC_SUCCESS_DIAGNOSTIC_STDERR=mmap failed at "
             "/inputs/mips32le-execution-smoke.elf: ENOMEM",
         ]
@@ -293,6 +295,26 @@ def test_execution_failure_diagnostic_parser_reports_sanitized_memory_failure() 
     assert diagnostic is not None
     assert diagnostic["category"] == "memory-or-address-mapping"
     assert diagnostic["stderr"] == "mmap failed at <synthetic-guest>: ENOMEM"
+
+
+def test_execution_failure_diagnostic_classifies_qemu_loader_stdout() -> None:
+    output = "\n".join(
+        [
+            "SYNTHETIC_SUCCESS_DIAGNOSTIC_EXIT_STATUS=1",
+            "SYNTHETIC_SUCCESS_DIAGNOSTIC_STDOUT_MATCH=false",
+            "SYNTHETIC_SUCCESS_DIAGNOSTIC_STDOUT_BYTES=56",
+            "SYNTHETIC_SUCCESS_DIAGNOSTIC_STDOUT_SHA256=" + "b" * 64,
+            "SYNTHETIC_SUCCESS_DIAGNOSTIC_STDOUT_TEXT=Error while loading "
+            "/inputs/mips32le-execution-smoke.elf: Permission denied",
+            "SYNTHETIC_SUCCESS_DIAGNOSTIC_STDERR=",
+        ]
+    )
+
+    diagnostic = qemu_runtime_build.parse_execution_failure_diagnostic(output)
+
+    assert diagnostic is not None
+    assert diagnostic["category"] == "permission-error"
+    assert diagnostic["stdout"] == "Error while loading <synthetic-guest>: Permission denied"
 
 
 def test_only_execution_build_compiles_the_first_party_guest() -> None:

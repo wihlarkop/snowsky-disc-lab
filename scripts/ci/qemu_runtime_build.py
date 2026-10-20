@@ -1045,9 +1045,11 @@ set +e
 timeout --signal=TERM --kill-after=1s 5s "$qemu" "$guest" >/tmp/success.stdout 2>/tmp/success.stderr
 success_status=$?
 if [[ "$success_status" -ne 0 ]] || ! cmp -s /tmp/expected-success /tmp/success.stdout; then
-  QEMU_LOG=guest_errors QEMU_LOG_FILENAME=/tmp/success.qemu.log QEMU_STRACE=1 \
-    timeout --signal=TERM --kill-after=1s 5s "$qemu" "$guest" \
-    >/tmp/success.trace.stdout 2>/tmp/success.trace.stderr
+  (
+    ulimit -f 8192
+    QEMU_LOG=guest_errors,in_asm QEMU_LOG_FILENAME=/tmp/success.qemu.log QEMU_STRACE=1 \
+      timeout --signal=TERM --kill-after=1s 5s "$qemu" "$guest"
+  ) >/tmp/success.trace.stdout 2>/tmp/success.trace.stderr
   trace_status=$?
   printf '\nQEMU_STRACE_EXIT_STATUS=%s\n' "$trace_status" >>/tmp/success.stderr
   if [[ -f /tmp/success.qemu.log ]]; then
@@ -1076,6 +1078,10 @@ if [[ "$success_status" -ne 0 ]] || ! cmp -s /tmp/expected-success /tmp/success.
   fi
   success_stdout_bytes="$(wc -c </tmp/success.stdout | tr -d ' ')"
   success_stdout_sha256="$(sha256sum /tmp/success.stdout | awk '{print $1}')"
+  success_stdout_text="$(head -c 4096 /tmp/success.stdout \
+    | LC_ALL=C tr '\000-\010\013\014\016-\037\177' ' ' \
+    | tr '\r\n\t' ' ' \
+    | cut -c 1-768)"
   success_stderr="$(head -c 4096 /tmp/success.stderr \
     | LC_ALL=C tr '\000-\010\013\014\016-\037\177' ' ' \
     | tr '\r\n\t' ' ' \
@@ -1084,6 +1090,7 @@ if [[ "$success_status" -ne 0 ]] || ! cmp -s /tmp/expected-success /tmp/success.
   printf 'SYNTHETIC_SUCCESS_DIAGNOSTIC_STDOUT_MATCH=%s\n' "$success_stdout_matches" >&2
   printf 'SYNTHETIC_SUCCESS_DIAGNOSTIC_STDOUT_BYTES=%s\n' "$success_stdout_bytes" >&2
   printf 'SYNTHETIC_SUCCESS_DIAGNOSTIC_STDOUT_SHA256=%s\n' "$success_stdout_sha256" >&2
+  printf 'SYNTHETIC_SUCCESS_DIAGNOSTIC_STDOUT_TEXT=%s\n' "$success_stdout_text" >&2
   printf 'SYNTHETIC_SUCCESS_DIAGNOSTIC_STDERR=%s\n' "$success_stderr" >&2
   exit 81
 fi
@@ -1297,6 +1304,7 @@ def parse_execution_failure_diagnostic(output: str) -> dict[str, Any] | None:
         "SYNTHETIC_SUCCESS_DIAGNOSTIC_STDOUT_MATCH",
         "SYNTHETIC_SUCCESS_DIAGNOSTIC_STDOUT_BYTES",
         "SYNTHETIC_SUCCESS_DIAGNOSTIC_STDOUT_SHA256",
+        "SYNTHETIC_SUCCESS_DIAGNOSTIC_STDOUT_TEXT",
         "SYNTHETIC_SUCCESS_DIAGNOSTIC_STDERR",
     }
     values: dict[str, str] = {}
@@ -1325,6 +1333,7 @@ def parse_execution_failure_diagnostic(output: str) -> dict[str, Any] | None:
         or not re.fullmatch(r"[0-9a-f]{64}", stdout_sha256)
     ):
         raise StopBuild("synthetic QEMU failure diagnostics contained invalid evidence")
+    stdout = sanitize_execution_diagnostic(values["SYNTHETIC_SUCCESS_DIAGNOSTIC_STDOUT_TEXT"])
     stderr = sanitize_execution_diagnostic(values["SYNTHETIC_SUCCESS_DIAGNOSTIC_STDERR"])
     matches = stdout_matches == "true"
     return {
@@ -1332,8 +1341,9 @@ def parse_execution_failure_diagnostic(output: str) -> dict[str, Any] | None:
         "stdout_matches": matches,
         "stdout_bytes": stdout_bytes,
         "stdout_sha256": stdout_sha256,
+        "stdout": stdout,
         "stderr": stderr,
-        "category": classify_execution_failure(exit_status, stderr, matches),
+        "category": classify_execution_failure(exit_status, f"{stdout} {stderr}", matches),
     }
 
 
@@ -1410,6 +1420,7 @@ def run_execution_smoke_container(
                     f"stdout_matches={failure['stdout_matches']}; "
                     f"stdout_bytes={failure['stdout_bytes']}; "
                     f"stdout_sha256={failure['stdout_sha256']}; "
+                    f"qemu_stdout={failure['stdout'] or '<empty>'}; "
                     f"qemu_stderr={failure['stderr'] or '<empty>'}"
                 )
             detail = sanitize_execution_diagnostic((result.stdout or "")[:4096])
