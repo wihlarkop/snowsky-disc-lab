@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import importlib.util
 import json
+import os
 import subprocess
 from pathlib import Path
 
@@ -191,6 +192,12 @@ def test_execution_container_is_networkless_read_only_and_resource_bounded(
 ) -> None:
     inputs = tmp_path / "inputs"
     inputs.mkdir()
+    if os.name == "posix":
+        with pytest.raises(qemu_runtime_build.StopBuild, match="not traversable"):
+            qemu_runtime_build.execution_container_args(
+                inputs, "set -euo pipefail\ntrue", "qemu-smoke-test"
+            )
+        inputs.chmod(0o711)
     args = qemu_runtime_build.execution_container_args(
         inputs, "set -euo pipefail\ntrue", "qemu-smoke-test"
     )

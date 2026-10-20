@@ -10,6 +10,7 @@ import platform
 import re
 import shlex
 import shutil
+import stat
 import subprocess
 import sys
 import tempfile
@@ -974,6 +975,10 @@ def build_container_args(inputs_dir: Path, command: str, container_name: str) ->
 def execution_container_args(inputs_dir: Path, command: str, container_name: str) -> list[str]:
     if inputs_dir.is_symlink() or not inputs_dir.is_dir():
         raise StopBuild("temporary QEMU execution inputs directory is missing or unsafe")
+    if os.name == "posix" and not inputs_dir.stat().st_mode & stat.S_IXOTH:
+        raise StopBuild(
+            "temporary QEMU execution inputs directory is not traversable by the isolated user"
+        )
     return [
         "docker",
         "create",
@@ -1823,6 +1828,7 @@ def run_build_container(
                 16 * 1024 * 1024,
                 executable=False,
             )
+            smoke_inputs_dir.chmod(0o711)
             evidence["synthetic_guest"] = guest_receipt
         return evidence
     finally:
