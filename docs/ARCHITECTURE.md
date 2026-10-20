@@ -2,7 +2,7 @@
 
 **State:** overall design specification. M0 implements host preflight, schema-only manifests and immutable source caching, with a [trust baseline](TRUST-BOUNDARIES.md) and [initial license inventory](LICENSE-INVENTORY.md). [CONTRACTS.md](CONTRACTS.md), [SOURCES.md](SOURCES.md), [HOST-PREFLIGHT.md](HOST-PREFLIGHT.md) and the published JSON schemas define current behavior. Remaining interfaces, runtime commands, directories and illustrative YAML below are proposals.
 
-[ADR 0001](adr/0001-external-ui-handoff.md) selects the initial cold-session external UI strategy, subject to M1/M2 validation. [Integration readiness](M0-INTEGRATION-READINESS.md) records outstanding closure gates. No runtime is implemented.
+[ADR 0001](adr/0001-external-ui-handoff.md) selects the initial cold-session external UI strategy, subject to M1/M2 validation. [Integration readiness](M0-INTEGRATION-READINESS.md) records outstanding closure gates. The [fixed synthetic runtime](synthetic-runtime.md) exercises first-party filesystem and lifecycle behavior through the reviewed QEMU build. Firmware-backed runtime and external UI handoff remain unimplemented.
 
 ## 1. Scope, product boundaries
 

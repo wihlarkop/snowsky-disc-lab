@@ -1,0 +1,296 @@
+"""Boundary regressions; Docker is simulated here, hosted acceptance executes QEMU."""
+
+from __future__ import annotations
+
+import hashlib
+import json
+import subprocess
+from typing import Any
+
+import pytest
+
+from snowsky_disc_lab import synthetic_runtime as runtime
+
+
+@pytest.fixture
+def inputs(tmp_path, monkeypatch):
+    directory = tmp_path / "inputs"
+    directory.mkdir(mode=0o711)
+    for name in ("qemu-mipsel", "mips32le-execution-smoke.elf"):
+        (directory / name).write_bytes(name.encode())
+        (directory / name).chmod(0o555)
+    qemu_hash = hashlib.sha256(b"qemu-mipsel").hexdigest()
+    monkeypatch.setattr(runtime, "QEMU_SHA256", qemu_hash)
+    evidence = {
+        "artifacts": [{"name": "qemu-mipsel", "sha256": qemu_hash}],
+        "synthetic_guest": {
+            "source": {"sha256": runtime.GUEST_SOURCE_SHA256},
+            "elf": {"sha256": hashlib.sha256(b"mips32le-execution-smoke.elf").hexdigest()},
+        },
+    }
+    return directory, evidence
+
+
+class Docker:
+    def __init__(self):
+        self.calls = []
+        self.inspection: list[dict[str, Any]] = []
+        self.mode = "filesystem"
+        self.timeout = False
+        self.extra_mount = False
+        self.foreign_owner = False
+        self.cleanup_failure = False
+
+    def __call__(self, args, **kwargs):
+        self.calls.append(args)
+        if args[1] == "create":
+            self.mode = args[-1]
+            label = args[args.index("--label") + 1].split("=", 1)
+            mounts = []
+            for index, arg in enumerate(args):
+                if arg == "--mount":
+                    fields = dict(
+                        part.split("=", 1) for part in args[index + 1].split(",") if "=" in part
+                    )
+                    mounts.append(
+                        {
+                            "Type": "bind",
+                            "Source": fields["src"],
+                            "Destination": fields["dst"],
+                            "RW": False,
+                        }
+                    )
+            if self.extra_mount:
+                mounts.append(
+                    {"Type": "bind", "Source": "/home", "Destination": "/host", "RW": True}
+                )
+            self.inspection = [
+                {
+                    "Id": "a" * 64,
+                    "Config": {
+                        "Image": runtime.BASE_IMAGE,
+                        "User": "65534:65534",
+                        "Labels": {label[0]: "foreign" if self.foreign_owner else label[1]},
+                        "Entrypoint": None,
+                        "Cmd": args[-5:],
+                        "WorkingDir": "",
+                        "Env": [
+                            "PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin"
+                        ],
+                    },
+                    "HostConfig": {
+                        "NetworkMode": "none",
+                        "CapDrop": ["ALL"],
+                        "CapAdd": None,
+                        "SecurityOpt": ["no-new-privileges:true"],
+                        "ReadonlyRootfs": True,
+                        "Privileged": False,
+                        "Memory": 256 * 1024**2,
+                        "MemorySwap": 256 * 1024**2,
+                        "NanoCpus": 1_000_000_000,
+                        "PidsLimit": 16,
+                        "Devices": [],
+                        "DeviceRequests": None,
+                        "PortBindings": {},
+                        "PidMode": "",
+                        "IpcMode": "none",
+                        "UTSMode": "",
+                        "VolumesFrom": None,
+                        "DeviceCgroupRules": None,
+                        "Tmpfs": runtime.TMPFS,
+                    },
+                    "Mounts": mounts,
+                    "State": {"Running": False, "ExitCode": 0, "OOMKilled": False},
+                }
+            ]
+            return subprocess.CompletedProcess(args, 0, "a" * 64 + "\n")
+        if args[1] == "inspect":
+            return subprocess.CompletedProcess(args, 0, json.dumps(self.inspection))
+        if args[1] == "start":
+            if self.timeout:
+                raise subprocess.TimeoutExpired(args, kwargs["timeout"])
+            output = {
+                "filesystem": runtime.EXPECTED_OUTPUT,
+                "failure": "SNOWSKY_MIPS32LE_EXPECTED_FAILURE\n",
+                "timeout": "",
+            }[self.mode]
+            code = {"filesystem": 0, "failure": 23, "timeout": 124}[self.mode]
+            self.inspection[0]["State"]["ExitCode"] = code
+            return subprocess.CompletedProcess(args, code, output)
+        if args[1] == "rm":
+            return subprocess.CompletedProcess(args, int(self.cleanup_failure), "")
+        raise AssertionError(args)
+
+
+def test_real_session_flow_and_no_replace(inputs, tmp_path, monkeypatch):
+    docker = Docker()
+    monkeypatch.setattr(runtime, "_docker", docker)
+    store = tmp_path / "sessions"
+    receipt = runtime.launch(*inputs, store, session_id="one")
+    assert receipt["status"] == "passed"
+    assert receipt["execution"]["exit_code"] == 0
+    assert receipt["cleanup"]["container_removed"] is True
+    assert receipt["execution"]["observations"]["readonly_write_errno"] == 30
+    assert str(tmp_path) not in json.dumps(receipt)
+    with pytest.raises(runtime.RuntimeRefused, match="existing"):
+        runtime.launch(*inputs, store, session_id="one")
+    assert len([call for call in docker.calls if call[1] == "create"]) == 1
+    second = runtime.launch(*inputs, store, session_id="two")
+    assert second["session_id"] != receipt["session_id"]
+    assert (store / "one" / "receipt.json").is_file()
+
+
+@pytest.mark.parametrize("mode,code", [("failure", 23), ("timeout", 124)])
+def test_expected_guest_lifecycle(inputs, tmp_path, monkeypatch, mode, code):
+    monkeypatch.setattr(runtime, "_docker", Docker())
+    receipt = runtime.launch(*inputs, tmp_path / "sessions", _case=mode)
+    assert receipt["execution"]["exit_code"] == code
+    assert receipt["execution"]["timed_out"] is (mode == "timeout")
+    assert receipt["cleanup"]["container_removed"]
+
+
+@pytest.mark.parametrize("state", ["extra_mount", "foreign_owner"])
+def test_inspect_refuses_before_start(inputs, tmp_path, monkeypatch, state):
+    docker = Docker()
+    setattr(docker, state, True)
+    monkeypatch.setattr(runtime, "_docker", docker)
+    with pytest.raises(runtime.RuntimeRefused):
+        runtime.launch(*inputs, tmp_path / "sessions")
+    assert not any(call[1] == "start" for call in docker.calls)
+    if state == "foreign_owner":
+        assert not any(call[1] == "rm" for call in docker.calls)
+
+
+def test_outer_timeout_quarantines_and_removes_only_owned_container(inputs, tmp_path, monkeypatch):
+    docker = Docker()
+    docker.timeout = True
+    monkeypatch.setattr(runtime, "_docker", docker)
+    with pytest.raises(runtime.RuntimeRefused, match="deadline"):
+        runtime.launch(*inputs, tmp_path / "sessions", session_id="timeout")
+    receipt = json.loads((tmp_path / "sessions/timeout/receipt.json").read_text())
+    assert receipt["status"] == "quarantined"
+    assert receipt["cleanup"]["container_removed"]
+    assert docker.calls[-1] == ["docker", "rm", "--force", "a" * 64]
+
+
+def test_cleanup_failure_is_not_reported_as_success(inputs, tmp_path, monkeypatch):
+    docker = Docker()
+    docker.cleanup_failure = True
+    monkeypatch.setattr(runtime, "_docker", docker)
+    with pytest.raises(runtime.RuntimeRefused, match="cleanup"):
+        runtime.launch(*inputs, tmp_path / "sessions", session_id="failed")
+    receipt = json.loads((tmp_path / "sessions/failed/receipt.json").read_text())
+    assert receipt["status"] == "quarantined"
+    assert receipt["cleanup"]["container_removed"] is False
+
+
+@pytest.mark.parametrize("name", ["../escape", "/absolute", "a/b", "a,b", "", "a\\b"])
+def test_unsafe_session_names_refused(inputs, tmp_path, name):
+    with pytest.raises(runtime.RuntimeRefused):
+        runtime.launch(*inputs, tmp_path / "sessions", session_id=name)
+    assert not (tmp_path / "sessions").exists()
+
+
+def test_changed_artifact_and_unknown_source_refused(inputs, tmp_path):
+    directory, evidence = inputs
+    evidence["synthetic_guest"]["source"]["sha256"] = "0" * 64
+    with pytest.raises(runtime.RuntimeRefused, match="identity"):
+        runtime.launch(directory, evidence, tmp_path / "sessions")
+    evidence["synthetic_guest"]["source"]["sha256"] = runtime.GUEST_SOURCE_SHA256
+    (directory / "qemu-mipsel").chmod(0o644)
+    (directory / "qemu-mipsel").write_bytes(b"changed")
+    with pytest.raises(runtime.RuntimeRefused, match="identity"):
+        runtime.launch(directory, evidence, tmp_path / "sessions")
+
+
+def test_symlink_ancestor_is_refused(inputs, tmp_path):
+    target = tmp_path / "target"
+    target.mkdir()
+    link = tmp_path / "link"
+    try:
+        link.symlink_to(target, target_is_directory=True)
+    except OSError:
+        pytest.skip("symlinks unavailable for this account")
+    with pytest.raises(runtime.RuntimeRefused, match="path"):
+        runtime.launch(*inputs, link / "sessions")
+    assert not (target / "sessions").exists()
+
+
+@pytest.mark.parametrize(
+    "field,value",
+    [
+        ("NetworkMode", "host"),
+        ("Privileged", True),
+        ("CapAdd", ["SYS_ADMIN"]),
+        ("PidMode", "host"),
+        ("IpcMode", "host"),
+        ("ReadonlyRootfs", False),
+        ("Memory", 0),
+        ("DeviceCgroupRules", ["a *:* rwm"]),
+        ("Tmpfs", {"/host": "rw"}),
+        ("SecurityOpt", ["seccomp=unconfined"]),
+    ],
+)
+def test_actual_inspect_security_drift_refused(inputs, tmp_path, monkeypatch, field, value):
+    docker = Docker()
+
+    def altered(args, **kwargs):
+        result = docker(args, **kwargs)
+        if args[1] == "inspect":
+            docker.inspection[0]["HostConfig"][field] = value
+            result.stdout = json.dumps(docker.inspection)
+        return result
+
+    monkeypatch.setattr(runtime, "_docker", altered)
+    with pytest.raises(runtime.RuntimeRefused):
+        runtime.launch(*inputs, tmp_path / "sessions")
+    assert not any(call[1] == "start" for call in docker.calls)
+
+
+def test_wrong_bind_source_refused(inputs, tmp_path, monkeypatch):
+    docker = Docker()
+
+    def altered(args, **kwargs):
+        result = docker(args, **kwargs)
+        if args[1] == "inspect":
+            docker.inspection[0]["Mounts"][0]["Source"] = "/unexpected-source"
+            result.stdout = json.dumps(docker.inspection)
+        return result
+
+    monkeypatch.setattr(runtime, "_docker", altered)
+    with pytest.raises(runtime.RuntimeRefused, match="mount source"):
+        runtime.launch(*inputs, tmp_path / "sessions")
+    assert not any(call[1] == "start" for call in docker.calls)
+
+
+def test_synthetic_input_is_measured_and_revalidated(tmp_path):
+    root = tmp_path / "root"
+    root.mkdir()
+    for name, data in runtime.LAYOUT.items():
+        path = root / name
+        path.parent.mkdir(parents=True, exist_ok=True)
+        path.write_bytes(data)
+        path.chmod(0o444)
+    first = runtime._verify_layout(root)
+    assert len(first) == 64
+    marker = root / "etc/lab-marker"
+    marker.chmod(0o644)
+    marker.write_bytes(b"modified")
+    with pytest.raises(runtime.RuntimeRefused):
+        runtime._verify_layout(root)
+
+
+def test_fixture_source_pin_matches_checkout():
+    from pathlib import Path
+
+    source = Path(__file__).resolve().parents[1] / "scripts/ci/fixtures/mips32le_execution_smoke.c"
+    assert hashlib.sha256(source.read_bytes()).hexdigest() == runtime.GUEST_SOURCE_SHA256
+
+
+def test_acceptance_retention_is_globally_bounded(tmp_path):
+    parent = tmp_path / "runtime"
+    stores = [runtime.reserve_acceptance_store(parent) for _ in range(8)]
+    assert len(set(stores)) == 8
+    with pytest.raises(runtime.RuntimeRefused, match="retention"):
+        runtime.reserve_acceptance_store(parent)
+    assert len(list(parent.iterdir())) == 8

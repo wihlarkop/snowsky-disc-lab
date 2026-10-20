@@ -2332,6 +2332,7 @@ def preflight() -> None:
         }
         write_summary("Firmware-free QEMU build stopped before image pull", receipt)
         raise StopBuild("runner resources are below the documented build estimate")
+
     with tempfile.TemporaryDirectory(prefix="qemu-runtime-preflight-") as temporary:
         workdir = Path(temporary)
         upstream, source_hashes, source_sizes = fetch_reviewed_upstream(workdir, reference)
@@ -2458,7 +2459,8 @@ def build_status_for_repeat(repeat_status: str) -> str:
     return f"firmware-free-build-passed-repeat-{suffix}"
 
 
-def build(*, execution_smoke: bool = False) -> None:
+def build(*, execution_smoke: bool = False, synthetic_session: bool = False) -> None:
+    execution_smoke = execution_smoke or synthetic_session
     started = time.monotonic()
     reference = read_reference()
     resources = resource_report()
@@ -2471,6 +2473,21 @@ def build(*, execution_smoke: bool = False) -> None:
         }
         write_summary("Firmware-free QEMU build stopped before image pull", receipt)
         raise StopBuild("runner resources are below the documented build estimate")
+
+    session_store = None
+    if synthetic_session:
+        # Host-side runtime responsibilities stay out of the copied build helper.
+        sys.path.insert(0, str(ROOT / "src"))
+        from snowsky_disc_lab.synthetic_runtime import (
+            RuntimeRefused,
+            acceptance,
+            reserve_acceptance_store,
+        )
+
+        try:
+            session_store = reserve_acceptance_store(ROOT / ".lab" / "synthetic-runtime-sessions")
+        except RuntimeRefused as exc:
+            raise StopBuild(f"synthetic runtime refused: {exc}") from exc
 
     with tempfile.TemporaryDirectory(prefix="qemu-runtime-build-") as temporary:
         workdir = Path(temporary)
@@ -2505,11 +2522,21 @@ def build(*, execution_smoke: bool = False) -> None:
             raise StopBuild("Debian archive keyring identity changed between preflight and build")
 
         execution_receipt = None
+        session_receipt = None
         if smoke_inputs_dir is not None:
             execution = run_execution_smoke_container(smoke_inputs_dir, first)
             execution_receipt = build_execution_smoke_receipt(
                 first, execution, resources, base, source_hashes, debian
             )
+            if synthetic_session:
+                assert session_store is not None
+                try:
+                    session_receipt = acceptance(smoke_inputs_dir, first, session_store)
+                except RuntimeRefused as exc:
+                    if exc.receipt is not None:
+                        write_summary("Synthetic runtime quarantined", exc.receipt)
+                    raise StopBuild(f"synthetic runtime refused: {exc}") from exc
+                session_receipt["toolchain"] = execution_receipt["toolchain"]
 
         repeat: dict[str, Any] = {
             "status": "not-run",
@@ -2655,6 +2682,7 @@ def build(*, execution_smoke: bool = False) -> None:
                 if execution_receipt is not None
                 else {}
             ),
+            **({"synthetic_runtime": session_receipt} if session_receipt is not None else {}),
             "elapsed_seconds": round(time.monotonic() - started, 1),
         }
     write_summary(
@@ -2670,11 +2698,13 @@ def main() -> int:
         "preflight",
         "build",
         "smoke",
+        "session",
         "measure",
         "measure-smoke-guest",
     }:
         print(
-            "usage: qemu_runtime_build.py {preflight|build|smoke|measure|measure-smoke-guest}",
+            "usage: qemu_runtime_build.py "
+            "{preflight|build|smoke|session|measure|measure-smoke-guest}",
             file=sys.stderr,
         )
         return 2
@@ -2685,6 +2715,8 @@ def main() -> int:
             build()
         elif sys.argv[1] == "smoke":
             build(execution_smoke=True)
+        elif sys.argv[1] == "session":
+            build(synthetic_session=True)
         elif sys.argv[1] == "measure-smoke-guest":
             measure_smoke_guest()
         else:

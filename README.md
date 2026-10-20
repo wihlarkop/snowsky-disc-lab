@@ -2,9 +2,9 @@
 
 **A proposed community development, emulation, and compatibility lab for the FiiO / SNOWSKY DISC.**
 
-> **Project status: M0 foundation with partial M1 intake/workspace preparation.** The CLI provides host diagnostics, strict UI/firmware manifest validation, immutable upstream source projections, bounded local candidate inspection and private snapshot preparation. Emulator execution, firmware extraction, builds, adapter SDK and device flashing are not implemented. No firmware/UI combination is Lab-verified. Commands in the planned experience section remain design targets.
+> **Project status: M0 foundation with partial M1 intake/workspace preparation and firmware-free synthetic execution.** The CLI provides host diagnostics, strict UI/firmware manifest validation, immutable upstream source projections, bounded local candidate inspection and private snapshot preparation. A [fixed synthetic runtime](docs/synthetic-runtime.md) reuses the pinned QEMU build to exercise filesystem and session isolation. Firmware extraction/execution, adapter SDK and device flashing are not implemented. No firmware/UI combination is Lab-verified. Commands in the planned experience section remain design targets.
 
-[M1-01 runtime preparation](docs/M1-01-RUNTIME-PREPARATION.md) records reviewed stock V2.57 source/build inputs, local firmware identity requirements and isolation boundaries. Runtime output identities and execution gates remain open; no runtime runner is shipped.
+[M1-01 runtime preparation](docs/M1-01-RUNTIME-PREPARATION.md) records reviewed stock V2.57 source/build inputs, local firmware identity requirements and isolation boundaries. Firmware-backed execution gates remain open; no prebuilt runtime runner is shipped.
 
 [M1-02 firmware intake](docs/FIRMWARE-INTAKE.md) adds offline, read-only `disc-lab firmware inspect PATH --format text|json` for local ZIP/package candidates. Structural acceptance grants no authenticity, compatibility, extraction or execution authority. Only synthetic inputs have been verified.
 

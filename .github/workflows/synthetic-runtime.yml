@@ -1,0 +1,31 @@
+name: Firmware-free synthetic runtime
+
+on:
+  pull_request:
+    branches: [main]
+    paths:
+      - .github/workflows/synthetic-runtime.yml
+      - scripts/ci/qemu_runtime_build.py
+      - scripts/ci/fixtures/mips32le_execution_smoke.c
+      - src/snowsky_disc_lab/synthetic_runtime.py
+      - tests/test_synthetic_runtime.py
+      - docs/m1-01-runtime-preparation.json
+
+permissions:
+  contents: read
+
+jobs:
+  synthetic-runtime:
+    if: >-
+      github.repository == 'wihlarkop/snowsky-disc-lab' &&
+      github.event.pull_request.head.repo.full_name == 'wihlarkop/snowsky-disc-lab' &&
+      github.event.pull_request.head.ref == 'codex/synthetic-runtime-session'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+        with:
+          ref: ${{ github.event.pull_request.head.sha }}
+          persist-credentials: false
+      - name: Build pinned QEMU once and execute synthetic filesystem and lifecycle acceptance
+        run: python3 scripts/ci/qemu_runtime_build.py session
