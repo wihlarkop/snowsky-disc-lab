@@ -26,7 +26,7 @@ BASE_IMAGE = (
 # Measured on main fecc939, manual execution-smoke run 39464385240.
 QEMU_SHA256 = "2a58998c25a7836b910f255641a95e9d828967c75ed6b0de2e5490cb82038ddb"
 GUEST_SOURCE_SHA256 = "d00aee44bbcf9a38cbf1a710fa5187501666dd280db4a7fe62ee1c91a1b18661"
-MQUEUE_GUEST_SOURCE_SHA256 = "8ac8547a00c47ecb4b23a75af54a872f1780fab4351d00daf240a117178ae6c6"
+MQUEUE_GUEST_SOURCE_SHA256 = "d5f643630197568842393b4abc20c25de50c5712b2c3c0550846af1be6006d7e"
 MQUEUE_NAME = "/snowsky_disc_lab_mqueue_probe_v1"
 MQUEUE_PAYLOAD = b"SNOWSKY_MIPS32LE_POSIX_MQ_V1"
 MQUEUE_PAYLOAD_SHA256 = "b8e0b0e98d2906e4b1d5cdaf72e10f44468760938a4c004c85fcbb7a4160e206"
@@ -106,6 +106,14 @@ MQUEUE_ERRNO_NAMES = {
     28: "ENOSPC",
     38: "ENOSYS",
 }
+MQUEUE_TRACE_SYSCALLS = (
+    "mq_open",
+    "mq_getsetattr",
+    "mq_timedsend",
+    "mq_timedreceive",
+    "mq_unlink",
+    "close",
+)
 LABEL = "org.snowsky-disc-lab.synthetic-session"
 TMPFS = {
     path: "rw,nosuid,nodev,noexec,size=1m,mode=0700,uid=65534,gid=65534"
@@ -237,7 +245,7 @@ def _verify_inputs(inputs: Path, evidence: dict[str, Any]) -> dict[str, str]:
 
 
 def _mqueue_failure(output: str) -> dict[str, Any] | None:
-    """Parse only the queue fixture's tiny numeric failure protocol."""
+    """Parse only fixed queue outcomes, bounded numeric attributes and syscall names."""
     encoded = output.encode("utf-8", errors="replace")
     if len(encoded) > 1024 or not output.isascii():
         return None
@@ -259,7 +267,50 @@ def _mqueue_failure(output: str) -> dict[str, Any] | None:
     number = int(number_text)
     if number > 4095 or MQUEUE_ERRNO_NAMES.get(number, "OTHER") != name:
         return None
-    return {"stage": stage, "errno": name, "errno_number": number}
+    failure: dict[str, Any] = {"stage": stage, "errno": name, "errno_number": number}
+    observed_attributes: dict[str, int | str] = {}
+    for key, label in (
+        ("MQ_OBSERVED_MAX_MESSAGES", "max_messages"),
+        ("MQ_OBSERVED_MESSAGE_BYTES", "max_message_bytes"),
+        ("MQ_OBSERVED_CURRENT_MESSAGES", "current_messages"),
+        ("MQ_OBSERVED_FLAGS", "flags"),
+    ):
+        value = fields.get(key, "")
+        if not re.fullmatch(r"[0-9]{1,6}", value) or int(value) > 65535:
+            observed_attributes.clear()
+            break
+        observed_attributes[label] = int(value)
+    mode = fields.get("MQ_OBSERVED_MODE", "")
+    if re.fullmatch(r"0[0-7]{3}", mode):
+        observed_attributes["mode"] = mode
+    if observed_attributes:
+        failure["observed_attributes"] = observed_attributes
+
+    lines = set(output.splitlines())
+    completed_operations = [
+        operation
+        for marker, operation in (
+            ("CREATE=ok", "mq_open_create"),
+            ("DUPLICATE_CREATE=EEXIST:17", "mq_open_duplicate_exclusive"),
+            ("SEND=ok", "mq_timedsend"),
+            ("RECEIVE=ok", "mq_timedreceive"),
+            ("CLOSE=ok", "mq_close"),
+            ("UNLINK=ok", "mq_unlink"),
+            ("REOPEN_AFTER_UNLINK=ENOENT:2", "mq_open_after_unlink"),
+            ("RECREATE=ok", "mq_open_recreate"),
+        )
+        if marker in lines
+    ]
+    if completed_operations:
+        failure["completed_operations"] = completed_operations
+
+    trace = fields.get("QEMU_SYSCALL_TRACE")
+    if trace is not None:
+        trace_names = trace.split(",") if trace else []
+        canonical_trace = [name for name in MQUEUE_TRACE_SYSCALLS if name in trace_names]
+        if len(trace_names) == len(set(trace_names)) and trace_names == canonical_trace:
+            failure["qemu_strace_syscalls"] = trace_names
+    return failure
 
 
 def _verify_layout(root: Path) -> str:

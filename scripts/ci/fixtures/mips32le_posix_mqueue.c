@@ -55,6 +55,22 @@ static int fail_probe(const char *stage, int error_number) {
     return 40;
 }
 
+static int fail_attributes(const struct mq_attr *attributes) {
+    printf("MQ_OBSERVED_MAX_MESSAGES=%ld\n"
+           "MQ_OBSERVED_MESSAGE_BYTES=%ld\n"
+           "MQ_OBSERVED_CURRENT_MESSAGES=%ld\n"
+           "MQ_OBSERVED_FLAGS=%ld\n",
+           attributes->mq_maxmsg, attributes->mq_msgsize,
+           attributes->mq_curmsgs, attributes->mq_flags);
+    return fail_probe("attributes", 0);
+}
+
+static int fail_mode(const struct stat *metadata) {
+    printf("MQ_OBSERVED_MODE=%04o\n",
+           (unsigned int)(metadata->st_mode & 0777));
+    return fail_probe("mode", 0);
+}
+
 static int verify_attributes(mqd_t descriptor, const char *label) {
     struct mq_attr attributes;
     struct stat metadata;
@@ -64,13 +80,13 @@ static int verify_attributes(mqd_t descriptor, const char *label) {
     if (attributes.mq_maxmsg != QUEUE_MAX_MESSAGES ||
         attributes.mq_msgsize != QUEUE_MESSAGE_BYTES || attributes.mq_curmsgs != 0 ||
         attributes.mq_flags != O_NONBLOCK) {
-        return fail_probe("attributes", 0);
+        return fail_attributes(&attributes);
     }
     if (fstat((int)descriptor, &metadata) != 0) {
         return fail_probe("fstat_mode", errno);
     }
     if ((metadata.st_mode & 0777) != 0600) {
-        return fail_probe("mode", 0);
+        return fail_mode(&metadata);
     }
     printf("%s=maxmsg:%ld,msgsize:%ld,curmsgs:%ld,nonblock:true\n",
            label, attributes.mq_maxmsg, attributes.mq_msgsize,

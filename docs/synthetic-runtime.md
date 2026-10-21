@@ -112,6 +112,16 @@ Documented stock queue attributes remain unverified; this probe makes no claim
 about stock queue names, sizes, shims, protocol or IPC compatibility. M1-04 stock
 boot remains **NOT RUN / unverified**.
 
+The first exact-head hosted execution created the synthetic queue, then stopped
+at attribute validation: `mq_getattr` returned values outside the fixed expected
+attributes, so the guest reported stage `attributes` with errno `NONE`. The
+owned container was removed successfully. Send/receive, unlink/reopen, retained
+queue lifetime and the second-session create were not established by that run.
+The follow-up parser is changed to retain only bounded numeric returned
+attributes, validated completed operations and recognized QEMU syscall names.
+That diagnostic change awaits exact-head hosted execution; raw guest output is
+never retained and the profile is unchanged.
+
 ## Lifecycle, retention and receipts
 
 Each session reserves a fresh directory without replacement and a fresh labelled

@@ -413,6 +413,62 @@ def test_posix_mqueue_failure_has_only_bounded_errno_evidence(inputs, tmp_path, 
     assert (tmp_path / "sessions/posix-mqueue-acceptance.json").is_file()
 
 
+def test_posix_mqueue_failure_reports_sanitized_observed_attributes_and_syscalls():
+    output = (
+        "QUEUE_PROBE=first\n"
+        f"QUEUE_NAME={runtime.MQUEUE_NAME}\n"
+        "CREATE=ok\n"
+        "MQ_ERROR_STAGE=attributes\n"
+        "MQ_ERROR_NAME=NONE\n"
+        "MQ_ERROR_ERRNO=0\n"
+        "MQ_OBSERVED_MAX_MESSAGES=10\n"
+        "MQ_OBSERVED_MESSAGE_BYTES=8192\n"
+        "MQ_OBSERVED_CURRENT_MESSAGES=0\n"
+        "MQ_OBSERVED_FLAGS=0\n"
+        "MQ_OBSERVED_MODE=0600\n"
+        "QEMU_SYSCALL_TRACE=mq_open,mq_getsetattr\n"
+    )
+
+    failure = runtime._mqueue_failure(output)
+
+    assert failure == {
+        "stage": "attributes",
+        "errno": "NONE",
+        "errno_number": 0,
+        "completed_operations": ["mq_open_create"],
+        "observed_attributes": {
+            "max_messages": 10,
+            "max_message_bytes": 8192,
+            "current_messages": 0,
+            "flags": 0,
+            "mode": "0600",
+        },
+        "qemu_strace_syscalls": ["mq_open", "mq_getsetattr"],
+    }
+    receipt = runtime._mqueue_receipt(
+        evidence={
+            "synthetic_queue_guest": {
+                "source": {"sha256": runtime.MQUEUE_GUEST_SOURCE_SHA256},
+                "elf": {"sha256": "a" * 64},
+            }
+        },
+        sessions=[{"execution": {"queue_syscall_error": failure}}],
+        status="failed",
+    )
+    assert receipt["failure"] == {"category": "queue-syscall", **failure}
+    assert "MQ_OBSERVED_MAX_MESSAGES=" not in json.dumps(receipt)
+
+    mode_failure = runtime._mqueue_failure(
+        "MQ_ERROR_STAGE=mode\nMQ_ERROR_NAME=NONE\nMQ_ERROR_ERRNO=0\nMQ_OBSERVED_MODE=0640\n"
+    )
+    assert mode_failure == {
+        "stage": "mode",
+        "errno": "NONE",
+        "errno_number": 0,
+        "observed_attributes": {"mode": "0640"},
+    }
+
+
 def test_acceptance_retention_is_globally_bounded(tmp_path):
     parent = tmp_path / "runtime"
     stores = [runtime.reserve_acceptance_store(parent) for _ in range(8)]
