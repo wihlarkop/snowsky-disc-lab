@@ -18,6 +18,11 @@ from snowsky_disc_lab.compat_evidence import (
 )
 
 runner = CliRunner()
+_IPC_REQUEST_SHA256 = "a27944201ce35b61283b9b24f246c935070e81d7f2fc241170c8a47bb9b12354"
+_IPC_ACK_SHA256 = "35cc983cb77d4d7b5f3f2b489a92d3f5324d131328f354f23fb0a352545dfa7c"
+_IPC_SOURCE_SHA256 = "f03c5fdd638038dfc96ee9684fe6a044cba2a16accbf219c31a3d81c042ed6aa"
+_IPC_CONSUMER_OUTPUT_SHA256 = "d093763953c4dfa3eda1c03b1fcda977ef41de090a6f64ebccb7d9d3c385cafd"
+_IPC_PRODUCER_OUTPUT_SHA256 = "ce265f3a0ee5c44e8aef6b9a89a31f848b3883618b361cafbbeca5f960aaff49"
 
 
 def _isolation() -> dict[str, Any]:
@@ -294,6 +299,189 @@ def _receipt() -> dict[str, Any]:
     }
 
 
+def _ipc_handoff_receipt() -> dict[str, Any]:
+    receipt = _receipt()
+    handoff_elf_sha256 = "9" * 64
+    receipt["identities"]["mips32le-posix-ipc-handoff.elf"] = handoff_elf_sha256
+    isolation = _isolation()
+    handoff_sessions = []
+    for number, label in enumerate(("first", "second"), start=1):
+        handoff_sessions.append(
+            {
+                "session_id": f"ipc-handoff-{label}",
+                "session_identity": f"ipc-session-{number}",
+                "case": "ipc-handoff",
+                "status": "passed",
+                "lifecycle": [
+                    "reserved",
+                    "created",
+                    "validated",
+                    "start-requested",
+                    "exited",
+                    "removed",
+                ],
+                "execution": {
+                    "exit_code": 0,
+                    "duration_seconds": 0.25,
+                    "stdout_sha256": "3" * 64,
+                    "stdout_bytes": 256,
+                    "timed_out": False,
+                    "guest_exit_codes": {"consumer": 0, "producer": 0},
+                },
+                "observations": {
+                    "status": "passed",
+                    "processes": {
+                        "count": 2,
+                        "roles": ["consumer", "producer"],
+                        "distinct_qemu_processes": True,
+                        "shared_container": True,
+                        "shared_private_ipc_namespace": True,
+                        "overlap_proven_by_request_ack_round_trip": True,
+                    },
+                    "guest_exit_codes": {"consumer": 0, "producer": 0},
+                    "queue_attributes": {
+                        "request": {
+                            "permissions": "0600",
+                            "max_messages": 2,
+                            "max_message_bytes": 64,
+                            "current_messages": 0,
+                        },
+                        "acknowledgment": {
+                            "permissions": "0600",
+                            "max_messages": 2,
+                            "max_message_bytes": 64,
+                            "current_messages": 0,
+                        },
+                    },
+                    "operations": [
+                        "consumer_created_request_queue",
+                        "consumer_created_acknowledgment_queue",
+                        "producer_opened_request_queue",
+                        "producer_opened_acknowledgment_queue",
+                        "producer_sent_request",
+                        "consumer_received_request",
+                        "consumer_sent_acknowledgment",
+                        "producer_received_acknowledgment",
+                        "closed_request_queue",
+                        "closed_acknowledgment_queue",
+                        "consumer_unlinked_request_queue",
+                        "consumer_unlinked_acknowledgment_queue",
+                    ],
+                    "messages": {
+                        "request": {
+                            "verified": True,
+                            "bytes": 26,
+                            "sha256": _IPC_REQUEST_SHA256,
+                            "priority": 7,
+                        },
+                        "acknowledgment": {
+                            "verified": True,
+                            "bytes": 22,
+                            "sha256": _IPC_ACK_SHA256,
+                            "priority": 3,
+                        },
+                    },
+                    "queue_cleanup": {
+                        "consumer_closed_both": True,
+                        "consumer_unlinked_both": True,
+                        "linked_at_exit": False,
+                    },
+                    "qemu_strace_syscalls": {
+                        "consumer": [
+                            "mq_open",
+                            "mq_getsetattr",
+                            "mq_timedsend",
+                            "mq_timedreceive",
+                            "mq_unlink",
+                            "close",
+                        ],
+                        "producer": [
+                            "mq_open",
+                            "mq_getsetattr",
+                            "mq_timedsend",
+                            "mq_timedreceive",
+                            "close",
+                        ],
+                    },
+                    "role_outputs": {
+                        "consumer": {
+                            "bytes": 425,
+                            "sha256": _IPC_CONSUMER_OUTPUT_SHA256,
+                        },
+                        "producer": {
+                            "bytes": 239,
+                            "sha256": _IPC_PRODUCER_OUTPUT_SHA256,
+                        },
+                    },
+                },
+                "isolation": isolation,
+                "cleanup": {
+                    "container_removed": True,
+                    "private_tmpfs_released": True,
+                    "host_metadata": "retained; no recursive cleanup",
+                },
+            }
+        )
+    receipt["synthetic_ipc_handoff"] = {
+        "schema_version": "firmware-free-mips32le-synthetic-ipc-handoff/v1",
+        "status": "passed",
+        "scope": "first-party synthetic two-process POSIX queue handoff",
+        "protocol": {
+            "request_queue": "/snowsky_disc_lab_handoff_req_v1",
+            "acknowledgment_queue": "/snowsky_disc_lab_handoff_ack_v1",
+            "queue_attributes": {
+                "permissions": "0600",
+                "max_messages": 2,
+                "max_message_bytes": 64,
+            },
+            "request": {
+                "payload_bytes": 26,
+                "payload_sha256": _IPC_REQUEST_SHA256,
+                "priority": 7,
+            },
+            "acknowledgment": {
+                "payload_bytes": 22,
+                "payload_sha256": _IPC_ACK_SHA256,
+                "priority": 3,
+            },
+        },
+        "identities": {
+            "qemu_mipsel_sha256": "a" * 64,
+            "guest_source_sha256": _IPC_SOURCE_SHA256,
+            "guest_elf_sha256": handoff_elf_sha256,
+        },
+        "processes": {
+            "roles": ["consumer", "producer"],
+            "distinct_qemu_processes": True,
+            "shared_container_per_session": True,
+            "shared_private_ipc_namespace": True,
+            "overlap_proven_by_request_ack_round_trip": True,
+            "ipc_mode": "none",
+        },
+        "sessions": handoff_sessions,
+        "fresh_session_isolation": {
+            "first_container_removed_before_second": True,
+            "distinct_session_identities": True,
+            "same_protocol_succeeded": True,
+        },
+        "container_security": {
+            "profiles": [isolation, isolation],
+            "mqueue_mount_added": False,
+            "limits_or_sysctls_changed": False,
+        },
+        "cleanup": {
+            "all_containers_removed": True,
+            "all_private_tmpfs_released": True,
+            "persistent_shared_queue": False,
+        },
+        "stock_compatibility": {
+            "stock_ipc_compatibility": "UNVERIFIED",
+            "m1_04_stock_boot": "NOT RUN",
+        },
+    }
+    return receipt
+
+
 def _qemu_receipt(*, repeat_status: str = "not-run", firmware_processed: bool = False):
     summary_status = {
         "identical": "firmware-free-build-passed-repeat-identical",
@@ -398,9 +586,212 @@ def test_parse_receipt_preserves_identity_and_does_not_promote_stock_compatibili
     assert report["scenarios"]["synthetic-timeout"]["status"] == "PASS"
     assert report["scenarios"]["synthetic-mqueue-first-session"]["status"] == "PASS"
     assert report["scenarios"]["synthetic-mqueue-second-session"]["status"] == "PASS"
+    assert report["scenarios"]["synthetic-ipc-handoff"]["status"] == "NOT RUN"
     assert report["scenarios"]["stock-v257-boot"]["status"] == "NOT RUN"
     assert report["scenarios"]["stock-ipc-compatibility"]["status"] == "NOT RUN"
     assert report["scenarios"]["arbitrary-user-binary-isolation"]["status"] == "UNSUPPORTED"
+
+
+def test_parse_current_main_ipc_handoff_receipt_and_marks_evidence_as_declared() -> None:
+    receipt = _ipc_handoff_receipt()
+
+    report = parse_receipt(json.dumps(receipt), source="current-main-receipt.json")
+
+    assert report["receipt_schema"] == "firmware-free-synthetic-runtime-acceptance/v1"
+    assert report["artifacts"]["ipc-handoff-guest"] == "9" * 64
+    assert report["scenarios"]["synthetic-ipc-handoff"]["status"] == "PASS"
+    assert report["scenarios"]["stock-v257-boot"]["status"] == "NOT RUN"
+    assert report["scenarios"]["stock-ipc-compatibility"]["status"] == "NOT RUN"
+    assert report["support_status"] == "unknown"
+    assert report["evidence_authentication"] == {
+        "receipt_values": "declared",
+        "independent_authentication": "not performed",
+        "artifact_bytes_rehashed": False,
+    }
+
+
+def _failed_ipc_handoff_receipt(*, cleanup_failed: bool) -> dict[str, Any]:
+    receipt = _ipc_handoff_receipt()
+    receipt["status"] = "failed"
+    receipt["failure"] = {"category": "synthetic-ipc-handoff-failed"}
+    handoff = receipt["synthetic_ipc_handoff"]
+    handoff["status"] = "failed"
+    session = handoff["sessions"][0]
+    session["status"] = "quarantined"
+    if cleanup_failed:
+        handoff["failure"] = {"category": "session-or-cleanup-failed"}
+        session["lifecycle"].remove("removed")
+        session["cleanup"] = {
+            "container_removed": False,
+            "private_tmpfs_released": False,
+        }
+        handoff["fresh_session_isolation"].update(
+            first_container_removed_before_second=False,
+            distinct_session_identities=False,
+            same_protocol_succeeded=False,
+        )
+        handoff["container_security"]["profiles"] = [session["isolation"]]
+        handoff["cleanup"].update(
+            all_containers_removed=False,
+            all_private_tmpfs_released=False,
+        )
+    else:
+        failure = {
+            "role": "producer",
+            "stage": "acknowledgment_timeout",
+            "errno": "EAGAIN",
+            "errno_number": 11,
+        }
+        handoff["failure"] = {"category": "guest-handoff", **failure}
+        session["execution"].update(
+            exit_code=40,
+            guest_exit_codes={"consumer": 40, "producer": 41},
+        )
+        session["observations"] = {
+            "status": "failed",
+            "failure": failure,
+            "guest_exit_codes": {"consumer": 40, "producer": 41},
+        }
+        handoff["processes"].update(
+            distinct_qemu_processes=False,
+            shared_container_per_session=False,
+            shared_private_ipc_namespace=False,
+            overlap_proven_by_request_ack_round_trip=False,
+        )
+        handoff["fresh_session_isolation"].update(
+            distinct_session_identities=False,
+            same_protocol_succeeded=False,
+        )
+        handoff["container_security"]["profiles"] = [session["isolation"]]
+        handoff["cleanup"].update(
+            all_containers_removed=False,
+            all_private_tmpfs_released=False,
+        )
+    handoff["sessions"] = [session]
+    return receipt
+
+
+def test_known_ipc_guest_handoff_failure_reports_fail() -> None:
+    receipt = _failed_ipc_handoff_receipt(cleanup_failed=False)
+
+    report = parse_receipt(json.dumps(receipt), source="failed-ipc-handoff.json")
+
+    assert report["scenarios"]["synthetic-ipc-handoff"]["status"] == "FAIL"
+    assert report["scenarios"]["stock-ipc-compatibility"]["status"] == "NOT RUN"
+    assert report["support_status"] == "unknown"
+
+
+def test_ipc_cleanup_failure_reports_blocked() -> None:
+    receipt = _failed_ipc_handoff_receipt(cleanup_failed=True)
+
+    report = parse_receipt(json.dumps(receipt), source="blocked-ipc-handoff.json")
+
+    assert report["scenarios"]["synthetic-ipc-handoff"]["status"] == "BLOCKED"
+    assert report["scenarios"]["stock-ipc-compatibility"]["status"] == "NOT RUN"
+    assert report["support_status"] == "unknown"
+
+
+def test_repeated_session_identity_failure_reports_blocked() -> None:
+    receipt = _ipc_handoff_receipt()
+    receipt["status"] = "failed"
+    receipt["failure"] = {"category": "synthetic-ipc-handoff-failed"}
+    handoff = receipt["synthetic_ipc_handoff"]
+    handoff["status"] = "failed"
+    handoff["failure"] = {"category": "session-or-cleanup-failed"}
+    handoff["sessions"][1]["session_identity"] = handoff["sessions"][0]["session_identity"]
+    handoff["fresh_session_isolation"]["distinct_session_identities"] = False
+
+    report = parse_receipt(json.dumps(receipt), source="reused-ipc-session.json")
+
+    assert report["scenarios"]["synthetic-ipc-handoff"]["status"] == "BLOCKED"
+
+
+@pytest.mark.parametrize(
+    "mutate",
+    [
+        lambda receipt: receipt["synthetic_ipc_handoff"]["failure"].update(stage="request_timeout"),
+        lambda receipt: receipt["synthetic_ipc_handoff"].update(
+            failure={"category": "session-or-cleanup-failed"}
+        ),
+        lambda receipt: receipt["failure"].update(category="fixed-probe-or-container-check-failed"),
+    ],
+)
+def test_rejects_contradictory_ipc_handoff_failure_receipts(mutate) -> None:
+    receipt = _failed_ipc_handoff_receipt(cleanup_failed=False)
+    mutate(receipt)
+
+    with pytest.raises(CompatibilityEvidenceError):
+        parse_receipt(json.dumps(receipt), source="bad-ipc-failure.json")
+
+
+@pytest.mark.parametrize(
+    "mutate",
+    [
+        lambda receipt: receipt["synthetic_ipc_handoff"].update(unreviewed=True),
+        lambda receipt: receipt.pop("synthetic_ipc_handoff"),
+        lambda receipt: receipt["identities"].pop("mips32le-posix-ipc-handoff.elf"),
+        lambda receipt: receipt["synthetic_ipc_handoff"]["identities"].update(
+            guest_elf_sha256="8" * 64
+        ),
+        lambda receipt: receipt["synthetic_ipc_handoff"]["protocol"]["queue_attributes"].update(
+            max_messages=3
+        ),
+        lambda receipt: receipt["synthetic_ipc_handoff"]["protocol"]["request"].update(priority=8),
+        lambda receipt: receipt["synthetic_ipc_handoff"]["protocol"]["request"].update(
+            payload_bytes=26.0
+        ),
+        lambda receipt: receipt["synthetic_ipc_handoff"]["sessions"][0]["observations"][
+            "processes"
+        ].update(distinct_qemu_processes=1),
+        lambda receipt: receipt["synthetic_ipc_handoff"]["sessions"][0]["observations"]["messages"][
+            "request"
+        ].update(verified=1),
+        lambda receipt: receipt["synthetic_ipc_handoff"]["sessions"][0]["observations"][
+            "queue_attributes"
+        ]["request"].update(current_messages=False),
+        lambda receipt: receipt["synthetic_ipc_handoff"]["sessions"][0]["observations"][
+            "role_outputs"
+        ]["consumer"].update(sha256="1" * 64),
+        lambda receipt: receipt["synthetic_ipc_handoff"]["sessions"][0]["observations"]["messages"][
+            "acknowledgment"
+        ].update(sha256="0" * 64),
+        lambda receipt: receipt["synthetic_ipc_handoff"]["sessions"][0]["observations"][
+            "processes"
+        ].update(roles=["consumer"]),
+        lambda receipt: receipt["synthetic_ipc_handoff"]["sessions"][1].update(
+            session_identity="ipc-session-1"
+        ),
+        lambda receipt: receipt["synthetic_ipc_handoff"]["sessions"][1]["execution"].update(
+            guest_exit_codes={"consumer": 0, "producer": 1}
+        ),
+        lambda receipt: receipt["synthetic_ipc_handoff"]["sessions"][1]["execution"].update(
+            stdout_sha256="5" * 64
+        ),
+        lambda receipt: receipt["synthetic_ipc_handoff"]["sessions"][1].update(
+            session_id="ipc-handoff-first"
+        ),
+        lambda receipt: receipt["synthetic_ipc_handoff"].update(status=[]),
+        lambda receipt: receipt["synthetic_ipc_handoff"]["sessions"][0].update(status=[]),
+        lambda receipt: receipt["synthetic_ipc_handoff"]["sessions"][0].update(
+            lifecycle=[["reserved"]]
+        ),
+        lambda receipt: receipt["synthetic_ipc_handoff"]["sessions"][0]["isolation"][
+            "verified_host_config"
+        ].update(Privileged=True),
+        lambda receipt: receipt["synthetic_ipc_handoff"]["sessions"][1]["cleanup"].update(
+            private_tmpfs_released=False
+        ),
+        lambda receipt: receipt["synthetic_ipc_handoff"]["cleanup"].update(
+            persistent_shared_queue=True
+        ),
+    ],
+)
+def test_rejects_malformed_or_contradictory_current_main_ipc_handoff_receipts(mutate) -> None:
+    receipt = _ipc_handoff_receipt()
+    mutate(receipt)
+
+    with pytest.raises(CompatibilityEvidenceError):
+        parse_receipt(json.dumps(receipt), source="bad-ipc-handoff.json")
 
 
 def test_reports_are_deterministic() -> None:

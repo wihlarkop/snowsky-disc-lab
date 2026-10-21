@@ -3,9 +3,12 @@
 The M5 subset in this release reads sanitized Lab-generated JSON receipts and
 produces local JSON or Markdown reports. It accepts
 `firmware-free-synthetic-runtime-acceptance/v1`, including the nested
-`firmware-free-mips32le-posix-mqueue-acceptance/v1` receipt, or the same
-synthetic receipt inside a `firmware-free-qemu-runtime-build/v1` summary.
-No other schema versions or receipt sources are accepted.
+`firmware-free-mips32le-posix-mqueue-acceptance/v1` receipt and, when present,
+the nested `firmware-free-mips32le-synthetic-ipc-handoff/v1` receipt. Earlier
+runtime v1 receipts without the handoff section remain valid and report that
+scenario as `NOT RUN`. The same synthetic receipt can appear inside a
+`firmware-free-qemu-runtime-build/v1` summary. No other schema versions or
+receipt sources are accepted.
 
 The parser rejects malformed JSON, duplicate keys, unknown fields, invalid
 digests, unknown statuses and contradictory parent/child outcomes. Inputs are
@@ -15,6 +18,10 @@ summaries, the upstream repository, commit and projection digest.
 The CLI validates the receipt structure and preserves receipt-provided identity
 claims. It does not authenticate the receipt's origin or recompute artifact
 hashes from binary inputs.
+Reports label receipt values as declared and set independent authentication to
+not performed. Schema checks, known protocol constants and cross-receipt
+identity links detect malformed or contradictory claims; they do not prove
+that a referenced artifact had those bytes.
 
 Run a report locally:
 
@@ -25,11 +32,13 @@ disc-lab compat report receipt-a.json receipt-b.json --format json
 
 Scenario results are `PASS`, `FAIL`, `NOT RUN`, `UNSUPPORTED` or `BLOCKED`.
 Unrecorded cases remain `NOT RUN`; quarantined sessions are `BLOCKED`; a
-sanitized known queue syscall failure is `FAIL`. The explicit
+sanitized known queue syscall or IPC handoff failure is `FAIL` when cleanup
+completed. Incomplete session or cleanup evidence is `BLOCKED`. The explicit
 `arbitrary binary isolation` runtime limitation is reported `UNSUPPORTED`.
-The fixed synthetic filesystem and queue probes are reported as synthetic
-scenarios. `stock-v257-boot` and `stock-ipc-compatibility` remain `NOT RUN` for
-these firmware-free receipts. Reports always keep overall support status
+The fixed synthetic filesystem, queue and two-process IPC handoff probes are
+reported as synthetic scenarios. `stock-v257-boot` and
+`stock-ipc-compatibility` remain `NOT RUN` for these firmware-free receipts.
+Reports always keep overall support status
 `unknown`; they do not promote `verified-emulator`, `verified-device` or any
 other support state.
 

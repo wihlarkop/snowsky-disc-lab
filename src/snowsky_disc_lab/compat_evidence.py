@@ -20,6 +20,7 @@ _TOP_KEYS = {
     "host_refusals",
     "session_isolation",
     "posix_mqueue",
+    "synthetic_ipc_handoff",
     "unsupported_or_unverified",
     "failure",
 }
@@ -101,11 +102,111 @@ _CASES = {
     "timeout": "synthetic-timeout",
     "mqueue-first": "synthetic-mqueue-first-session",
     "mqueue-second": "synthetic-mqueue-second-session",
+    "ipc-handoff": "synthetic-ipc-handoff",
 }
 _FAILURE_CATEGORIES = {
     "queue-syscall",
     "queue-timeout",
     "fixed-probe-or-container-check-failed",
+    "synthetic-ipc-handoff-failed",
+}
+_IPC_HANDOFF_SCHEMA = "firmware-free-mips32le-synthetic-ipc-handoff/v1"
+_IPC_HANDOFF_ELF = "mips32le-posix-ipc-handoff.elf"
+_IPC_HANDOFF_SOURCE_SHA256 = "f03c5fdd638038dfc96ee9684fe6a044cba2a16accbf219c31a3d81c042ed6aa"
+_IPC_HANDOFF_REQUEST_SHA256 = "a27944201ce35b61283b9b24f246c935070e81d7f2fc241170c8a47bb9b12354"
+_IPC_HANDOFF_ACK_SHA256 = "35cc983cb77d4d7b5f3f2b489a92d3f5324d131328f354f23fb0a352545dfa7c"
+_IPC_HANDOFF_ROLES = ("consumer", "producer")
+_IPC_HANDOFF_ROLE_OUTPUTS = {
+    "consumer": {
+        "bytes": 425,
+        "sha256": "d093763953c4dfa3eda1c03b1fcda977ef41de090a6f64ebccb7d9d3c385cafd",
+    },
+    "producer": {
+        "bytes": 239,
+        "sha256": "ce265f3a0ee5c44e8aef6b9a89a31f848b3883618b361cafbbeca5f960aaff49",
+    },
+}
+_IPC_HANDOFF_OPERATIONS = (
+    "consumer_created_request_queue",
+    "consumer_created_acknowledgment_queue",
+    "producer_opened_request_queue",
+    "producer_opened_acknowledgment_queue",
+    "producer_sent_request",
+    "consumer_received_request",
+    "consumer_sent_acknowledgment",
+    "producer_received_acknowledgment",
+    "closed_request_queue",
+    "closed_acknowledgment_queue",
+    "consumer_unlinked_request_queue",
+    "consumer_unlinked_acknowledgment_queue",
+)
+_IPC_HANDOFF_CONSUMER_SYSCALLS = (
+    "mq_open",
+    "mq_getsetattr",
+    "mq_timedsend",
+    "mq_timedreceive",
+    "mq_unlink",
+    "close",
+)
+_IPC_HANDOFF_PRODUCER_SYSCALLS = (
+    "mq_open",
+    "mq_getsetattr",
+    "mq_timedsend",
+    "mq_timedreceive",
+    "close",
+)
+_IPC_HANDOFF_ERROR_STAGES = {
+    "fixed_argument",
+    "clock_read",
+    "create_request",
+    "create_acknowledgment",
+    "request_attributes",
+    "acknowledgment_attributes",
+    "queue_readiness_timeout",
+    "open_request",
+    "open_acknowledgment",
+    "request_send",
+    "request_timeout",
+    "request_payload",
+    "request_priority",
+    "acknowledgment_send",
+    "acknowledgment_timeout",
+    "acknowledgment_payload",
+    "acknowledgment_priority",
+    "close_request",
+    "close_acknowledgment",
+    "unlink_request",
+    "unlink_acknowledgment",
+    "cleanup_close_request",
+    "cleanup_close_acknowledgment",
+    "cleanup_unlink_request",
+    "cleanup_unlink_acknowledgment",
+    "consumer_exit",
+    "producer_exit",
+    "consumer_timeout",
+    "producer_timeout",
+    "consumer_output_missing",
+    "producer_output_missing",
+    "output_not_ascii",
+    "output_limit",
+    "output_mismatch",
+}
+_IPC_HANDOFF_ERRNOS = {
+    "NONE": 0,
+    "EACCES": 13,
+    "EAGAIN": 11,
+    "EBADF": 9,
+    "EEXIST": 17,
+    "EINTR": 4,
+    "EINVAL": 22,
+    "EMFILE": 24,
+    "ENFILE": 23,
+    "ENOENT": 2,
+    "ENOMEM": 12,
+    "ENOSPC": 28,
+    "ENOSYS": 38,
+    "EPERM": 1,
+    "OTHER": -1,
 }
 
 
@@ -459,6 +560,644 @@ def _validate_failure(value: Any, field: str) -> None:
         raise CompatibilityEvidenceError(f"invalid {field} record")
 
 
+def _expect_object(value: Any, fields: set[str], field: str) -> dict[str, Any]:
+    if not isinstance(value, dict) or value.keys() != fields:
+        raise CompatibilityEvidenceError(f"invalid {field} fields")
+    return value
+
+
+def _validate_ipc_failure(value: Any, *, category: bool) -> dict[str, Any]:
+    allowed = {"role", "stage", "errno", "errno_number", "exit_code"}
+    required = {"role", "stage", "errno", "errno_number"}
+    if category:
+        allowed.add("category")
+        required.add("category")
+    if (
+        not isinstance(value, dict)
+        or value.keys() - allowed
+        or required - value.keys()
+        or not isinstance(value.get("role"), str)
+        or value["role"] not in {*_IPC_HANDOFF_ROLES, "container", "unknown"}
+        or not isinstance(value.get("stage"), str)
+        or value["stage"] not in _IPC_HANDOFF_ERROR_STAGES
+        or not isinstance(value.get("errno"), str)
+        or value["errno"] not in _IPC_HANDOFF_ERRNOS
+        or not isinstance(value.get("errno_number"), int)
+        or isinstance(value.get("errno_number"), bool)
+        or value["errno_number"] < 0
+        or value["errno_number"] > 4095
+        or (
+            _IPC_HANDOFF_ERRNOS[value["errno"]] >= 0
+            and value["errno_number"] != _IPC_HANDOFF_ERRNOS[value["errno"]]
+        )
+        or (
+            "exit_code" in value
+            and (
+                not isinstance(value["exit_code"], int)
+                or isinstance(value["exit_code"], bool)
+                or not 0 <= value["exit_code"] <= 255
+            )
+        )
+    ):
+        raise CompatibilityEvidenceError("invalid synthetic IPC handoff failure details")
+    return value
+
+
+def _validate_ipc_exit_codes(value: Any, field: str, *, complete: bool) -> dict[str, int]:
+    if not isinstance(value, dict) or value.keys() - set(_IPC_HANDOFF_ROLES):
+        raise CompatibilityEvidenceError(f"invalid {field}")
+    if complete and value.keys() != set(_IPC_HANDOFF_ROLES):
+        raise CompatibilityEvidenceError(f"incomplete {field}")
+    if any(
+        not isinstance(code, int) or isinstance(code, bool) or not 0 <= code <= 255
+        for code in value.values()
+    ):
+        raise CompatibilityEvidenceError(f"invalid {field}")
+    return value
+
+
+def _matches_fixed_json(value: Any, expected: Any) -> bool:
+    """Compare receipt JSON while distinguishing booleans from numbers."""
+    if type(value) is not type(expected):
+        return False
+    if isinstance(expected, dict):
+        return value.keys() == expected.keys() and all(
+            _matches_fixed_json(value[key], expected[key]) for key in expected
+        )
+    if isinstance(expected, list):
+        return len(value) == len(expected) and all(
+            _matches_fixed_json(actual, wanted)
+            for actual, wanted in zip(value, expected, strict=True)
+        )
+    return value == expected
+
+
+def _validate_ipc_observations(value: Any, *, passed: bool) -> dict[str, Any]:
+    if not isinstance(value, dict):
+        raise CompatibilityEvidenceError("invalid synthetic IPC handoff observations")
+    if passed:
+        fields = {
+            "status",
+            "processes",
+            "guest_exit_codes",
+            "queue_attributes",
+            "operations",
+            "messages",
+            "queue_cleanup",
+            "qemu_strace_syscalls",
+            "role_outputs",
+        }
+        observations = _expect_object(value, fields, "synthetic IPC handoff observations")
+        expected_processes = {
+            "count": 2,
+            "roles": list(_IPC_HANDOFF_ROLES),
+            "distinct_qemu_processes": True,
+            "shared_container": True,
+            "shared_private_ipc_namespace": True,
+            "overlap_proven_by_request_ack_round_trip": True,
+        }
+        if observations["status"] != "passed" or not _matches_fixed_json(
+            observations["processes"], expected_processes
+        ):
+            raise CompatibilityEvidenceError("contradictory synthetic IPC handoff processes")
+        if not _matches_fixed_json(
+            observations["guest_exit_codes"], {"consumer": 0, "producer": 0}
+        ):
+            raise CompatibilityEvidenceError("contradictory synthetic IPC handoff guest exits")
+        attributes = {
+            "permissions": "0600",
+            "max_messages": 2,
+            "max_message_bytes": 64,
+            "current_messages": 0,
+        }
+        if not _matches_fixed_json(
+            observations["queue_attributes"],
+            {"request": attributes, "acknowledgment": attributes},
+        ):
+            raise CompatibilityEvidenceError("contradictory synthetic IPC queue attributes")
+        if not _matches_fixed_json(observations["operations"], list(_IPC_HANDOFF_OPERATIONS)):
+            raise CompatibilityEvidenceError("contradictory synthetic IPC handoff operations")
+        expected_messages = {
+            "request": {
+                "verified": True,
+                "bytes": 26,
+                "sha256": _IPC_HANDOFF_REQUEST_SHA256,
+                "priority": 7,
+            },
+            "acknowledgment": {
+                "verified": True,
+                "bytes": 22,
+                "sha256": _IPC_HANDOFF_ACK_SHA256,
+                "priority": 3,
+            },
+        }
+        if not _matches_fixed_json(observations["messages"], expected_messages):
+            raise CompatibilityEvidenceError("contradictory synthetic IPC request/ack evidence")
+        if not _matches_fixed_json(
+            observations["queue_cleanup"],
+            {
+                "consumer_closed_both": True,
+                "consumer_unlinked_both": True,
+                "linked_at_exit": False,
+            },
+        ):
+            raise CompatibilityEvidenceError("contradictory synthetic IPC queue cleanup")
+        expected_syscalls = {
+            "consumer": list(_IPC_HANDOFF_CONSUMER_SYSCALLS),
+            "producer": list(_IPC_HANDOFF_PRODUCER_SYSCALLS),
+        }
+        if not _matches_fixed_json(observations["qemu_strace_syscalls"], expected_syscalls):
+            raise CompatibilityEvidenceError("contradictory synthetic IPC syscall observations")
+        role_outputs = _expect_object(
+            observations["role_outputs"], set(_IPC_HANDOFF_ROLES), "synthetic IPC role outputs"
+        )
+        for role in _IPC_HANDOFF_ROLES:
+            output = _expect_object(
+                role_outputs[role], {"bytes", "sha256"}, f"synthetic IPC {role} output"
+            )
+            if not _matches_fixed_json(output, _IPC_HANDOFF_ROLE_OUTPUTS[role]):
+                raise CompatibilityEvidenceError(f"contradictory synthetic IPC {role} output")
+        return observations
+
+    allowed = {
+        "status",
+        "failure",
+        "guest_exit_codes",
+        "additional_failures",
+        "completed_operations",
+    }
+    if value.keys() - allowed or value.get("status") != "failed" or "failure" not in value:
+        raise CompatibilityEvidenceError("invalid failed synthetic IPC handoff observations")
+    if "failure" in value:
+        _validate_ipc_failure(value["failure"], category=False)
+    if "guest_exit_codes" in value:
+        _validate_ipc_exit_codes(
+            value["guest_exit_codes"], "IPC handoff guest exits", complete=False
+        )
+    if "additional_failures" in value:
+        failures = value["additional_failures"]
+        if not isinstance(failures, list) or len(failures) > 3:
+            raise CompatibilityEvidenceError("invalid additional IPC handoff failures")
+        for failure in failures:
+            _validate_ipc_failure(failure, category=False)
+    if "completed_operations" in value:
+        completed = value["completed_operations"]
+        if (
+            not isinstance(completed, list)
+            or any(not isinstance(item, str) for item in completed)
+            or any(item not in _IPC_HANDOFF_OPERATIONS for item in completed)
+            or len(set(completed)) != len(completed)
+            or completed != [item for item in _IPC_HANDOFF_OPERATIONS if item in completed]
+        ):
+            raise CompatibilityEvidenceError("invalid completed IPC handoff operations")
+    return value
+
+
+def _validate_ipc_session(session: Any, position: int) -> dict[str, Any]:
+    fields = {
+        "session_id",
+        "session_identity",
+        "case",
+        "status",
+        "lifecycle",
+        "execution",
+        "observations",
+        "isolation",
+        "cleanup",
+    }
+    session = _expect_object(session, fields, "synthetic IPC handoff session")
+    label = ("first", "second")[position]
+    identity = session["session_identity"]
+    if (
+        session["session_id"] != f"ipc-handoff-{label}"
+        or not isinstance(identity, str)
+        or not identity
+        or len(identity) > 128
+        or any(ord(character) < 32 or ord(character) == 127 for character in identity)
+        or session["case"] != "ipc-handoff"
+        or not isinstance(session["status"], str)
+        or session["status"] not in {"passed", "quarantined"}
+    ):
+        raise CompatibilityEvidenceError("invalid synthetic IPC handoff session identity or status")
+    lifecycle = session["lifecycle"]
+    lifecycle_order = ["reserved", "created", "validated", "start-requested", "exited", "removed"]
+    if (
+        not isinstance(lifecycle, list)
+        or any(not isinstance(item, str) for item in lifecycle)
+        or any(item not in lifecycle_order for item in lifecycle)
+        or len(set(lifecycle)) != len(lifecycle)
+        or [item for item in lifecycle_order if item in lifecycle] != lifecycle
+    ):
+        raise CompatibilityEvidenceError("invalid synthetic IPC handoff lifecycle")
+    execution_fields = {
+        "exit_code",
+        "duration_seconds",
+        "stdout_sha256",
+        "stdout_bytes",
+        "timed_out",
+        "guest_exit_codes",
+    }
+    execution = session["execution"]
+    if not isinstance(execution, dict) or execution.keys() - execution_fields:
+        raise CompatibilityEvidenceError("invalid synthetic IPC handoff execution fields")
+    if "exit_code" in execution and (
+        not isinstance(execution["exit_code"], int) or isinstance(execution["exit_code"], bool)
+    ):
+        raise CompatibilityEvidenceError("invalid synthetic IPC handoff exit code")
+    if "duration_seconds" in execution:
+        _nonnegative_number(execution["duration_seconds"], "IPC handoff duration")
+    if "stdout_sha256" in execution:
+        _digest(execution["stdout_sha256"], "IPC handoff stdout_sha256")
+    if "stdout_bytes" in execution and (
+        not isinstance(execution["stdout_bytes"], int)
+        or isinstance(execution["stdout_bytes"], bool)
+        or not 0 <= execution["stdout_bytes"] <= 1024
+    ):
+        raise CompatibilityEvidenceError("invalid synthetic IPC handoff stdout length")
+    if "timed_out" in execution and not isinstance(execution["timed_out"], bool):
+        raise CompatibilityEvidenceError("invalid synthetic IPC handoff timeout status")
+    if "guest_exit_codes" in execution:
+        _validate_ipc_exit_codes(
+            execution["guest_exit_codes"], "IPC handoff guest exits", complete=False
+        )
+    if session["status"] == "passed":
+        if (
+            lifecycle != lifecycle_order
+            or execution.keys()
+            != {
+                "exit_code",
+                "duration_seconds",
+                "stdout_sha256",
+                "stdout_bytes",
+                "timed_out",
+                "guest_exit_codes",
+            }
+            or execution["exit_code"] != 0
+            or execution["timed_out"] is not False
+            or execution["guest_exit_codes"] != {"consumer": 0, "producer": 0}
+            or execution["stdout_bytes"] == 0
+        ):
+            raise CompatibilityEvidenceError("contradictory successful IPC handoff execution")
+
+    isolation = session["isolation"]
+    if isolation:
+        _validate_isolation(isolation)
+    elif session["status"] == "passed":
+        raise CompatibilityEvidenceError("passed IPC handoff session lacks isolation evidence")
+
+    cleanup = session["cleanup"]
+    if not isinstance(cleanup, dict) or cleanup.keys() - {
+        "container_removed",
+        "private_tmpfs_released",
+        "host_metadata",
+    }:
+        raise CompatibilityEvidenceError("invalid IPC handoff cleanup evidence")
+    if any(
+        key in cleanup and not isinstance(cleanup[key], bool)
+        for key in ("container_removed", "private_tmpfs_released")
+    ) or (
+        "host_metadata" in cleanup and cleanup["host_metadata"] != "retained; no recursive cleanup"
+    ):
+        raise CompatibilityEvidenceError("invalid IPC handoff cleanup evidence")
+    if (
+        cleanup.get("private_tmpfs_released") is True
+        and cleanup.get("container_removed") is not True
+    ):
+        raise CompatibilityEvidenceError("contradictory IPC handoff cleanup evidence")
+    if session["status"] == "passed" and cleanup != {
+        "container_removed": True,
+        "private_tmpfs_released": True,
+        "host_metadata": "retained; no recursive cleanup",
+    }:
+        raise CompatibilityEvidenceError("incomplete successful IPC handoff cleanup")
+    if cleanup.get("container_removed") is True and "removed" not in lifecycle:
+        raise CompatibilityEvidenceError("IPC handoff lifecycle contradicts container cleanup")
+
+    if not isinstance(session["observations"], dict):
+        raise CompatibilityEvidenceError("invalid synthetic IPC handoff observations")
+    observation_status = session["observations"].get("status")
+    if session["status"] == "passed" and observation_status != "passed":
+        raise CompatibilityEvidenceError("passed IPC handoff session lacks successful observations")
+    if observation_status == "passed":
+        observations = _validate_ipc_observations(session["observations"], passed=True)
+    elif observation_status == "failed":
+        observations = _validate_ipc_observations(session["observations"], passed=False)
+    elif session["observations"] == {} and session["status"] == "quarantined":
+        observations = session["observations"]
+    else:
+        raise CompatibilityEvidenceError("invalid synthetic IPC handoff observation status")
+    if session["status"] == "passed":
+        if observations["guest_exit_codes"] != execution["guest_exit_codes"]:
+            raise CompatibilityEvidenceError("IPC observations contradict process exits")
+    elif observations.get("status") == "failed" and "guest_exit_codes" in observations:
+        if (
+            "guest_exit_codes" in execution
+            and observations["guest_exit_codes"] != execution["guest_exit_codes"]
+        ):
+            raise CompatibilityEvidenceError("IPC failure observations contradict process exits")
+    return session
+
+
+def _validate_ipc_handoff(
+    receipt: dict[str, Any], artifacts: dict[str, str], *, parent_status: str
+) -> dict[str, Any] | None:
+    if "synthetic_ipc_handoff" not in receipt:
+        return None
+    handoff = receipt["synthetic_ipc_handoff"]
+    if not isinstance(handoff, dict):
+        raise CompatibilityEvidenceError("invalid synthetic IPC handoff receipt")
+    status = handoff.get("status")
+    fields = {
+        "schema_version",
+        "status",
+        "scope",
+        "protocol",
+        "identities",
+        "processes",
+        "sessions",
+        "fresh_session_isolation",
+        "container_security",
+        "cleanup",
+        "stock_compatibility",
+    }
+    if status == "failed":
+        fields.add("failure")
+    handoff = _expect_object(handoff, fields, "synthetic IPC handoff receipt")
+    if (
+        handoff["schema_version"] != _IPC_HANDOFF_SCHEMA
+        or not isinstance(status, str)
+        or status not in {"passed", "failed"}
+    ):
+        raise CompatibilityEvidenceError("unsupported synthetic IPC handoff schema or status")
+    if handoff["scope"] != "first-party synthetic two-process POSIX queue handoff":
+        raise CompatibilityEvidenceError("unsupported synthetic IPC handoff scope")
+    expected_protocol = {
+        "request_queue": "/snowsky_disc_lab_handoff_req_v1",
+        "acknowledgment_queue": "/snowsky_disc_lab_handoff_ack_v1",
+        "queue_attributes": {
+            "permissions": "0600",
+            "max_messages": 2,
+            "max_message_bytes": 64,
+        },
+        "request": {
+            "payload_bytes": 26,
+            "payload_sha256": _IPC_HANDOFF_REQUEST_SHA256,
+            "priority": 7,
+        },
+        "acknowledgment": {
+            "payload_bytes": 22,
+            "payload_sha256": _IPC_HANDOFF_ACK_SHA256,
+            "priority": 3,
+        },
+    }
+    if not _matches_fixed_json(handoff["protocol"], expected_protocol):
+        raise CompatibilityEvidenceError("contradictory synthetic IPC handoff protocol")
+    identities = _expect_object(
+        handoff["identities"],
+        {"qemu_mipsel_sha256", "guest_source_sha256", "guest_elf_sha256"},
+        "synthetic IPC handoff identities",
+    )
+    for key, value in identities.items():
+        _digest(value, f"synthetic_ipc_handoff.identities.{key}")
+    if (
+        identities["qemu_mipsel_sha256"] != artifacts["qemu-mipsel"]
+        or identities["guest_source_sha256"] != _IPC_HANDOFF_SOURCE_SHA256
+        or identities["guest_elf_sha256"] != artifacts[_IPC_HANDOFF_ELF]
+    ):
+        raise CompatibilityEvidenceError("contradictory synthetic IPC handoff artifact identities")
+
+    processes = _expect_object(
+        handoff["processes"],
+        {
+            "roles",
+            "distinct_qemu_processes",
+            "shared_container_per_session",
+            "shared_private_ipc_namespace",
+            "overlap_proven_by_request_ack_round_trip",
+            "ipc_mode",
+        },
+        "IPC handoff process summary",
+    )
+    if (
+        processes["roles"] != list(_IPC_HANDOFF_ROLES)
+        or processes["ipc_mode"] != "none"
+        or any(
+            not isinstance(processes[field], bool)
+            for field in (
+                "distinct_qemu_processes",
+                "shared_container_per_session",
+                "shared_private_ipc_namespace",
+                "overlap_proven_by_request_ack_round_trip",
+            )
+        )
+    ):
+        raise CompatibilityEvidenceError("invalid synthetic IPC handoff process summary")
+
+    sessions = handoff["sessions"]
+    if not isinstance(sessions, list) or not 1 <= len(sessions) <= 2:
+        raise CompatibilityEvidenceError("invalid synthetic IPC handoff sessions")
+    parsed_sessions = [
+        _validate_ipc_session(session, index) for index, session in enumerate(sessions)
+    ]
+    if status == "passed" and (
+        len(parsed_sessions) != 2
+        or any(session["status"] != "passed" for session in parsed_sessions)
+    ):
+        raise CompatibilityEvidenceError("incomplete passed synthetic IPC handoff sessions")
+    first = parsed_sessions[0]
+    second = parsed_sessions[1] if len(parsed_sessions) == 2 else {}
+    if status == "passed" and (
+        first["execution"]["stdout_bytes"] != second["execution"]["stdout_bytes"]
+        or first["execution"]["stdout_sha256"] != second["execution"]["stdout_sha256"]
+        or first["observations"]["role_outputs"] != second["observations"]["role_outputs"]
+    ):
+        raise CompatibilityEvidenceError("contradictory repeated IPC handoff outputs")
+    first_observations = first["observations"]
+    observed_processes = first_observations.get("processes", {})
+    expected_processes = {
+        "roles": list(_IPC_HANDOFF_ROLES),
+        "distinct_qemu_processes": observed_processes.get("distinct_qemu_processes", False),
+        "shared_container_per_session": observed_processes.get("shared_container", False),
+        "shared_private_ipc_namespace": observed_processes.get(
+            "shared_private_ipc_namespace", False
+        ),
+        "overlap_proven_by_request_ack_round_trip": observed_processes.get(
+            "overlap_proven_by_request_ack_round_trip", False
+        ),
+        "ipc_mode": "none",
+    }
+    if not _matches_fixed_json(processes, expected_processes):
+        raise CompatibilityEvidenceError("contradictory synthetic IPC handoff process summary")
+    if status == "passed" and not all(
+        processes[key]
+        for key in (
+            "distinct_qemu_processes",
+            "shared_container_per_session",
+            "shared_private_ipc_namespace",
+            "overlap_proven_by_request_ack_round_trip",
+        )
+    ):
+        raise CompatibilityEvidenceError("incomplete passed synthetic IPC process evidence")
+
+    session_identities = [session["session_identity"] for session in parsed_sessions]
+    identities_distinct = (
+        len(session_identities) == 2 and session_identities[0] != session_identities[1]
+    )
+    fresh = _expect_object(
+        handoff["fresh_session_isolation"],
+        {
+            "first_container_removed_before_second",
+            "distinct_session_identities",
+            "same_protocol_succeeded",
+        },
+        "synthetic IPC fresh-session isolation",
+    )
+    expected_fresh = {
+        "first_container_removed_before_second": (
+            first["cleanup"].get("container_removed") is True
+        ),
+        "distinct_session_identities": identities_distinct,
+        "same_protocol_succeeded": (
+            len(parsed_sessions) == 2
+            and second.get("status") == "passed"
+            and second.get("observations", {}).get("status") == "passed"
+        ),
+    }
+    if any(not isinstance(value, bool) for value in fresh.values()) or fresh != expected_fresh:
+        raise CompatibilityEvidenceError("contradictory synthetic IPC fresh-session isolation")
+    if status == "passed" and not all(fresh.values()):
+        raise CompatibilityEvidenceError("incomplete passed synthetic IPC session isolation")
+
+    security = _expect_object(
+        handoff["container_security"],
+        {"profiles", "mqueue_mount_added", "limits_or_sysctls_changed"},
+        "synthetic IPC container security",
+    )
+    profiles = security["profiles"]
+    if not isinstance(profiles, list) or len(profiles) != len(parsed_sessions):
+        raise CompatibilityEvidenceError("incomplete synthetic IPC session isolation profiles")
+    for profile, session in zip(profiles, parsed_sessions, strict=True):
+        if profile != session["isolation"]:
+            raise CompatibilityEvidenceError(
+                "contradictory synthetic IPC session isolation profile"
+            )
+        if profile:
+            _validate_isolation(profile)
+    if (
+        security["mqueue_mount_added"] is not False
+        or security["limits_or_sysctls_changed"] is not False
+    ):
+        raise CompatibilityEvidenceError("unsafe synthetic IPC container security boundary")
+
+    cleanup = _expect_object(
+        handoff["cleanup"],
+        {"all_containers_removed", "all_private_tmpfs_released", "persistent_shared_queue"},
+        "synthetic IPC cleanup summary",
+    )
+    expected_cleanup = {
+        "all_containers_removed": len(parsed_sessions) == 2
+        and all(session["cleanup"].get("container_removed") is True for session in parsed_sessions),
+        "all_private_tmpfs_released": len(parsed_sessions) == 2
+        and all(
+            session["cleanup"].get("private_tmpfs_released") is True for session in parsed_sessions
+        ),
+        "persistent_shared_queue": False,
+    }
+    if (
+        any(not isinstance(value, bool) for value in cleanup.values())
+        or cleanup != expected_cleanup
+    ):
+        raise CompatibilityEvidenceError("contradictory synthetic IPC cleanup summary")
+    if status == "passed" and (
+        cleanup["all_containers_removed"] is not True
+        or cleanup["all_private_tmpfs_released"] is not True
+    ):
+        raise CompatibilityEvidenceError("incomplete passed synthetic IPC cleanup")
+
+    stock = _expect_object(
+        handoff["stock_compatibility"],
+        {"stock_ipc_compatibility", "m1_04_stock_boot"},
+        "synthetic IPC stock compatibility boundary",
+    )
+    if stock != {"stock_ipc_compatibility": "UNVERIFIED", "m1_04_stock_boot": "NOT RUN"}:
+        raise CompatibilityEvidenceError("contradictory synthetic IPC stock compatibility boundary")
+
+    scenario_status = "PASS" if status == "passed" else "BLOCKED"
+    if status == "failed":
+        failure = handoff["failure"]
+        if not isinstance(failure, dict) or not isinstance(failure.get("category"), str):
+            raise CompatibilityEvidenceError("invalid synthetic IPC handoff failure")
+        if failure["category"] == "guest-handoff":
+            failure = _validate_ipc_failure(failure, category=True)
+            matching = [
+                session
+                for session in parsed_sessions
+                if session["status"] == "quarantined"
+                and session["observations"].get("failure")
+                == {key: value for key, value in failure.items() if key != "category"}
+            ]
+            if len(matching) != 1:
+                raise CompatibilityEvidenceError(
+                    "IPC handoff failure contradicts session observations"
+                )
+            failed_cleanup = matching[0]["cleanup"]
+            scenario_status = (
+                "FAIL"
+                if failed_cleanup.get("container_removed") is True
+                and failed_cleanup.get("private_tmpfs_released") is True
+                else "BLOCKED"
+            )
+        elif failure == {"category": "session-or-cleanup-failed"}:
+            if any(
+                session["status"] == "quarantined"
+                and session["observations"].get("status") == "failed"
+                for session in parsed_sessions
+            ):
+                raise CompatibilityEvidenceError(
+                    "IPC guest failure is mislabeled as a session or cleanup failure"
+                )
+            has_session_or_cleanup_failure = any(
+                session["status"] == "quarantined"
+                and (
+                    session["observations"] == {}
+                    or (
+                        session["observations"].get("status") == "passed"
+                        and (
+                            session["cleanup"].get("container_removed") is not True
+                            or session["cleanup"].get("private_tmpfs_released") is not True
+                        )
+                    )
+                )
+                for session in parsed_sessions
+            )
+            repeated_or_missing_session = not fresh["distinct_session_identities"] and all(
+                session["status"] == "passed" for session in parsed_sessions
+            )
+            if not has_session_or_cleanup_failure and not repeated_or_missing_session:
+                raise CompatibilityEvidenceError("IPC session failure lacks a blocked session")
+        else:
+            raise CompatibilityEvidenceError("unknown synthetic IPC handoff failure category")
+        if parent_status != "failed":
+            raise CompatibilityEvidenceError("contradictory parent and IPC handoff status")
+        if receipt.get("failure") != {"category": "synthetic-ipc-handoff-failed"}:
+            raise CompatibilityEvidenceError("parent receipt does not identify IPC handoff failure")
+    elif receipt.get("failure", {}).get("category") == "synthetic-ipc-handoff-failed":
+        raise CompatibilityEvidenceError("parent receipt contradicts passed IPC handoff")
+
+    return {
+        "status": scenario_status,
+        "receipt_status": status,
+        "sessions": len(parsed_sessions),
+        "roles": list(_IPC_HANDOFF_ROLES),
+        "identities": {
+            "qemu-mipsel": identities["qemu_mipsel_sha256"],
+            "guest-source": identities["guest_source_sha256"],
+            "guest-elf": identities["guest_elf_sha256"],
+        },
+        "independently_authenticated": False,
+    }
+
+
 def _nonnegative_number(value: Any, field: str) -> None:
     if not isinstance(value, (int, float)) or isinstance(value, bool) or value < 0:
         raise CompatibilityEvidenceError(f"invalid numeric value: {field}")
@@ -754,11 +1493,14 @@ def parse_receipt(document: str | bytes, *, source: str) -> dict[str, Any]:
     identities = receipt.get("identities")
     if not isinstance(identities, dict) or not identities:
         raise CompatibilityEvidenceError("receipt identities are missing")
-    if set(identities) != {
+    expected_artifact_names = {
         "qemu-mipsel",
         "mips32le-execution-smoke.elf",
         "mips32le-posix-mqueue.elf",
-    }:
+    }
+    if "synthetic_ipc_handoff" in receipt:
+        expected_artifact_names.add(_IPC_HANDOFF_ELF)
+    if set(identities) != expected_artifact_names:
         raise CompatibilityEvidenceError("unknown or incomplete artifact identities")
     artifacts = {name: _digest(value, name) for name, value in identities.items()}
     guest_source = _digest(receipt.get("guest_source_sha256"), "guest_source_sha256")
@@ -801,6 +1543,11 @@ def parse_receipt(document: str | bytes, *, source: str) -> dict[str, Any]:
     elif "failure" in receipt:
         raise CompatibilityEvidenceError("contradictory synthetic runtime failure record")
     _validate_optional_sections(receipt)
+    ipc_handoff_result = _validate_ipc_handoff(receipt, artifacts, parent_status=status)
+    if receipt.get("failure", {}).get("category") == "synthetic-ipc-handoff-failed" and (
+        ipc_handoff_result is None or ipc_handoff_result["receipt_status"] != "failed"
+    ):
+        raise CompatibilityEvidenceError("synthetic IPC failure is missing its nested evidence")
     if "posix_mqueue" in receipt:
         queue = receipt["posix_mqueue"]
         if not isinstance(queue, dict) or queue.get("schema_version") != (
@@ -1221,6 +1968,9 @@ def parse_receipt(document: str | bytes, *, source: str) -> dict[str, Any]:
             queue_description.get("payload_sha256") if queue_description else None,
             "queue.payload_sha256",
         )
+    if ipc_handoff_result is not None:
+        artifacts["ipc-handoff-guest"] = ipc_handoff_result["identities"]["guest-elf"]
+        artifacts["ipc-handoff-guest-source"] = ipc_handoff_result["identities"]["guest-source"]
 
     all_session_results = {
         case: ("quarantined" if "quarantined" in results else "passed")
@@ -1235,6 +1985,10 @@ def parse_receipt(document: str | bytes, *, source: str) -> dict[str, Any]:
                     "mqueue-second",
                 }:
                     all_session_results[session["case"]] = session.get("status")
+    if ipc_handoff_result is not None:
+        all_session_results["ipc-handoff"] = (
+            "passed" if ipc_handoff_result["status"] == "PASS" else "quarantined"
+        )
     if status == "failed" and not any(
         result == "quarantined" for result in all_session_results.values()
     ):
@@ -1294,6 +2048,11 @@ def parse_receipt(document: str | bytes, *, source: str) -> dict[str, Any]:
                     "status": "FAIL",
                     "evidence": "sanitized fixed-probe failure category",
                 }
+    if ipc_handoff_result is not None:
+        scenarios["synthetic-ipc-handoff"] = {
+            "status": ipc_handoff_result["status"],
+            "evidence": ("receipt-declared handoff evidence; artifact provenance is unverified"),
+        }
     return {
         "source": source,
         "receipt_schema": _SCHEMA,
@@ -1301,6 +2060,12 @@ def parse_receipt(document: str | bytes, *, source: str) -> dict[str, Any]:
         "execution_scope": "firmware-free synthetic execution",
         "support_status": "unknown",
         "artifacts": artifacts,
+        "evidence_authentication": {
+            "receipt_values": "declared",
+            "independent_authentication": "not performed",
+            "artifact_bytes_rehashed": False,
+        },
+        "synthetic_ipc_handoff": ipc_handoff_result,
         "guest_source_sha256": guest_source,
         "queue_guest_source_sha256": artifacts["mqueue-guest-source"],
         "synthetic_input_sha256": synthetic_input,
@@ -1335,6 +2100,7 @@ def render_markdown(reports: list[dict[str, Any]]) -> str:
                 f"- Receipt: `{report['receipt_schema']}` ({report['receipt_status']})",
                 f"- Execution scope: {report['execution_scope']}",
                 f"- Support status: `{report['support_status']}`",
+                "- Receipt values: declared; independently authenticated: no",
                 "",
                 "| Scenario | Result |",
                 "| --- | --- |",
