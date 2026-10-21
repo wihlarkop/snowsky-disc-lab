@@ -267,3 +267,13 @@ def test_classifies_linked_executable_without_dynamic_metadata_as_static(tmp_pat
     report = inspect_elf(_write(tmp_path, _elf32_mips(load=b"synthetic-code")))
 
     assert report.static_dynamic == "static"
+
+
+def test_dynamic_segment_without_interpreter_or_needed_keeps_linkage_unknown(
+    tmp_path: Path,
+) -> None:
+    report = inspect_elf(_write(tmp_path, _elf32_mips(dynamic=True)))
+
+    assert report.interpreter is None
+    assert report.needed_libraries == ()
+    assert report.static_dynamic == "UNKNOWN"

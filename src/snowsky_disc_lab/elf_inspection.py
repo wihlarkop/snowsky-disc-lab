@@ -277,7 +277,9 @@ def inspect_elf(path: str | os.PathLike[str], *, max_bytes: int = _MAX_BYTES) ->
         file_type=file_type,
         static_dynamic=(
             "dynamic"
-            if dynamic_segments or interpreters
+            if interpreters or needed
+            else "UNKNOWN"
+            if dynamic_segments
             else "static"
             if e_type == 2 and any(segment[0] == _PT_LOAD for segment in segments)
             else "UNKNOWN"
