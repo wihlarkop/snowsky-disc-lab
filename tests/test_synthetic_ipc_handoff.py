@@ -235,6 +235,8 @@ def test_acceptance_reports_owned_container_cleanup_failure(
     with pytest.raises(runtime.RuntimeRefused, match="handoff acceptance failed") as failure:
         handoff.acceptance(tmp_path / "inputs", evidence, store)
 
-    assert failure.value.receipt["status"] == "failed"
-    assert failure.value.receipt["cleanup"]["all_containers_removed"] is False
-    assert str(tmp_path) not in repr(failure.value.receipt)
+    receipt = failure.value.receipt
+    assert receipt is not None
+    assert receipt["status"] == "failed"
+    assert receipt["cleanup"]["all_containers_removed"] is False
+    assert str(tmp_path) not in repr(receipt)

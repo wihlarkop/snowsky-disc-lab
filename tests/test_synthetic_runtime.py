@@ -221,6 +221,10 @@ def test_ipc_handoff_command_starts_two_fixed_roles_concurrently():
     assert 'wait "$consumer_pid"' in command and 'wait "$producer_pid"' in command
     assert "--kill-after=1s 5s" in command
     assert "QEMU_STRACE=1" in command
+    assert (
+        "for syscall in mq_open mq_getsetattr mq_timedsend mq_timedreceive mq_unlink close"
+        in command
+    )
     assert "/dev/mqueue" not in command
     assert "docker exec" not in command
 
@@ -266,6 +270,7 @@ def test_ipc_handoff_output_failure_is_sanitized_and_owned_container_removed(
         )
 
     receipt = failure.value.receipt
+    assert receipt is not None
     assert receipt["execution"]["handoff"]["failure"] == {
         "role": "producer",
         "stage": "acknowledgment_timeout",

@@ -59,8 +59,8 @@ PRODUCER_OUTPUT = (
 CONSUMER_SYSCALLS = [
     "mq_open",
     "mq_getsetattr",
-    "mq_timedreceive",
     "mq_timedsend",
+    "mq_timedreceive",
     "mq_unlink",
     "close",
 ]
