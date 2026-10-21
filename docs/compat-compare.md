@@ -6,9 +6,12 @@ deterministic, read-only, and performs no receipt parsing, filesystem access,
 runtime execution, or artifact hashing.
 
 Comparison conditions match only when both reports declare the same receipt
-schema and the exact same artifact identity mapping. Any mismatch makes every
-scenario result `incomparable`; reports from different QEMU or guest artifact
-identities are never presented as same-condition evidence.
+schema, the exact same artifact identity mapping (including `qemu-mipsel`),
+and the same QEMU `build_source` identity, including matching presence or
+absence. Any mismatch makes every scenario result `incomparable`; reports from
+different QEMU build sources or artifact identities are never presented as
+same-condition evidence. Present build-source identities are structurally
+validated before comparison.
 
 With matching conditions, `PASS` to `FAIL` is a regression and `FAIL` to
 `PASS` is an improvement. Equal outcomes are unchanged. Other differing

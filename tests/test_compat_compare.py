@@ -60,6 +60,72 @@ def test_mismatched_artifact_identity_makes_scenario_incomparable() -> None:
     assert result["reason"] == "artifact identities differ"
 
 
+def _build_source(*, commit: str = "c" * 40) -> dict:
+    return {
+        "repository": "https://github.com/example/qemu.git",
+        "commit": commit,
+        "projection_digest": "d" * 64,
+        "source_lock_changed": False,
+        "firmware_tree_fetched": False,
+        "reviewed_file_sha256": {"configure": "e" * 64},
+        "reviewed_file_bytes": {"configure": 10},
+        "build_input_manifest_sha256": "f" * 64,
+    }
+
+
+def test_mismatched_build_source_identity_is_incomparable() -> None:
+    earlier = _report()
+    later = _report()
+    earlier["build_source"] = _build_source()
+    later["build_source"] = _build_source(commit="a" * 40)
+
+    comparison = compare_reports(earlier, later)
+
+    assert comparison["conditions_match"] is False
+    assert comparison["scenarios"]["synthetic-filesystem"]["classification"] == "incomparable"
+    assert (
+        comparison["scenarios"]["synthetic-filesystem"]["reason"]
+        == "build source identities differ"
+    )
+
+
+def test_build_source_presence_must_match() -> None:
+    earlier = _report()
+    later = _report()
+    later["build_source"] = _build_source()
+
+    comparison = compare_reports(earlier, later)
+
+    assert comparison["conditions_match"] is False
+    assert comparison["scenarios"]["synthetic-filesystem"]["classification"] == "incomparable"
+
+
+@pytest.mark.parametrize(
+    "mutate",
+    [
+        lambda source: source.pop("commit"),
+        lambda source: source.update(commit=[]),
+        lambda source: source.update(firmware_tree_fetched=True),
+        lambda source: source["reviewed_file_bytes"].update(configure=True),
+    ],
+)
+def test_rejects_malformed_build_source(mutate) -> None:
+    report = _report()
+    report["build_source"] = _build_source()
+    mutate(report["build_source"])
+
+    with pytest.raises(CompatibilityComparisonError, match="build source"):
+        compare_reports(report, _report())
+
+
+def test_requires_qemu_artifact_identity() -> None:
+    report = _report()
+    report["artifacts"] = {"guest-elf": "b" * 64}
+
+    with pytest.raises(CompatibilityComparisonError, match="qemu-mipsel"):
+        compare_reports(report, _report())
+
+
 def test_missing_and_unrecognized_outcomes_never_become_pass() -> None:
     earlier = _report()
     later = _report()
