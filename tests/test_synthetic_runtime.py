@@ -50,6 +50,7 @@ class Docker:
         self.foreign_owner = False
         self.cleanup_failure = False
         self.mqueue_failure = False
+        self.mqueue_timeout = False
 
     def __call__(self, args, **kwargs):
         self.calls.append(args)
@@ -141,6 +142,9 @@ class Docker:
                     "MQ_ERROR_ERRNO=1\n"
                 )
                 code = 40
+            if self.mqueue_timeout and self.mode == "mqueue-first":
+                output = ""
+                code = 124
             self.inspection[0]["State"]["ExitCode"] = code
             return subprocess.CompletedProcess(args, code, output)
         if args[1] == "rm":
@@ -353,6 +357,16 @@ def test_posix_mqueue_acceptance_records_two_clean_private_sessions(inputs, tmp_
         "errno": "EEXIST",
         "errno_number": 17,
     }
+    assert receipt["observed_syscalls"]["first_session"]["mq_timedreceive_empty_queue"] == {
+        "result": -1,
+        "errno": "EAGAIN",
+        "errno_number": 11,
+    }
+    assert receipt["observed_syscalls"]["first_session"]["retained_queue_empty_receive"] == {
+        "result": -1,
+        "errno": "EAGAIN",
+        "errno_number": 11,
+    }
     assert receipt["observed_syscalls"]["first_session"]["mq_open_after_unlink"]["errno"] == (
         "ENOENT"
     )
@@ -364,6 +378,11 @@ def test_posix_mqueue_acceptance_records_two_clean_private_sessions(inputs, tmp_
         "mq_unlink",
         "close",
     ]
+    assert receipt["observed_syscalls"]["second_session"]["mq_timedreceive_empty_queue"] == {
+        "result": -1,
+        "errno": "EAGAIN",
+        "errno_number": 11,
+    }
     assert receipt["session_separation"]["first_container_removed_before_second_create"]
     assert receipt["session_separation"]["second_session_same_name_o_excl_create"] == "success"
     assert receipt["cleanup"]["persistent_shared_queue"] is False
@@ -467,6 +486,28 @@ def test_posix_mqueue_failure_reports_sanitized_observed_attributes_and_syscalls
         "errno_number": 0,
         "observed_attributes": {"mode": "0640"},
     }
+
+
+def test_posix_mqueue_deadline_failure_is_sanitized_and_cleans_container(
+    inputs, tmp_path, monkeypatch
+):
+    docker = Docker()
+    docker.mqueue_timeout = True
+    monkeypatch.setattr(runtime, "_docker", docker)
+
+    with pytest.raises(runtime.RuntimeRefused, match="queue acceptance failed") as failure:
+        runtime.posix_mqueue_acceptance(*inputs, tmp_path / "sessions")
+
+    receipt = failure.value.receipt
+    assert receipt is not None
+    assert receipt["failure"] == {
+        "category": "queue-timeout",
+        "stage": "guest_deadline",
+        "errno": "NONE",
+        "errno_number": 0,
+    }
+    assert receipt["sessions"][0]["execution"]["timed_out"] is True
+    assert receipt["sessions"][0]["cleanup"]["container_removed"] is True
 
 
 def test_acceptance_retention_is_globally_bounded(tmp_path):

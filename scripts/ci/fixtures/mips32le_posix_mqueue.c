@@ -71,6 +71,19 @@ static int fail_mode(const struct stat *metadata) {
     return fail_probe("mode", 0);
 }
 
+static int fail_nonblocking(const struct mq_attr *attributes,
+                            const struct stat *metadata, int error_number) {
+    printf("MQ_OBSERVED_MAX_MESSAGES=%ld\n"
+           "MQ_OBSERVED_MESSAGE_BYTES=%ld\n"
+           "MQ_OBSERVED_CURRENT_MESSAGES=%ld\n"
+           "MQ_OBSERVED_FLAGS=%ld\n"
+           "MQ_OBSERVED_MODE=%04o\n",
+           attributes->mq_maxmsg, attributes->mq_msgsize,
+           attributes->mq_curmsgs, attributes->mq_flags,
+           (unsigned int)(metadata->st_mode & 0777));
+    return fail_probe("nonblock_empty_receive", error_number);
+}
+
 static int verify_attributes(mqd_t descriptor, const char *label) {
     struct mq_attr attributes;
     struct stat metadata;
@@ -78,8 +91,7 @@ static int verify_attributes(mqd_t descriptor, const char *label) {
         return fail_probe("mq_getattr", errno);
     }
     if (attributes.mq_maxmsg != QUEUE_MAX_MESSAGES ||
-        attributes.mq_msgsize != QUEUE_MESSAGE_BYTES || attributes.mq_curmsgs != 0 ||
-        attributes.mq_flags != O_NONBLOCK) {
+        attributes.mq_msgsize != QUEUE_MESSAGE_BYTES || attributes.mq_curmsgs != 0) {
         return fail_attributes(&attributes);
     }
     if (fstat((int)descriptor, &metadata) != 0) {
@@ -88,10 +100,18 @@ static int verify_attributes(mqd_t descriptor, const char *label) {
     if ((metadata.st_mode & 0777) != 0600) {
         return fail_mode(&metadata);
     }
+    char received[QUEUE_MESSAGE_BYTES];
+    unsigned int priority = 0;
+    errno = 0;
+    ssize_t length = mq_receive(descriptor, received, sizeof(received), &priority);
+    if (length >= 0 || errno != EAGAIN) {
+        return fail_nonblocking(&attributes, &metadata, length >= 0 ? 0 : errno);
+    }
     printf("%s=maxmsg:%ld,msgsize:%ld,curmsgs:%ld,nonblock:true\n",
            label, attributes.mq_maxmsg, attributes.mq_msgsize,
            attributes.mq_curmsgs);
     printf("%s_MODE=0600\n", label);
+    printf("%s_EMPTY_RECEIVE=EAGAIN:11\n", label);
     return 0;
 }
 

@@ -26,7 +26,7 @@ BASE_IMAGE = (
 # Measured on main fecc939, manual execution-smoke run 39464385240.
 QEMU_SHA256 = "2a58998c25a7836b910f255641a95e9d828967c75ed6b0de2e5490cb82038ddb"
 GUEST_SOURCE_SHA256 = "d00aee44bbcf9a38cbf1a710fa5187501666dd280db4a7fe62ee1c91a1b18661"
-MQUEUE_GUEST_SOURCE_SHA256 = "d5f643630197568842393b4abc20c25de50c5712b2c3c0550846af1be6006d7e"
+MQUEUE_GUEST_SOURCE_SHA256 = "459656e8b14e24c2ab1f2ab97d2219c978b290203168d20e6c8a8554c0ae6795"
 MQUEUE_NAME = "/snowsky_disc_lab_mqueue_probe_v1"
 MQUEUE_PAYLOAD = b"SNOWSKY_MIPS32LE_POSIX_MQ_V1"
 MQUEUE_PAYLOAD_SHA256 = "b8e0b0e98d2906e4b1d5cdaf72e10f44468760938a4c004c85fcbb7a4160e206"
@@ -44,6 +44,7 @@ MQUEUE_FIRST_OUTPUT = (
     "CREATE=ok\n"
     "ATTRIBUTES=maxmsg:2,msgsize:64,curmsgs:0,nonblock:true\n"
     "ATTRIBUTES_MODE=0600\n"
+    "ATTRIBUTES_EMPTY_RECEIVE=EAGAIN:11\n"
     "DUPLICATE_CREATE=EEXIST:17\n"
     "SEND=ok\n"
     "RECEIVE=ok\n"
@@ -56,6 +57,7 @@ MQUEUE_FIRST_OUTPUT = (
     "RECREATE=ok\n"
     "RETAINED_ATTRIBUTES=maxmsg:2,msgsize:64,curmsgs:0,nonblock:true\n"
     "RETAINED_ATTRIBUTES_MODE=0600\n"
+    "RETAINED_ATTRIBUTES_EMPTY_RECEIVE=EAGAIN:11\n"
     "RETAINED_CLOSE=ok\n"
     "QUEUE_LINKED_AT_EXIT=yes\n"
     "QEMU_SYSCALL_TRACE=mq_open,mq_getsetattr,mq_timedsend,mq_timedreceive,mq_unlink,close\n"
@@ -66,6 +68,7 @@ MQUEUE_SECOND_OUTPUT = (
     "CREATE=ok\n"
     "ATTRIBUTES=maxmsg:2,msgsize:64,curmsgs:0,nonblock:true\n"
     "ATTRIBUTES_MODE=0600\n"
+    "ATTRIBUTES_EMPTY_RECEIVE=EAGAIN:11\n"
     "CLOSE=ok\n"
     "UNLINK=ok\n"
     "REOPEN_AFTER_UNLINK=ENOENT:2\n"
@@ -78,6 +81,7 @@ MQUEUE_ERROR_STAGES = frozenset(
         "attributes",
         "fstat_mode",
         "mode",
+        "nonblock_empty_receive",
         "duplicate_exclusive_create",
         "mq_send",
         "mq_receive_verify",
@@ -291,6 +295,7 @@ def _mqueue_failure(output: str) -> dict[str, Any] | None:
         operation
         for marker, operation in (
             ("CREATE=ok", "mq_open_create"),
+            ("ATTRIBUTES_EMPTY_RECEIVE=EAGAIN:11", "mq_timedreceive_empty_queue"),
             ("DUPLICATE_CREATE=EEXIST:17", "mq_open_duplicate_exclusive"),
             ("SEND=ok", "mq_timedsend"),
             ("RECEIVE=ok", "mq_timedreceive"),
@@ -298,6 +303,12 @@ def _mqueue_failure(output: str) -> dict[str, Any] | None:
             ("UNLINK=ok", "mq_unlink"),
             ("REOPEN_AFTER_UNLINK=ENOENT:2", "mq_open_after_unlink"),
             ("RECREATE=ok", "mq_open_recreate"),
+            (
+                "RETAINED_ATTRIBUTES_EMPTY_RECEIVE=EAGAIN:11",
+                "mq_timedreceive_retained_empty_queue",
+            ),
+            ("RETAINED_CLOSE=ok", "mq_close_retained"),
+            ("QUEUE_LINKED_AT_EXIT=yes", "queue_linked_at_exit"),
         )
         if marker in lines
     ]
@@ -624,6 +635,8 @@ def launch(
         }[_case]
         if _case.startswith("mqueue-"):
             queue_error = _mqueue_failure(result.stdout)
+            if queue_error is None and result.returncode == 124:
+                queue_error = {"stage": "guest_deadline", "errno": "NONE", "errno_number": 0}
             receipt["execution"] = {
                 "exit_code": result.returncode,
                 "duration_seconds": elapsed,
@@ -634,6 +647,8 @@ def launch(
                 "queue_syscall_error": queue_error,
             }
             if queue_error:
+                if queue_error["stage"] == "guest_deadline":
+                    raise RuntimeRefused("POSIX queue guest exceeded its bounded deadline")
                 raise RuntimeRefused(
                     "POSIX queue syscall failed at "
                     f"{queue_error['stage']}: {queue_error['errno']} "
@@ -761,6 +776,11 @@ def _mqueue_receipt(
                         "current_messages": 0,
                         "nonblocking": True,
                     },
+                    "mq_timedreceive_empty_queue": {
+                        "result": -1,
+                        "errno": "EAGAIN",
+                        "errno_number": 11,
+                    },
                     "fstat_mode": "0600",
                     "mq_open_duplicate_exclusive": {
                         "result": -1,
@@ -780,6 +800,11 @@ def _mqueue_receipt(
                     "mq_open_after_unlink": {"result": -1, "errno": "ENOENT", "errno_number": 2},
                     "mq_open_recreate": "success",
                     "retained_queue_linked_until_exit": True,
+                    "retained_queue_empty_receive": {
+                        "result": -1,
+                        "errno": "EAGAIN",
+                        "errno_number": 11,
+                    },
                     "qemu_strace_syscalls": [
                         "mq_open",
                         "mq_getsetattr",
@@ -796,6 +821,11 @@ def _mqueue_receipt(
                         "max_message_bytes": 64,
                         "current_messages": 0,
                         "nonblocking": True,
+                    },
+                    "mq_timedreceive_empty_queue": {
+                        "result": -1,
+                        "errno": "EAGAIN",
+                        "errno_number": 11,
                     },
                     "fstat_mode": "0600",
                     "mq_close": "success",
@@ -857,7 +887,12 @@ def _mqueue_receipt(
         last_execution = sessions[-1].get("execution", {}) if sessions else {}
         error = last_execution.get("queue_syscall_error")
         result["failure"] = (
-            {"category": "queue-syscall", **error}
+            {
+                "category": "queue-timeout"
+                if error.get("stage") == "guest_deadline"
+                else "queue-syscall",
+                **error,
+            }
             if isinstance(error, dict)
             else {"category": "fixed-probe-or-container-check-failed"}
         )

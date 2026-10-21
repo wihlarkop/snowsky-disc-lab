@@ -112,15 +112,18 @@ Documented stock queue attributes remain unverified; this probe makes no claim
 about stock queue names, sizes, shims, protocol or IPC compatibility. M1-04 stock
 boot remains **NOT RUN / unverified**.
 
-The first exact-head hosted execution created the synthetic queue, then stopped
-at attribute validation: `mq_getattr` returned values outside the fixed expected
-attributes, so the guest reported stage `attributes` with errno `NONE`. The
-owned container was removed successfully. Send/receive, unlink/reopen, retained
-queue lifetime and the second-session create were not established by that run.
-The follow-up parser is changed to retain only bounded numeric returned
-attributes, validated completed operations and recognized QEMU syscall names.
-That diagnostic change awaits exact-head hosted execution; raw guest output is
-never retained and the profile is unchanged.
+The exact-head hosted run on `93f9c42` created the queue, then stopped at
+attribute validation. It observed maxmsg 2, msgsize 64, curmsgs 0 and raw
+`mq_flags=2048`; the guest's numeric `O_NONBLOCK` comparison failed with errno
+`NONE`. QEMU tracing saw `mq_open`, `mq_getsetattr`, `mq_unlink` and `close`, and
+the owned container was removed successfully. Mode, payload, unlink/reopen,
+retained queue lifetime and the second-session create were not established by
+that run. The fixed guest now verifies nonblocking behavior with an empty receive
+that must return `EAGAIN`, avoiding a host-versus-target numeric flag assumption.
+The follow-up hosted execution of that change is pending. Failure receipts retain
+only bounded numeric attributes, validated completed operations and recognized
+QEMU syscall names; raw guest output is never retained and the profile is
+unchanged.
 
 ## Lifecycle, retention and receipts
 
