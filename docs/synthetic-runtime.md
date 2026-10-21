@@ -120,10 +120,15 @@ the owned container was removed successfully. Mode, payload, unlink/reopen,
 retained queue lifetime and the second-session create were not established by
 that run. The fixed guest now verifies nonblocking behavior with an empty receive
 that must return `EAGAIN`, avoiding a host-versus-target numeric flag assumption.
-The follow-up hosted execution of that change is pending. Failure receipts retain
-only bounded numeric attributes, validated completed operations and recognized
-QEMU syscall names; raw guest output is never retained and the profile is
-unchanged.
+On exact head `0d68763`, the first session passed and the second guest exited 0;
+both owned containers were removed. The overall receipt failed its fixed-output
+comparison because the second-session trace includes `mq_timedreceive` for the
+empty receive, while the expected trace omitted that name. The observed
+second-session output was 306 bytes, exactly 16 bytes longer than the previous
+290-byte expectation. The fixed trace contract now includes that call; another
+exact-head hosted acceptance is pending. Failure receipts retain only bounded
+numeric attributes, validated completed operations and recognized QEMU syscall
+names; raw guest output is never retained and the profile is unchanged.
 
 ## Lifecycle, retention and receipts
 

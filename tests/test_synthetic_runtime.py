@@ -383,6 +383,13 @@ def test_posix_mqueue_acceptance_records_two_clean_private_sessions(inputs, tmp_
         "errno": "EAGAIN",
         "errno_number": 11,
     }
+    assert receipt["observed_syscalls"]["second_session"]["qemu_strace_syscalls"] == [
+        "mq_open",
+        "mq_getsetattr",
+        "mq_timedreceive",
+        "mq_unlink",
+        "close",
+    ]
     assert receipt["session_separation"]["first_container_removed_before_second_create"]
     assert receipt["session_separation"]["second_session_same_name_o_excl_create"] == "success"
     assert receipt["cleanup"]["persistent_shared_queue"] is False

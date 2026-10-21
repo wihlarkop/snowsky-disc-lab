@@ -72,7 +72,7 @@ MQUEUE_SECOND_OUTPUT = (
     "CLOSE=ok\n"
     "UNLINK=ok\n"
     "REOPEN_AFTER_UNLINK=ENOENT:2\n"
-    "QEMU_SYSCALL_TRACE=mq_open,mq_getsetattr,mq_unlink,close\n"
+    "QEMU_SYSCALL_TRACE=mq_open,mq_getsetattr,mq_timedreceive,mq_unlink,close\n"
 )
 MQUEUE_ERROR_STAGES = frozenset(
     {
@@ -834,6 +834,7 @@ def _mqueue_receipt(
                     "qemu_strace_syscalls": [
                         "mq_open",
                         "mq_getsetattr",
+                        "mq_timedreceive",
                         "mq_unlink",
                         "close",
                     ],
