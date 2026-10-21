@@ -42,7 +42,7 @@ are not reused here. Only the existing separately reviewed build is reused.
 | `/usr/data` writable userdata | `/session-data` | One private 1 MiB tmpfs; ephemeral |
 | Temporary files, including future card paths | `/session-tmp` | One private 1 MiB tmpfs; no card or block-device model |
 | `/work/shots` and runtime diagnostics | `/session-diagnostics` | One private 1 MiB tmpfs; bounded stdout/stderr; only validated observations exported |
-| Interpreter and static guest | `/inputs` | Exact two measured regular, non-hard-linked, executable read-only files |
+| Pinned interpreter and fixed first-party guests | `/inputs` | Exact measured QEMU and guest ELF files, regular, non-hard-linked, executable and read-only; the queue guest is used only by `session` acceptance |
 | Guest `/dev`, `/proc`, `/sys` | Marker files under the synthetic input tree only | No emulated device/kernel interfaces; no extra proc, mqueue or sys mounts |
 
 The synthetic `/usr/data` and `/tmp` marker directories are descriptive inputs;
@@ -83,6 +83,35 @@ QEMU user mode uses the container/host kernel; this is not a full guest kernel o
 an independently constructed guest mount namespace. No host chroot, mount changes,
 binfmt registration, SYS_ADMIN or physical passthrough is performed.
 
+## POSIX message queue acceptance
+
+The `session` command also compiles and runs a separate fixed MIPS32LE O32 queue
+guest through the same pinned QEMU build. It uses only the synthetic name
+`/snowsky_disc_lab_mqueue_probe_v1`, `O_CREAT | O_EXCL | O_NONBLOCK | O_RDWR`,
+mode 0600, two messages and 64-byte messages. It sets no queue limit or sysctl.
+The container stays on `--ipc none`, with UID/GID 65534, no capabilities,
+no-new-privileges, read-only inputs and root, the existing private tmpfs, and the
+existing CPU, memory, process and time limits. No `/dev/mqueue` mount is added.
+
+QEMU syscall tracing must show `mq_open`, `mq_getsetattr`, `mq_timedsend`,
+`mq_timedreceive`, `mq_unlink` and `close` for the first session, plus the calls
+used by the second session. The guest verifies queue attributes and mode, the
+duplicate `EEXIST`, exact payload bytes and priority, close/unlink, and `ENOENT`
+after unlink. It then recreates the queue and exits while it remains linked. The
+owned container is terminated and removed before a second fresh container
+attempts an exclusive create of the same name. The second guest removes its queue
+and verifies `ENOENT` after unlink. Trace text stays in the bounded private
+diagnostic tmpfs; the receipt includes only the fixed observed syscall names,
+numeric errors, verified payload digest, guest-output digests, durations, session
+identities, inspected security profile and cleanup outcomes.
+
+The CI summary adds a versioned `posix_mqueue` receipt to the existing synthetic
+runtime receipt. If a syscall fails under QEMU, seccomp, the kernel or current
+queue limits, acceptance fails with only a bounded stage and numeric errno.
+Documented stock queue attributes remain unverified; this probe makes no claim
+about stock queue names, sizes, shims, protocol or IPC compatibility. M1-04 stock
+boot remains **NOT RUN / unverified**.
+
 ## Lifecycle, retention and receipts
 
 Each session reserves a fresh directory without replacement and a fresh labelled
@@ -96,7 +125,7 @@ Retention is capped at eight acceptance directories, each with at most 32 sessio
 the global cap is checked before source downloads or builds. At capacity the
 invocation refuses and asks for operator review; it never deletes older sessions.
 
-The acceptance journey runs two separate successful sessions, the expected exit-23
+The acceptance journey runs two separate successful filesystem sessions, the expected exit-23
 failure and the deliberate timeout (124). Both successful sessions must exclusively
 create the same private filename, demonstrating fresh independent tmpfs state.
 It also exercises existing-ID, traversal and symlink-ancestor refusals. Hosted
@@ -131,6 +160,6 @@ The [V2.57 capability map](v257-runtime-capability-map.md) separates these verif
 observations from upstream path, syscall and privilege requirements. Its
 [test-only boundary contract](v257-runtime-boundary-contract.json) checks existing
 container refusals; it adds no runtime inputs or execution authority. The proposed
-smallest follow-up is a bounded first-party POSIX queue probe under unchanged
-isolation, not stock integration. Lawful firmware identity/authenticity, rights
+smallest follow-up is a bounded two-process first-party queue handoff under the
+same unchanged isolation profile. Lawful firmware identity/authenticity, rights
 review and explicit firmware-backed runtime authorization remain separate gates.

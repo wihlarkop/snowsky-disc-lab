@@ -26,6 +26,86 @@ BASE_IMAGE = (
 # Measured on main fecc939, manual execution-smoke run 39464385240.
 QEMU_SHA256 = "2a58998c25a7836b910f255641a95e9d828967c75ed6b0de2e5490cb82038ddb"
 GUEST_SOURCE_SHA256 = "d00aee44bbcf9a38cbf1a710fa5187501666dd280db4a7fe62ee1c91a1b18661"
+MQUEUE_GUEST_SOURCE_SHA256 = "8ac8547a00c47ecb4b23a75af54a872f1780fab4351d00daf240a117178ae6c6"
+MQUEUE_NAME = "/snowsky_disc_lab_mqueue_probe_v1"
+MQUEUE_PAYLOAD = b"SNOWSKY_MIPS32LE_POSIX_MQ_V1"
+MQUEUE_PAYLOAD_SHA256 = "b8e0b0e98d2906e4b1d5cdaf72e10f44468760938a4c004c85fcbb7a4160e206"
+MQUEUE_PRIORITY = 7
+MQUEUE_ATTRIBUTES = {
+    "max_messages": 2,
+    "max_message_bytes": 64,
+    "current_messages": 0,
+    "open_flags": ["O_CREAT", "O_EXCL", "O_NONBLOCK", "O_RDWR"],
+    "mode": "0600",
+}
+MQUEUE_FIRST_OUTPUT = (
+    "QUEUE_PROBE=first\n"
+    f"QUEUE_NAME={MQUEUE_NAME}\n"
+    "CREATE=ok\n"
+    "ATTRIBUTES=maxmsg:2,msgsize:64,curmsgs:0,nonblock:true\n"
+    "ATTRIBUTES_MODE=0600\n"
+    "DUPLICATE_CREATE=EEXIST:17\n"
+    "SEND=ok\n"
+    "RECEIVE=ok\n"
+    f"PAYLOAD_BYTES={len(MQUEUE_PAYLOAD)}\n"
+    f"PAYLOAD_SHA256={MQUEUE_PAYLOAD_SHA256}\n"
+    f"PRIORITY={MQUEUE_PRIORITY}\n"
+    "CLOSE=ok\n"
+    "UNLINK=ok\n"
+    "REOPEN_AFTER_UNLINK=ENOENT:2\n"
+    "RECREATE=ok\n"
+    "RETAINED_ATTRIBUTES=maxmsg:2,msgsize:64,curmsgs:0,nonblock:true\n"
+    "RETAINED_ATTRIBUTES_MODE=0600\n"
+    "RETAINED_CLOSE=ok\n"
+    "QUEUE_LINKED_AT_EXIT=yes\n"
+    "QEMU_SYSCALL_TRACE=mq_open,mq_getsetattr,mq_timedsend,mq_timedreceive,mq_unlink,close\n"
+)
+MQUEUE_SECOND_OUTPUT = (
+    "QUEUE_PROBE=second\n"
+    f"QUEUE_NAME={MQUEUE_NAME}\n"
+    "CREATE=ok\n"
+    "ATTRIBUTES=maxmsg:2,msgsize:64,curmsgs:0,nonblock:true\n"
+    "ATTRIBUTES_MODE=0600\n"
+    "CLOSE=ok\n"
+    "UNLINK=ok\n"
+    "REOPEN_AFTER_UNLINK=ENOENT:2\n"
+    "QEMU_SYSCALL_TRACE=mq_open,mq_getsetattr,mq_unlink,close\n"
+)
+MQUEUE_ERROR_STAGES = frozenset(
+    {
+        "exclusive_create",
+        "mq_getattr",
+        "attributes",
+        "fstat_mode",
+        "mode",
+        "duplicate_exclusive_create",
+        "mq_send",
+        "mq_receive_verify",
+        "mq_close_initial",
+        "mq_unlink_initial",
+        "reopen_after_unlink",
+        "mq_close_retained",
+        "mq_close_second",
+        "mq_unlink_second",
+        "fixed_argument",
+    }
+)
+MQUEUE_ERRNO_NAMES = {
+    0: "NONE",
+    1: "EPERM",
+    2: "ENOENT",
+    5: "EIO",
+    9: "EBADF",
+    11: "EAGAIN",
+    12: "ENOMEM",
+    13: "EACCES",
+    17: "EEXIST",
+    22: "EINVAL",
+    23: "ENFILE",
+    24: "EMFILE",
+    28: "ENOSPC",
+    38: "ENOSYS",
+}
 LABEL = "org.snowsky-disc-lab.synthetic-session"
 TMPFS = {
     path: "rw,nosuid,nodev,noexec,size=1m,mode=0700,uid=65534,gid=65534"
@@ -49,22 +129,47 @@ COMMAND = r"""set -eu
 umask 077
 ulimit -c 0
 ulimit -f 64
-case "$1" in
- filesystem) option=--filesystem; deadline=5s ;;
- failure) option=--fail; deadline=5s ;;
- timeout) option=--timeout; deadline=2s ;;
+    case "$1" in
+ filesystem)
+   guest=/inputs/mips32le-execution-smoke.elf
+   option=--filesystem; deadline=5s; trace=0
+   ;;
+ failure) guest=/inputs/mips32le-execution-smoke.elf; option=--fail; deadline=5s; trace=0 ;;
+ timeout) guest=/inputs/mips32le-execution-smoke.elf; option=--timeout; deadline=2s; trace=0 ;;
+ mqueue-first) guest=/inputs/mips32le-posix-mqueue.elf; option=first; deadline=5s; trace=1 ;;
+ mqueue-second) guest=/inputs/mips32le-posix-mqueue.elf; option=second; deadline=5s; trace=1 ;;
  *) exit 99 ;;
 esac
 set +e
-timeout --signal=TERM --kill-after=1s "$deadline" \
- /inputs/qemu-mipsel /inputs/mips32le-execution-smoke.elf "$option" \
- > /session-diagnostics/stdout 2> /session-diagnostics/stderr
+if [ "$trace" = 1 ]; then
+  QEMU_STRACE=1 timeout --signal=TERM --kill-after=1s "$deadline" \
+    /inputs/qemu-mipsel "$guest" "$option" \
+    > /session-diagnostics/stdout 2> /session-diagnostics/stderr
+else
+  timeout --signal=TERM --kill-after=1s "$deadline" \
+    /inputs/qemu-mipsel "$guest" "$option" \
+    > /session-diagnostics/stdout 2> /session-diagnostics/stderr
+fi
 code=$?
 set -e
 # Only fixed bounded stdout is exported. Unreviewed stderr stays ephemeral.
 test "$(wc -c < /session-diagnostics/stdout)" -le 1024 || exit 98
-test ! -s /session-diagnostics/stderr || exit 97
+if [ "$trace" = 1 ]; then
+  test "$(wc -c < /session-diagnostics/stderr)" -le 8192 || exit 97
+  trace_calls=""
+  for syscall in mq_open mq_getsetattr mq_timedsend mq_timedreceive mq_unlink close; do
+    if grep -Eq " ${syscall}\\(" /session-diagnostics/stderr; then
+      if [ -n "$trace_calls" ]; then trace_calls="$trace_calls,"; fi
+      trace_calls="${trace_calls}${syscall}"
+    fi
+  done
+else
+  test ! -s /session-diagnostics/stderr || exit 97
+fi
 cat /session-diagnostics/stdout
+if [ "$trace" = 1 ]; then
+  printf 'QEMU_SYSCALL_TRACE=%s\n' "$trace_calls"
+fi
 exit "$code"
 """
 
@@ -100,12 +205,16 @@ def _verify_inputs(inputs: Path, evidence: dict[str, Any]) -> dict[str, str]:
     guest = evidence.get("synthetic_guest", {})
     if guest.get("source", {}).get("sha256") != GUEST_SOURCE_SHA256:
         raise RuntimeRefused("synthetic source identity is not the reviewed fixture")
+    queue_guest = evidence.get("synthetic_queue_guest", {})
+    if queue_guest.get("source", {}).get("sha256") != MQUEUE_GUEST_SOURCE_SHA256:
+        raise RuntimeRefused("POSIX queue source identity is not the reviewed fixture")
     qemu = [item for item in evidence.get("artifacts", []) if item.get("name") == "qemu-mipsel"]
     if len(qemu) != 1 or qemu[0].get("sha256") != QEMU_SHA256:
         raise RuntimeRefused("QEMU identity is not the reviewed interpreter")
     expected = {
         "qemu-mipsel": QEMU_SHA256,
         "mips32le-execution-smoke.elf": guest.get("elf", {}).get("sha256", ""),
+        "mips32le-posix-mqueue.elf": queue_guest.get("elf", {}).get("sha256", ""),
     }
     if not inputs.is_dir() or {entry.name for entry in inputs.iterdir()} != set(expected):
         raise RuntimeRefused("unexpected runtime inputs")
@@ -125,6 +234,32 @@ def _verify_inputs(inputs: Path, evidence: dict[str, Any]) -> dict[str, str]:
         if os.name == "posix" and (metadata.st_mode & 0o222 or not metadata.st_mode & 0o111):
             raise RuntimeRefused("runtime artifact permissions are unsafe")
     return expected
+
+
+def _mqueue_failure(output: str) -> dict[str, Any] | None:
+    """Parse only the queue fixture's tiny numeric failure protocol."""
+    encoded = output.encode("utf-8", errors="replace")
+    if len(encoded) > 1024 or not output.isascii():
+        return None
+    fields: dict[str, str] = {}
+    for line in output.splitlines():
+        key, separator, value = line.partition("=")
+        if not separator or key in fields:
+            continue
+        fields[key] = value
+    stage = fields.get("MQ_ERROR_STAGE", "")
+    name = fields.get("MQ_ERROR_NAME", "")
+    number_text = fields.get("MQ_ERROR_ERRNO", "")
+    if (
+        stage not in MQUEUE_ERROR_STAGES
+        or not re.fullmatch(r"[A-Z]{2,12}", name)
+        or not re.fullmatch(r"[0-9]{1,4}", number_text)
+    ):
+        return None
+    number = int(number_text)
+    if number > 4095 or MQUEUE_ERRNO_NAMES.get(number, "OTHER") != name:
+        return None
+    return {"stage": stage, "errno": name, "errno_number": number}
 
 
 def _verify_layout(root: Path) -> str:
@@ -349,7 +484,7 @@ def launch(
     session_id = uuid.uuid4().hex if session_id is None else session_id
     if not re.fullmatch(r"[a-z0-9][a-z0-9-]{0,47}", session_id):
         raise RuntimeRefused("unsafe session identifier")
-    if _case not in {"filesystem", "failure", "timeout"}:
+    if _case not in {"filesystem", "failure", "timeout", "mqueue-first", "mqueue-second"}:
         raise RuntimeRefused("unknown first-party synthetic case")
     identities = _verify_inputs(inputs, build_evidence)
     inputs, store = _safe_path(inputs), _safe_path(store)
@@ -374,6 +509,7 @@ def launch(
         "case": _case,
         "identities": identities,
         "guest_source_sha256": GUEST_SOURCE_SHA256,
+        "queue_guest_source_sha256": MQUEUE_GUEST_SOURCE_SHA256,
         "lifecycle": ["reserved"],
         "cleanup": {"container_removed": False},
         "unsupported_or_unverified": [
@@ -421,12 +557,37 @@ def launch(
         elapsed = round(time.monotonic() - started, 3)
         final = _inspect(container_id)
         state = final.get("State", {})
-        expected_code = {"filesystem": 0, "failure": 23, "timeout": 124}[_case]
+        expected_code = {
+            "filesystem": 0,
+            "failure": 23,
+            "timeout": 124,
+            "mqueue-first": 0,
+            "mqueue-second": 0,
+        }[_case]
         expected_output = {
             "filesystem": EXPECTED_OUTPUT,
             "failure": "SNOWSKY_MIPS32LE_EXPECTED_FAILURE\n",
             "timeout": "",
+            "mqueue-first": MQUEUE_FIRST_OUTPUT,
+            "mqueue-second": MQUEUE_SECOND_OUTPUT,
         }[_case]
+        if _case.startswith("mqueue-"):
+            queue_error = _mqueue_failure(result.stdout)
+            receipt["execution"] = {
+                "exit_code": result.returncode,
+                "duration_seconds": elapsed,
+                "stdout_sha256": hashlib.sha256(result.stdout.encode()).hexdigest(),
+                "stdout_bytes": len(result.stdout.encode()),
+                "timed_out": result.returncode == 124,
+                "terminated": state.get("Running") is False,
+                "queue_syscall_error": queue_error,
+            }
+            if queue_error:
+                raise RuntimeRefused(
+                    "POSIX queue syscall failed at "
+                    f"{queue_error['stage']}: {queue_error['errno']} "
+                    f"({queue_error['errno_number']})"
+                )
         if (
             not _owned(final, token)
             or state.get("Running") is not False
@@ -436,25 +597,26 @@ def launch(
             or result.stdout != expected_output
         ):
             raise RuntimeRefused("guest output, exit or termination differs from the fixed case")
-        receipt["execution"] = {
-            "exit_code": result.returncode,
-            "duration_seconds": elapsed,
-            "stdout_sha256": hashlib.sha256(result.stdout.encode()).hexdigest(),
-            "stdout_bytes": len(result.stdout.encode()),
-            "timed_out": _case == "timeout",
-            "terminated": True,
-            "observations": {
-                "input_read": "ok",
-                "readonly_write_errno": 30,
-                "private_create_read": "ok",
-                "temporary_create_read": "ok",
-                "outside_write_errno": 30,
-                "host_path_errno": 2,
-                "fresh_session": "ok",
+        if not _case.startswith("mqueue-"):
+            receipt["execution"] = {
+                "exit_code": result.returncode,
+                "duration_seconds": elapsed,
+                "stdout_sha256": hashlib.sha256(result.stdout.encode()).hexdigest(),
+                "stdout_bytes": len(result.stdout.encode()),
+                "timed_out": _case == "timeout",
+                "terminated": True,
+                "observations": {
+                    "input_read": "ok",
+                    "readonly_write_errno": 30,
+                    "private_create_read": "ok",
+                    "temporary_create_read": "ok",
+                    "outside_write_errno": 30,
+                    "host_path_errno": 2,
+                    "fresh_session": "ok",
+                }
+                if _case == "filesystem"
+                else {},
             }
-            if _case == "filesystem"
-            else {},
-        }
         receipt["lifecycle"].append("exited")
         receipt["status"] = "passed"
     except (RuntimeRefused, OSError, subprocess.SubprocessError, ValueError) as exc:
@@ -486,6 +648,205 @@ def launch(
         error = RuntimeRefused(failure)
         error.receipt = receipt
         raise error
+    return receipt
+
+
+def _mqueue_session_summary(session: dict[str, Any]) -> dict[str, Any]:
+    return {
+        key: session[key]
+        for key in (
+            "session_id",
+            "session_identity",
+            "case",
+            "status",
+            "lifecycle",
+            "execution",
+            "isolation",
+            "cleanup",
+        )
+        if key in session
+    }
+
+
+def _mqueue_receipt(
+    evidence: dict[str, Any], sessions: list[dict[str, Any]], *, status: str
+) -> dict[str, Any]:
+    queue_guest = evidence.get("synthetic_queue_guest", {})
+    identities = sessions[0].get("identities", {}) if sessions else {}
+    first, second = (sessions + [{}, {}])[:2]
+    second_execution = second.get("execution", {})
+    first_cleanup = first.get("cleanup", {})
+    second_cleanup = second.get("cleanup", {})
+    same_name_separated = (
+        first_cleanup.get("container_removed") is True
+        and second.get("case") == "mqueue-second"
+        and second_execution.get("exit_code") == 0
+        and second.get("status") == "passed"
+    )
+    result: dict[str, Any] = {
+        "schema_version": "firmware-free-mips32le-posix-mqueue-acceptance/v1",
+        "status": status,
+        "scope": "first-party synthetic POSIX message queue syscall acceptance",
+        "queue": {
+            "name": MQUEUE_NAME,
+            "attributes": dict(MQUEUE_ATTRIBUTES),
+            "payload_bytes": len(MQUEUE_PAYLOAD),
+            "payload_sha256": MQUEUE_PAYLOAD_SHA256,
+            "priority": MQUEUE_PRIORITY,
+        },
+        "identities": {
+            "qemu_mipsel_sha256": identities.get("qemu-mipsel"),
+            "queue_guest_source_sha256": queue_guest.get("source", {}).get("sha256"),
+            "queue_guest_elf_sha256": queue_guest.get("elf", {}).get("sha256"),
+        },
+        "sessions": [_mqueue_session_summary(session) for session in sessions],
+        "observed_syscalls": (
+            {
+                "first_session": {
+                    "mq_open_exclusive_create": "success",
+                    "mq_getattr": {
+                        "max_messages": 2,
+                        "max_message_bytes": 64,
+                        "current_messages": 0,
+                        "nonblocking": True,
+                    },
+                    "fstat_mode": "0600",
+                    "mq_open_duplicate_exclusive": {
+                        "result": -1,
+                        "errno": "EEXIST",
+                        "errno_number": 17,
+                    },
+                    "mq_timedsend": "success",
+                    "mq_timedreceive": {
+                        "result": "success",
+                        "payload_matches": True,
+                        "payload_bytes": len(MQUEUE_PAYLOAD),
+                        "payload_sha256": MQUEUE_PAYLOAD_SHA256,
+                        "priority": MQUEUE_PRIORITY,
+                    },
+                    "mq_close": "success",
+                    "mq_unlink": "success",
+                    "mq_open_after_unlink": {"result": -1, "errno": "ENOENT", "errno_number": 2},
+                    "mq_open_recreate": "success",
+                    "retained_queue_linked_until_exit": True,
+                    "qemu_strace_syscalls": [
+                        "mq_open",
+                        "mq_getsetattr",
+                        "mq_timedsend",
+                        "mq_timedreceive",
+                        "mq_unlink",
+                        "close",
+                    ],
+                },
+                "second_session": {
+                    "mq_open_exclusive_create": "success",
+                    "mq_getattr": {
+                        "max_messages": 2,
+                        "max_message_bytes": 64,
+                        "current_messages": 0,
+                        "nonblocking": True,
+                    },
+                    "fstat_mode": "0600",
+                    "mq_close": "success",
+                    "mq_unlink": "success",
+                    "mq_open_after_unlink": {"result": -1, "errno": "ENOENT", "errno_number": 2},
+                    "qemu_strace_syscalls": [
+                        "mq_open",
+                        "mq_getsetattr",
+                        "mq_unlink",
+                        "close",
+                    ],
+                },
+            }
+            if status == "passed"
+            else {"complete_observation": False}
+        ),
+        "session_separation": {
+            "first_container_removed_before_second_create": first_cleanup.get("container_removed")
+            is True,
+            "distinct_session_identities": bool(
+                first.get("session_identity")
+                and second.get("session_identity")
+                and first.get("session_identity") != second.get("session_identity")
+            ),
+            "second_session_same_name_o_excl_create": (
+                "success" if same_name_separated else "not-established"
+            ),
+        },
+        "isolation": {
+            "container_profiles": [
+                session.get("isolation") for session in sessions if session.get("isolation")
+            ],
+            "mqueue_filesystem_mount_added": False,
+        },
+        "stock_compatibility": {
+            "stock_v257_queue_attributes": "DOCUMENTED_ONLY_UNVERIFIED",
+            "stock_ipc_compatibility": "UNVERIFIED",
+            "m1_04_stock_boot": "NOT RUN",
+        },
+    }
+    if status == "passed":
+        result["outputs"] = [
+            {
+                "session_identity": session.get("session_identity"),
+                "bytes": session.get("execution", {}).get("stdout_bytes"),
+                "sha256": session.get("execution", {}).get("stdout_sha256"),
+                "duration_seconds": session.get("execution", {}).get("duration_seconds"),
+            }
+            for session in sessions
+        ]
+        result["cleanup"] = {
+            "first_container_removed": first_cleanup.get("container_removed") is True,
+            "first_private_tmpfs_released": first_cleanup.get("private_tmpfs_released") is True,
+            "second_container_removed": second_cleanup.get("container_removed") is True,
+            "second_private_tmpfs_released": second_cleanup.get("private_tmpfs_released") is True,
+            "persistent_shared_queue": False,
+        }
+    else:
+        last_execution = sessions[-1].get("execution", {}) if sessions else {}
+        error = last_execution.get("queue_syscall_error")
+        result["failure"] = (
+            {"category": "queue-syscall", **error}
+            if isinstance(error, dict)
+            else {"category": "fixed-probe-or-container-check-failed"}
+        )
+    return result
+
+
+def _persist_mqueue_receipt(store: Path, receipt: dict[str, Any]) -> None:
+    path = store / "posix-mqueue-acceptance.json"
+    with path.open("x", encoding="utf-8") as stream:
+        json.dump(receipt, stream, sort_keys=True, indent=2)
+        stream.write("\n")
+
+
+def posix_mqueue_acceptance(inputs: Path, evidence: dict[str, Any], store: Path) -> dict[str, Any]:
+    """Run two serial, owned sessions using only the fixed queue guest cases."""
+    sessions: list[dict[str, Any]] = []
+    try:
+        first = launch(inputs, evidence, store, session_id="mqueue-first", _case="mqueue-first")
+        sessions.append(first)
+        if first.get("cleanup", {}).get("container_removed") is not True:
+            raise RuntimeRefused("first queue container was not removed before session two")
+        second = launch(inputs, evidence, store, session_id="mqueue-second", _case="mqueue-second")
+        sessions.append(second)
+        if first.get("session_identity") == second.get("session_identity"):
+            raise RuntimeRefused("queue sessions did not receive separate identities")
+        receipt = _mqueue_receipt(evidence, sessions, status="passed")
+        if not all(
+            item.get("container_removed") is True and item.get("private_tmpfs_released") is True
+            for item in (first.get("cleanup", {}), second.get("cleanup", {}))
+        ):
+            raise RuntimeRefused("queue acceptance container cleanup was incomplete")
+    except RuntimeRefused as exc:
+        if exc.receipt is not None:
+            sessions.append(exc.receipt)
+        receipt = _mqueue_receipt(evidence, sessions, status="failed")
+        _persist_mqueue_receipt(store, receipt)
+        error = RuntimeRefused("POSIX message queue acceptance failed")
+        error.receipt = receipt
+        raise error from exc
+    _persist_mqueue_receipt(store, receipt)
     return receipt
 
 
@@ -522,6 +883,7 @@ def acceptance(inputs: Path, evidence: dict[str, Any], store: Path) -> dict[str,
     sessions = [first, launch(inputs, evidence, store, session_id="second")]
     for case in ("failure", "timeout"):
         sessions.append(launch(inputs, evidence, store, session_id=case, _case=case))
+    mqueue_receipt = posix_mqueue_acceptance(inputs, evidence, store)
     return {
         "schema_version": "firmware-free-synthetic-runtime-acceptance/v1",
         "status": "passed",
@@ -548,5 +910,6 @@ def acceptance(inputs: Path, evidence: dict[str, Any], store: Path) -> dict[str,
         "session_isolation": (
             "independent inspected containers and tmpfs; both O_EXCL probes passed"
         ),
+        "posix_mqueue": mqueue_receipt,
         "unsupported_or_unverified": first["unsupported_or_unverified"],
     }
