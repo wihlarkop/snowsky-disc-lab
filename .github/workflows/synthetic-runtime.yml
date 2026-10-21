@@ -8,6 +8,7 @@ on:
       - .github/workflows/synthetic-runtime.yml
       - scripts/ci/qemu_runtime_build.py
       - scripts/ci/fixtures/mips32le_execution_smoke.c
+      - scripts/ci/fixtures/mips32le_posix_mqueue.c
       - src/snowsky_disc_lab/synthetic_runtime.py
       - tests/test_synthetic_runtime.py
       - docs/m1-01-runtime-preparation.json
@@ -21,7 +22,7 @@ jobs:
       (github.event_name == 'pull_request' &&
        github.repository == 'wihlarkop/snowsky-disc-lab' &&
        github.event.pull_request.head.repo.full_name == 'wihlarkop/snowsky-disc-lab' &&
-       github.event.pull_request.head.ref == 'codex/synthetic-runtime-session') ||
+       github.event.pull_request.head.ref == 'codex/mips32le-posix-mqueue') ||
       (github.event_name == 'workflow_dispatch' &&
        github.repository == 'wihlarkop/snowsky-disc-lab' &&
        github.ref == 'refs/heads/main')

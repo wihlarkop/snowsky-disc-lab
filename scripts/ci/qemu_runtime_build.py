@@ -140,6 +140,11 @@ AUDIT_LOG_FILES += (
 AUDIT_LOG_FILES += (
     ("/audit/synthetic-guest-build.log", "synthetic-guest-build.log"),
     ("/audit/synthetic-guest-evidence.log", "synthetic-guest-evidence.log"),
+    ("/audit/synthetic-mqueue-guest-build.log", "synthetic-mqueue-guest-build.log"),
+    (
+        "/audit/synthetic-mqueue-guest-evidence.log",
+        "synthetic-mqueue-guest-evidence.log",
+    ),
     ("/audit/execution-input-staging.log", "execution-input-staging.log"),
 )
 FAKEROOT_BOOTSTRAP_PACKAGES = ("fakeroot", "libfakeroot")
@@ -180,10 +185,20 @@ BUILD_EVIDENCE_FILES = (("/audit/build-evidence.json", "build-evidence.json"),)
 SMOKE_GUEST_EVIDENCE_FILES = (
     ("/audit/synthetic-guest-evidence.json", "synthetic-guest-evidence.json"),
 )
+MQUEUE_GUEST_EVIDENCE_FILES = (
+    (
+        "/audit/synthetic-mqueue-guest-evidence.json",
+        "synthetic-mqueue-guest-evidence.json",
+    ),
+)
 BUILD_EVIDENCE_MAX_BYTES = 1024 * 1024
 SMOKE_GUEST_SOURCE = "scripts/ci/fixtures/mips32le_execution_smoke.c"
 SMOKE_GUEST_SOURCE_PATH = ROOT / SMOKE_GUEST_SOURCE
 SMOKE_GUEST_ELF_PATH = "/build/smoke/mips32le-execution-smoke.elf"
+MQUEUE_GUEST_SOURCE = "scripts/ci/fixtures/mips32le_posix_mqueue.c"
+MQUEUE_GUEST_SOURCE_PATH = ROOT / MQUEUE_GUEST_SOURCE
+MQUEUE_GUEST_ELF_PATH = "/build/smoke/mips32le-posix-mqueue.elf"
+MQUEUE_GUEST_SOURCE_SHA256 = "459656e8b14e24c2ab1f2ab97d2219c978b290203168d20e6c8a8554c0ae6795"
 SMOKE_GUEST_TIMEOUT_SECONDS = 2
 SMOKE_EXECUTION_OUTER_TIMEOUT_SECONDS = 30
 EXECUTION_DIAGNOSTIC_MAX_CHARS = 768
@@ -208,6 +223,7 @@ AUDIT_FILE_MAX_BYTES = {
     "copying-hashes.txt": 128 * 1024,
     "build-evidence.json": BUILD_EVIDENCE_MAX_BYTES,
     "synthetic-guest-evidence.json": 16 * 1024,
+    "synthetic-mqueue-guest-evidence.json": 16 * 1024,
     **{name: 1024 * 1024 for _, name in AUDIT_LOG_FILES},
 }
 
@@ -862,7 +878,10 @@ def prepare_build_inputs(
     source_hashes: dict[str, str],
     *,
     include_smoke_guest: bool = False,
+    include_mqueue_guest: bool = False,
 ) -> str:
+    if include_mqueue_guest and not include_smoke_guest:
+        raise StopBuild("POSIX queue guest requires the fixed execution smoke build")
     source_paths = {
         "LICENSE": upstream / "LICENSE",
         "emulator/docker/Dockerfile": upstream / "emulator/docker/Dockerfile",
@@ -925,6 +944,20 @@ def prepare_build_inputs(
         if digest(guest_source_target) != guest_source_hash:
             raise StopBuild("copied first-party synthetic MIPS guest source changed")
         expected_hashes["lab/fixtures/mips32le_execution_smoke.c"] = guest_source_hash
+
+    if include_mqueue_guest:
+        if (
+            MQUEUE_GUEST_SOURCE_PATH.is_symlink()
+            or not MQUEUE_GUEST_SOURCE_PATH.is_file()
+            or MQUEUE_GUEST_SOURCE_PATH.stat().st_size > 16 * 1024
+            or digest(MQUEUE_GUEST_SOURCE_PATH) != MQUEUE_GUEST_SOURCE_SHA256
+        ):
+            raise StopBuild("first-party POSIX queue guest source identity is invalid")
+        queue_source_target = destination / "lab" / "fixtures" / "mips32le_posix_mqueue.c"
+        shutil.copyfile(MQUEUE_GUEST_SOURCE_PATH, queue_source_target)
+        if digest(queue_source_target) != MQUEUE_GUEST_SOURCE_SHA256:
+            raise StopBuild("copied first-party POSIX queue guest source changed")
+        expected_hashes["lab/fixtures/mips32le_posix_mqueue.c"] = MQUEUE_GUEST_SOURCE_SHA256
 
     helper = ROOT / "scripts" / "ci" / "qemu_runtime_build.py"
     if helper.is_symlink() or not helper.is_file():
@@ -1556,7 +1589,12 @@ def build_execution_smoke_receipt(
     }
 
 
-def build_container_command(reference: dict[str, Any], *, include_smoke_guest: bool = False) -> str:
+def build_container_command(
+    reference: dict[str, Any],
+    *,
+    include_smoke_guest: bool = False,
+    include_mqueue_guest: bool = False,
+) -> str:
     inputs = reference["buildInputs"]
     native_packages = tuple(inputs["nativeBuildPackageRequests"])
     cross_packages = tuple(inputs["shimToolchain"]["packages"])
@@ -1569,6 +1607,9 @@ def build_container_command(reference: dict[str, Any], *, include_smoke_guest: b
     package_args = " ".join(shlex.quote(item) for item in (*native_packages, *cross_packages))
     configure_args = " ".join(shlex.quote(item) for item in configure_flags)
     smoke_guest_steps = ""
+    mqueue_guest_steps = ""
+    if include_mqueue_guest and not include_smoke_guest:
+        raise StopBuild("POSIX queue guest requires the fixed execution smoke build")
     if include_smoke_guest:
         smoke_guest_steps = r"""
 install -d -m 0700 /build/smoke
@@ -1593,6 +1634,24 @@ mark_phase synthetic-guest-artifact-staging /audit/execution-input-staging.log
   test -s /audit/execution-inputs/qemu-mipsel
   test -s /audit/execution-inputs/mips32le-execution-smoke.elf
 } >/audit/execution-input-staging.log 2>&1
+"""
+    if include_mqueue_guest:
+        mqueue_guest_steps = r"""
+mark_phase synthetic-mqueue-guest-build /audit/synthetic-mqueue-guest-build.log
+mipsel-linux-gnu-gcc -static -march=mips32 -mabi=32 -EL -O2 -fno-pie -no-pie \
+  -Wl,--build-id=none -o /build/smoke/mips32le-posix-mqueue.elf \
+  /inputs/lab/fixtures/mips32le_posix_mqueue.c -lrt \
+  >/audit/synthetic-mqueue-guest-build.log 2>&1
+mark_phase synthetic-mqueue-guest-evidence /audit/synthetic-mqueue-guest-evidence.log
+python3 /inputs/lab/qemu_runtime_build.py measure-posix-mqueue-guest \
+  >/audit/synthetic-mqueue-guest-evidence.log 2>&1
+{
+  install -m 0555 /build/smoke/mips32le-posix-mqueue.elf \
+    /audit/execution-inputs/mips32le-posix-mqueue.elf
+  cmp -s /build/smoke/mips32le-posix-mqueue.elf \
+    /audit/execution-inputs/mips32le-posix-mqueue.elf
+  test -s /audit/execution-inputs/mips32le-posix-mqueue.elf
+} >>/audit/execution-input-staging.log 2>&1
 """
     archive_checks = "\n".join(
         f"printf '%s  %s\\n' '{sha256}' '/inputs/qemu/{name}' | sha256sum --check --status"
@@ -1760,6 +1819,7 @@ mark_phase mips-shim-build /audit/shim-build.log
 WORK=/build/shims bash /inputs/upstream/emulator/shims/build_shims.sh \
   >/audit/shim-build.log 2>&1
 __SMOKE_GUEST_STEPS__
+__MQUEUE_GUEST_STEPS__
 mark_phase build-evidence-collection ""
 python3 /inputs/lab/qemu_runtime_build.py measure
 """
@@ -1770,6 +1830,7 @@ python3 /inputs/lab/qemu_runtime_build.py measure
         .replace("__DEBIAN_SIGNATURE_ALLOWLIST__", signature_case)
         .replace("__CONFIGURE_ARGS__", configure_args)
         .replace("__SMOKE_GUEST_STEPS__", smoke_guest_steps)
+        .replace("__MQUEUE_GUEST_STEPS__", mqueue_guest_steps)
     )
 
 
@@ -1878,8 +1939,15 @@ def run_build_container(
     *,
     timeout_seconds: int = 2100,
     smoke_inputs_dir: Path | None = None,
+    include_mqueue_guest: bool = False,
 ) -> dict[str, Any]:
-    command = build_container_command(reference, include_smoke_guest=smoke_inputs_dir is not None)
+    if include_mqueue_guest and smoke_inputs_dir is None:
+        raise StopBuild("POSIX queue guest requires execution input staging")
+    command = build_container_command(
+        reference,
+        include_smoke_guest=smoke_inputs_dir is not None,
+        include_mqueue_guest=include_mqueue_guest,
+    )
     container_name = f"qemu-runtime-build-{uuid.uuid4().hex[:16]}"
     create_attempted = False
     container_created = False
@@ -1984,6 +2052,49 @@ def run_build_container(
             )
             smoke_inputs_dir.chmod(0o711)
             evidence["synthetic_guest"] = guest_receipt
+            if include_mqueue_guest:
+                copy_audit_files(
+                    container_name,
+                    report_path.parent,
+                    MQUEUE_GUEST_EVIDENCE_FILES,
+                    required=True,
+                )
+                queue_receipt_path = report_path.parent / "synthetic-mqueue-guest-evidence.json"
+                try:
+                    queue_receipt = json.loads(queue_receipt_path.read_text(encoding="utf-8"))
+                except (OSError, json.JSONDecodeError) as exc:
+                    raise StopBuild("synthetic POSIX queue guest evidence is malformed") from exc
+                if (
+                    not isinstance(queue_receipt, dict)
+                    or queue_receipt.get("schema_version")
+                    != "firmware-free-mips32le-posix-mqueue-guest/v1"
+                    or queue_receipt.get("status") != "synthetic-static-guest-built"
+                    or queue_receipt.get("source", {}).get("sha256") != MQUEUE_GUEST_SOURCE_SHA256
+                ):
+                    raise StopBuild(
+                        "synthetic POSIX queue guest build evidence does not match its source"
+                    )
+                queue_elf = queue_receipt.get("elf", {})
+                if (
+                    not isinstance(queue_elf, dict)
+                    or queue_elf.get("elf_class") != "ELF32"
+                    or queue_elf.get("elf_data") != "little endian"
+                    or not isinstance(queue_elf.get("machine"), str)
+                    or not queue_elf["machine"].startswith("MIPS")
+                    or queue_elf.get("abi") != "o32"
+                    or queue_elf.get("isa") not in {"mips32", "mips32r2"}
+                    or queue_elf.get("has_interpreter") is not False
+                ):
+                    raise StopBuild("synthetic POSIX queue guest ELF is not static MIPS32LE O32")
+                copy_execution_binary(
+                    container_name,
+                    "/audit/execution-inputs/mips32le-posix-mqueue.elf",
+                    smoke_inputs_dir / "mips32le-posix-mqueue.elf",
+                    str(queue_elf.get("sha256", "")),
+                    16 * 1024 * 1024,
+                    executable=True,
+                )
+                evidence["synthetic_queue_guest"] = queue_receipt
         return evidence
     finally:
         if create_attempted:
@@ -2140,6 +2251,30 @@ def measure_smoke_guest() -> None:
         "elf": synthetic_guest_elf_evidence(guest),
     }
     output = Path("/audit/synthetic-guest-evidence.json")
+    output.write_text(json.dumps(evidence, sort_keys=True, indent=2) + "\n", encoding="utf-8")
+
+
+def measure_posix_mqueue_guest() -> None:
+    source = Path("/inputs/lab/fixtures/mips32le_posix_mqueue.c")
+    if (
+        source.is_symlink()
+        or not source.is_file()
+        or source.stat().st_size > 16 * 1024
+        or digest(source) != MQUEUE_GUEST_SOURCE_SHA256
+    ):
+        raise StopBuild("first-party POSIX queue guest source is missing or changed")
+    guest = Path(MQUEUE_GUEST_ELF_PATH)
+    evidence = {
+        "schema_version": "firmware-free-mips32le-posix-mqueue-guest/v1",
+        "status": "synthetic-static-guest-built",
+        "source": {
+            "path": MQUEUE_GUEST_SOURCE,
+            "bytes": source.stat().st_size,
+            "sha256": digest(source),
+        },
+        "elf": synthetic_guest_elf_evidence(guest),
+    }
+    output = Path("/audit/synthetic-mqueue-guest-evidence.json")
     output.write_text(json.dumps(evidence, sort_keys=True, indent=2) + "\n", encoding="utf-8")
 
 
@@ -2504,6 +2639,7 @@ def build(*, execution_smoke: bool = False, synthetic_session: bool = False) -> 
             inputs_dir,
             source_hashes,
             include_smoke_guest=execution_smoke,
+            include_mqueue_guest=synthetic_session,
         )
         build_started = time.monotonic()
         smoke_inputs_dir = workdir / "execution-inputs" if execution_smoke else None
@@ -2514,6 +2650,7 @@ def build(*, execution_smoke: bool = False, synthetic_session: bool = False) -> 
             workdir / "build-evidence.json",
             reference,
             smoke_inputs_dir=smoke_inputs_dir,
+            include_mqueue_guest=synthetic_session,
         )
         first_elapsed = round(time.monotonic() - build_started, 1)
         if first.get("debian_archive_keyring_sha256") != debian.get(
@@ -2701,10 +2838,11 @@ def main() -> int:
         "session",
         "measure",
         "measure-smoke-guest",
+        "measure-posix-mqueue-guest",
     }:
         print(
             "usage: qemu_runtime_build.py "
-            "{preflight|build|smoke|session|measure|measure-smoke-guest}",
+            "{preflight|build|smoke|session|measure|measure-smoke-guest|measure-posix-mqueue-guest}",
             file=sys.stderr,
         )
         return 2
@@ -2719,6 +2857,8 @@ def main() -> int:
             build(synthetic_session=True)
         elif sys.argv[1] == "measure-smoke-guest":
             measure_smoke_guest()
+        elif sys.argv[1] == "measure-posix-mqueue-guest":
+            measure_posix_mqueue_guest()
         else:
             measure_build_evidence()
     except (StopBuild, OSError, subprocess.SubprocessError, json.JSONDecodeError) as exc:

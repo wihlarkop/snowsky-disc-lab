@@ -322,6 +322,9 @@ def test_only_execution_build_compiles_the_first_party_guest() -> None:
 
     ordinary = qemu_runtime_build.build_container_command(reference)
     smoke = qemu_runtime_build.build_container_command(reference, include_smoke_guest=True)
+    session = qemu_runtime_build.build_container_command(
+        reference, include_smoke_guest=True, include_mqueue_guest=True
+    )
 
     assert "mipsel-linux-gnu-gcc -static -march=mips32 -mabi=32 -EL" not in ordinary
     assert "mipsel-linux-gnu-gcc -static -march=mips32 -mabi=32 -EL" in smoke
@@ -331,6 +334,14 @@ def test_only_execution_build_compiles_the_first_party_guest() -> None:
     assert "mark_phase synthetic-guest-artifact-staging" in smoke
     assert "/audit/execution-inputs/qemu-mipsel" in smoke
     assert "/audit/execution-inputs/mips32le-execution-smoke.elf" in smoke
+    assert "mips32le_posix_mqueue.c" not in ordinary
+    assert "mips32le_posix_mqueue.c" not in smoke
+    assert "mipsel-linux-gnu-gcc -static -march=mips32 -mabi=32 -EL" in session
+    assert "/inputs/lab/fixtures/mips32le_posix_mqueue.c -lrt" in session
+    assert "measure-posix-mqueue-guest" in session
+    assert "/audit/execution-inputs/mips32le-posix-mqueue.elf" in session
+    with pytest.raises(qemu_runtime_build.StopBuild, match="requires"):
+        qemu_runtime_build.build_container_command(reference, include_mqueue_guest=True)
 
 
 def test_synthetic_guest_elf_requires_static_mips32le_o32(monkeypatch, tmp_path: Path) -> None:
@@ -741,6 +752,7 @@ def test_build_container_stages_synthetic_guest_as_read_only_executable(
 ) -> None:
     qemu_bytes = b"synthetic qemu"
     guest_bytes = b"synthetic mips elf"
+    queue_guest_bytes = b"synthetic mips queue elf"
     qemu_artifact = {
         "name": "qemu-mipsel",
         "bytes": len(qemu_bytes),
@@ -779,16 +791,33 @@ def test_build_container_stages_synthetic_guest_as_read_only_executable(
             "has_interpreter": False,
         },
     }
+    queue_guest_evidence = {
+        "schema_version": "firmware-free-mips32le-posix-mqueue-guest/v1",
+        "status": "synthetic-static-guest-built",
+        "source": {"sha256": qemu_runtime_build.MQUEUE_GUEST_SOURCE_SHA256},
+        "elf": {
+            "bytes": len(queue_guest_bytes),
+            "sha256": qemu_runtime_build.hashlib.sha256(queue_guest_bytes).hexdigest(),
+            "elf_class": "ELF32",
+            "elf_data": "little endian",
+            "machine": "MIPS R3000",
+            "abi": "o32",
+            "isa": "mips32",
+            "has_interpreter": False,
+        },
+    }
     build_evidence = {
         "schema_version": "firmware-free-qemu-runtime-build/v1",
         "status": "build-passed-binaries-ephemeral",
         "artifacts": [qemu_artifact, *shims],
         "synthetic_guest": guest_evidence,
+        "synthetic_queue_guest": queue_guest_evidence,
         "retention": {"compiled_binaries_published": False},
     }
     binaries = {
         "/audit/execution-inputs/qemu-mipsel": qemu_bytes,
         "/audit/execution-inputs/mips32le-execution-smoke.elf": guest_bytes,
+        "/audit/execution-inputs/mips32le-posix-mqueue.elf": queue_guest_bytes,
     }
 
     def fake_run(args: list[str], **_kwargs: object) -> subprocess.CompletedProcess[str]:
@@ -800,6 +829,8 @@ def test_build_container_stages_synthetic_guest_as_read_only_executable(
                 target.write_text(json.dumps(build_evidence), encoding="utf-8")
             elif source == "/audit/synthetic-guest-evidence.json":
                 target.write_text(json.dumps(guest_evidence), encoding="utf-8")
+            elif source == "/audit/synthetic-mqueue-guest-evidence.json":
+                target.write_text(json.dumps(queue_guest_evidence), encoding="utf-8")
             else:
                 target.write_bytes(binaries[source])
         return subprocess.CompletedProcess(args, 0, stdout="")
@@ -838,13 +869,16 @@ def test_build_container_stages_synthetic_guest_as_read_only_executable(
         tmp_path / "report" / "build-evidence.json",
         qemu_runtime_build.read_reference(),
         smoke_inputs_dir=smoke_inputs,
+        include_mqueue_guest=True,
     )
 
     assert copy_modes == [
         ("/audit/execution-inputs/qemu-mipsel", True),
         ("/audit/execution-inputs/mips32le-execution-smoke.elf", True),
+        ("/audit/execution-inputs/mips32le-posix-mqueue.elf", True),
     ]
     assert (smoke_inputs / "mips32le-execution-smoke.elf").read_bytes() == guest_bytes
+    assert (smoke_inputs / "mips32le-posix-mqueue.elf").read_bytes() == queue_guest_bytes
 
 
 def test_failed_build_reports_bounded_container_logs_before_cleanup(
