@@ -610,6 +610,19 @@ def test_parse_current_main_ipc_handoff_receipt_and_marks_evidence_as_declared()
     }
 
 
+def test_qemu_envelope_accepts_current_main_ipc_handoff_receipt() -> None:
+    receipt = _qemu_receipt(repeat_status="not-run")
+    receipt["synthetic_runtime"] = _ipc_handoff_receipt()
+
+    report = parse_receipt(json.dumps(receipt), source="qemu-ipc-summary.json")
+
+    assert report["build_source"] == receipt["source_identity"]
+    assert report["synthetic_ipc_handoff"]["status"] == "PASS"
+    assert report["scenarios"]["synthetic-ipc-handoff"]["status"] == "PASS"
+    assert report["scenarios"]["stock-v257-boot"]["status"] == "NOT RUN"
+    assert report["scenarios"]["stock-ipc-compatibility"]["status"] == "NOT RUN"
+
+
 def _failed_ipc_handoff_receipt(*, cleanup_failed: bool) -> dict[str, Any]:
     receipt = _ipc_handoff_receipt()
     receipt["status"] = "failed"
