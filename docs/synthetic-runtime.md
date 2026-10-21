@@ -112,23 +112,16 @@ Documented stock queue attributes remain unverified; this probe makes no claim
 about stock queue names, sizes, shims, protocol or IPC compatibility. M1-04 stock
 boot remains **NOT RUN / unverified**.
 
-The exact-head hosted run on `93f9c42` created the queue, then stopped at
-attribute validation. It observed maxmsg 2, msgsize 64, curmsgs 0 and raw
-`mq_flags=2048`; the guest's numeric `O_NONBLOCK` comparison failed with errno
-`NONE`. QEMU tracing saw `mq_open`, `mq_getsetattr`, `mq_unlink` and `close`, and
-the owned container was removed successfully. Mode, payload, unlink/reopen,
-retained queue lifetime and the second-session create were not established by
-that run. The fixed guest now verifies nonblocking behavior with an empty receive
-that must return `EAGAIN`, avoiding a host-versus-target numeric flag assumption.
-On exact head `0d68763`, the first session passed and the second guest exited 0;
-both owned containers were removed. The overall receipt failed its fixed-output
-comparison because the second-session trace includes `mq_timedreceive` for the
-empty receive, while the expected trace omitted that name. The observed
-second-session output was 306 bytes, exactly 16 bytes longer than the previous
-290-byte expectation. The fixed trace contract now includes that call; another
-exact-head hosted acceptance is pending. Failure receipts retain only bounded
-numeric attributes, validated completed operations and recognized QEMU syscall
-names; raw guest output is never retained and the profile is unchanged.
+An initial hosted probe observed raw `mq_flags=2048`, which did not match the
+guest's numeric `O_NONBLOCK` constant even though maxmsg 2, msgsize 64 and
+curmsgs 0 matched. The fixed guest now verifies nonblocking behavior directly:
+an empty receive must return `EAGAIN`, avoiding a host-versus-target numeric flag
+assumption.
+
+The complete hosted acceptance passed on implementation head
+`cd6d40a2ae242976ba8f1872b127ed7da14cf250` ([synthetic runtime run](https://github.com/wihlarkop/snowsky-disc-lab/actions/runs/39656237048)); exact-head M0 also passed all four jobs ([M0 run](https://github.com/wihlarkop/snowsky-disc-lab/actions/runs/39656237120)). The sanitized v1 receipt records QEMU SHA-256 `2a58998c25a7836b910f255641a95e9d828967c75ed6b0de2e5490cb82038ddb`, queue-source SHA-256 `459656e8b14e24c2ab1f2ab97d2219c978b290203168d20e6c8a8554c0ae6795`, and guest-ELF SHA-256 `fc0c25cc07b072851f9ed20e1e1af6d084193a05a07776d4e6d15ecad2a824e5`.
+
+Under unchanged `--ipc none` and without a `/dev/mqueue` mount, the first session verified mode 0600, maxmsg 2, msgsize 64, empty count, empty-receive `EAGAIN`, duplicate `EEXIST`, exact 28-byte payload and priority 7, close/unlink, and `ENOENT` after unlink. It recreated the queue and left it linked until its container was removed. A second, distinct container identity then exclusively created the same queue name and verified its attributes, `EAGAIN`, close/unlink and `ENOENT`. Both containers and private tmpfs instances were removed; the receipt records output digests and durations. Existing filesystem, expected-failure and timeout acceptance also passed. No stock queue behavior is inferred, documented stock attributes remain unverified, and M1-04 stock boot remains **NOT RUN**. Raw guest output is never retained.
 
 ## Lifecycle, retention and receipts
 
