@@ -1,6 +1,7 @@
 """Public M0 command surface. Validation never executes manifest data."""
 
 import json
+from dataclasses import asdict
 from pathlib import Path
 from typing import Annotated, Literal
 
@@ -18,6 +19,7 @@ from snowsky_disc_lab.compat_evidence import (
 )
 from snowsky_disc_lab.contracts import load_manifest
 from snowsky_disc_lab.doctor import collect_diagnostics
+from snowsky_disc_lab.elf_inspection import ElfInspectionError, inspect_elf
 from snowsky_disc_lab.firmware_intake import inspect_firmware
 from snowsky_disc_lab.firmware_workspace import (
     FirmwareWorkspaceManager,
@@ -37,7 +39,7 @@ from snowsky_disc_lab.sources import (
 app = typer.Typer(
     help="Firmware-free SNOWSKY DISC Lab diagnostics and schema validation.", add_completion=False
 )
-ui_app = typer.Typer(help="Validate UI manifest data; no builds or execution.")
+ui_app = typer.Typer(help="Validate UI manifests or inspect a selected local ELF as data only.")
 firmware_app = typer.Typer(
     help="Validate profiles or inspect local candidate inputs; no extraction."
 )
@@ -114,6 +116,39 @@ def validate(path: Path, kind: Literal["ui", "firmware"]) -> None:
 def ui_validate(manifest: Path) -> None:
     """Validate a lab-ui/v1 YAML manifest without reading its output binary."""
     validate(manifest, "ui")
+
+
+@ui_app.command("inspect")
+def ui_inspect(
+    candidate: Path,
+    output_format: Annotated[Literal["text", "json"], typer.Option("--format")] = "text",
+) -> None:
+    """Inspect declared metadata in one selected local ELF file without executing it."""
+    try:
+        report = inspect_elf(candidate)
+    except ElfInspectionError as error:
+        errors.print(f"ELF inspection failed: {error}", markup=False, highlight=False)
+        raise typer.Exit(code=2) from None
+    if output_format == "json":
+        serialized = asdict(report)
+        serialized["path"] = str(report.path)
+        typer.echo(json.dumps(serialized, indent=2))
+        return
+    console.print(f"ELF file: {report.file_name}; size: {report.size_bytes} bytes")
+    console.print(f"SHA-256: {report.sha256}")
+    console.print(
+        f"Format: {report.elf_class}, {report.endianness}-endian; machine: "
+        f"{report.machine} ({report.machine_id}); type: {report.file_type}"
+    )
+    console.print(
+        f"MIPS ABI: {report.mips_abi}; float ABI: {report.float_abi}; "
+        f"linkage: {report.static_dynamic}"
+    )
+    console.print(f"Interpreter: {report.interpreter or 'none declared'}")
+    console.print(
+        "DT_NEEDED: " + (", ".join(report.needed_libraries) or "none declared"), markup=False
+    )
+    console.print(f"Compatibility: {report.compatibility}")
 
 
 @firmware_app.command("validate")
