@@ -9,6 +9,13 @@ from rich.console import Console
 from rich.table import Table
 from rich.text import Text
 
+from snowsky_disc_lab.compat_evidence import (
+    MAX_RECEIPT_BYTES,
+    CompatibilityEvidenceError,
+    parse_receipt,
+    render_json,
+    render_markdown,
+)
 from snowsky_disc_lab.contracts import load_manifest
 from snowsky_disc_lab.doctor import collect_diagnostics
 from snowsky_disc_lab.firmware_intake import inspect_firmware
@@ -38,10 +45,12 @@ workspace_app = typer.Typer(
     help="Create and verify private firmware byte snapshots; no extraction or execution."
 )
 sources_app = typer.Typer(help="Resolve exact source pins into an isolated source-only cache.")
+compat_app = typer.Typer(help="Report evidence from sanitized Lab runtime receipts.")
 app.add_typer(ui_app, name="ui")
 app.add_typer(firmware_app, name="firmware")
 firmware_app.add_typer(workspace_app, name="workspace")
 app.add_typer(sources_app, name="sources")
+app.add_typer(compat_app, name="compat")
 console = Console()
 errors = Console(stderr=True)
 DEFAULT_SOURCE_LOCK = Path("upstreams.lock.yaml")
@@ -348,3 +357,24 @@ def sources_verify(
 ) -> None:
     """Verify cached source identity and bytes entirely offline, without repairs."""
     source_command("verify", lock, cache_dir, source)
+
+
+@compat_app.command("report")
+def compatibility_report(
+    receipts: Annotated[
+        list[Path], typer.Argument(help="Sanitized Lab runtime receipt JSON files.")
+    ],
+    output_format: Annotated[Literal["json", "markdown"], typer.Option("--format")] = "markdown",
+) -> None:
+    """Render a deterministic compatibility report without promoting support."""
+    try:
+        reports = []
+        for path in receipts:
+            with path.open("rb") as stream:
+                document = stream.read(MAX_RECEIPT_BYTES + 1)
+            reports.append(parse_receipt(document, source=str(path)))
+    except (OSError, CompatibilityEvidenceError) as error:
+        errors.print(f"Compatibility report refused: {error}", markup=False, highlight=False)
+        raise typer.Exit(code=2) from None
+    output = render_json(reports) if output_format == "json" else render_markdown(reports)
+    typer.echo(output, nl=False)
