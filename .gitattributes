@@ -1,3 +1,4 @@
 # Keep the independently pinned data-only reference byte-identical on every host.
 src/snowsky_disc_lab/data/v257-intake-reference.json -text
 scripts/ci/fixtures/mips32le_execution_smoke.c text eol=lf
+scripts/ci/fixtures/mips32le_posix_mqueue.c text eol=lf
