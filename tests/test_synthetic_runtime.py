@@ -10,6 +10,7 @@ from typing import Any
 
 import pytest
 
+from snowsky_disc_lab import synthetic_ipc_handoff as handoff
 from snowsky_disc_lab import synthetic_runtime as runtime
 
 
@@ -21,6 +22,7 @@ def inputs(tmp_path, monkeypatch):
         "qemu-mipsel",
         "mips32le-execution-smoke.elf",
         "mips32le-posix-mqueue.elf",
+        handoff.GUEST_ELF,
     ):
         (directory / name).write_bytes(name.encode())
         (directory / name).chmod(0o555)
@@ -35,6 +37,10 @@ def inputs(tmp_path, monkeypatch):
         "synthetic_queue_guest": {
             "source": {"sha256": runtime.MQUEUE_GUEST_SOURCE_SHA256},
             "elf": {"sha256": hashlib.sha256(b"mips32le-posix-mqueue.elf").hexdigest()},
+        },
+        "synthetic_ipc_handoff_guest": {
+            "source": {"sha256": handoff.GUEST_SOURCE_SHA256},
+            "elf": {"sha256": hashlib.sha256(handoff.GUEST_ELF.encode()).hexdigest()},
         },
     }
     return directory, evidence
@@ -51,6 +57,7 @@ class Docker:
         self.cleanup_failure = False
         self.mqueue_failure = False
         self.mqueue_timeout = False
+        self.handoff_failure = False
 
     def __call__(self, args, **kwargs):
         self.calls.append(args)
@@ -126,6 +133,7 @@ class Docker:
                 "timeout": "",
                 "mqueue-first": runtime.MQUEUE_FIRST_OUTPUT,
                 "mqueue-second": runtime.MQUEUE_SECOND_OUTPUT,
+                "ipc-handoff": handoff.EXPECTED_CONTAINER_OUTPUT,
             }[self.mode]
             code = {
                 "filesystem": 0,
@@ -133,6 +141,7 @@ class Docker:
                 "timeout": 124,
                 "mqueue-first": 0,
                 "mqueue-second": 0,
+                "ipc-handoff": 0,
             }[self.mode]
             if self.mqueue_failure and self.mode == "mqueue-first":
                 output = (
@@ -145,6 +154,16 @@ class Docker:
             if self.mqueue_timeout and self.mode == "mqueue-first":
                 output = ""
                 code = 124
+            if self.handoff_failure and self.mode == "ipc-handoff":
+                output = (
+                    "HANDOFF_ERROR_ROLE=producer\n"
+                    "HANDOFF_ERROR_STAGE=acknowledgment_timeout\n"
+                    "HANDOFF_ERROR_NAME=EAGAIN\n"
+                    "HANDOFF_ERROR_ERRNO=11\n"
+                    "GUEST_EXIT_CODE_CONSUMER=0\n"
+                    "GUEST_EXIT_CODE_PRODUCER=40\n"
+                )
+                code = 40
             self.inspection[0]["State"]["ExitCode"] = code
             return subprocess.CompletedProcess(args, code, output)
         if args[1] == "rm":
@@ -190,6 +209,90 @@ def test_posix_mqueue_cases_use_fixed_guest_and_bounded_qemu_syscall_trace():
     assert "/dev/mqueue" not in command
     assert "/ui" not in command and "/player" not in command
     assert "ulimit -q" not in command and "setrlimit" not in command
+
+
+def test_ipc_handoff_command_starts_two_fixed_roles_concurrently():
+    command = runtime.COMMAND
+
+    assert 'if [ "$1" = "ipc-handoff" ]' in command
+    assert "/inputs/mips32le-posix-ipc-handoff.elf consumer" in command
+    assert "/inputs/mips32le-posix-ipc-handoff.elf producer" in command
+    assert "consumer_pid=$!" in command and "producer_pid=$!" in command
+    assert 'wait "$consumer_pid"' in command and 'wait "$producer_pid"' in command
+    assert "--kill-after=1s 5s" in command
+    assert "QEMU_STRACE=1" in command
+    assert "/dev/mqueue" not in command
+    assert "docker exec" not in command
+
+
+def test_ipc_handoff_launch_reuses_one_inspected_isolated_container(inputs, tmp_path, monkeypatch):
+    docker = Docker()
+    monkeypatch.setattr(runtime, "_docker", docker)
+
+    receipt = runtime.launch(
+        *inputs, tmp_path / "sessions", session_id="handoff-one", _case="ipc-handoff"
+    )
+
+    assert receipt["status"] == "passed"
+    assert receipt["execution"]["handoff"]["status"] == "passed"
+    assert receipt["execution"]["handoff"]["guest_exit_codes"] == {
+        "consumer": 0,
+        "producer": 0,
+    }
+    assert receipt["isolation"]["verified_host_config"]["IpcMode"] == "none"
+    assert receipt["isolation"]["verified_host_config"]["NetworkMode"] == "none"
+    assert receipt["cleanup"]["container_removed"] is True
+    assert len([call for call in docker.calls if call[1] == "create"]) == 1
+    assert len([call for call in docker.calls if call[1] == "start"]) == 1
+    create = next(call for call in docker.calls if call[1] == "create")
+    assert create[create.index("--ipc") + 1] == "none"
+    assert create[create.index("--network") + 1] == "none"
+    assert "--cap-drop=ALL" in create
+    assert "--privileged" not in create
+    assert not any("/dev/mqueue" in argument for argument in create)
+
+
+def test_ipc_handoff_output_failure_is_sanitized_and_owned_container_removed(
+    inputs, tmp_path, monkeypatch
+):
+    docker = Docker()
+    docker.mode = "ipc-handoff"
+    docker.handoff_failure = True
+    monkeypatch.setattr(runtime, "_docker", docker)
+
+    with pytest.raises(runtime.RuntimeRefused, match="IPC handoff") as failure:
+        runtime.launch(
+            *inputs, tmp_path / "sessions", session_id="handoff-fail", _case="ipc-handoff"
+        )
+
+    receipt = failure.value.receipt
+    assert receipt["execution"]["handoff"]["failure"] == {
+        "role": "producer",
+        "stage": "acknowledgment_timeout",
+        "errno": "EAGAIN",
+        "errno_number": 11,
+    }
+    assert receipt["cleanup"]["container_removed"] is True
+    assert str(tmp_path) not in json.dumps(receipt)
+    assert "HANDOFF_ERROR_STAGE=" not in json.dumps(receipt)
+
+
+def test_ipc_handoff_refuses_shared_ipc_drift_before_guest_execution(inputs, tmp_path, monkeypatch):
+    docker = Docker()
+
+    def altered(args, **kwargs):
+        result = docker(args, **kwargs)
+        if args[1] == "inspect":
+            docker.inspection[0]["HostConfig"]["IpcMode"] = "host"
+            result.stdout = json.dumps(docker.inspection)
+        return result
+
+    monkeypatch.setattr(runtime, "_docker", altered)
+    with pytest.raises(runtime.RuntimeRefused, match="container isolation"):
+        runtime.launch(
+            *inputs, tmp_path / "sessions", session_id="handoff-isolation", _case="ipc-handoff"
+        )
+    assert not any(call[1] == "start" for call in docker.calls)
 
 
 @pytest.mark.parametrize("state", ["extra_mount", "foreign_owner"])
@@ -539,7 +642,7 @@ def test_workflow_manual_dispatch_and_pr_guards_are_narrow():
         "(github.event_name == 'pull_request' &&\n"
         " github.repository == 'wihlarkop/snowsky-disc-lab' &&\n"
         " github.event.pull_request.head.repo.full_name == 'wihlarkop/snowsky-disc-lab' &&\n"
-        " github.event.pull_request.head.ref == 'codex/mips32le-posix-mqueue') ||\n"
+        " github.event.pull_request.head.ref == 'codex/mips32le-ipc-handoff') ||\n"
         "(github.event_name == 'workflow_dispatch' &&\n"
         " github.repository == 'wihlarkop/snowsky-disc-lab' &&\n"
         " github.ref == 'refs/heads/main')"
@@ -561,3 +664,12 @@ def test_workflow_manual_dispatch_and_pr_guards_are_narrow():
     assert "secrets." not in source
     assert "push:" not in source
     assert "scripts/ci/fixtures/mips32le_posix_mqueue.c" in workflow["on"]["pull_request"]["paths"]
+    assert (
+        "scripts/ci/fixtures/mips32le_posix_ipc_handoff.c"
+        in workflow["on"]["pull_request"]["paths"]
+    )
+    assert (
+        "src/snowsky_disc_lab/synthetic_ipc_handoff.py" in workflow["on"]["pull_request"]["paths"]
+    )
+    assert "tests/test_synthetic_ipc_handoff.py" in workflow["on"]["pull_request"]["paths"]
+    assert "docs/synthetic-runtime.md" in workflow["on"]["pull_request"]["paths"]

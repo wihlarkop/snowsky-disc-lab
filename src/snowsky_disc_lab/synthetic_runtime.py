@@ -19,6 +19,8 @@ from itertools import islice
 from pathlib import Path
 from typing import Any
 
+from . import synthetic_ipc_handoff as ipc_handoff
+
 BASE_IMAGE = (
     "docker.io/library/debian:12@sha256:"
     "6ebd97fa83deb272194a2cf015b3d26a4d538e9ad3a7a79d544c8af5b0a01443"
@@ -141,6 +143,47 @@ COMMAND = r"""set -eu
 umask 077
 ulimit -c 0
 ulimit -f 64
+if [ "$1" = "ipc-handoff" ]; then
+  set +e
+  QEMU_STRACE=1 timeout --signal=TERM --kill-after=1s 5s \
+    /inputs/qemu-mipsel /inputs/mips32le-posix-ipc-handoff.elf consumer \
+    > /session-diagnostics/consumer.stdout 2> /session-diagnostics/consumer.stderr &
+  consumer_pid=$!
+  QEMU_STRACE=1 timeout --signal=TERM --kill-after=1s 5s \
+    /inputs/qemu-mipsel /inputs/mips32le-posix-ipc-handoff.elf producer \
+    > /session-diagnostics/producer.stdout 2> /session-diagnostics/producer.stderr &
+  producer_pid=$!
+  wait "$consumer_pid"
+  consumer_code=$?
+  wait "$producer_pid"
+  producer_code=$?
+  set -e
+  test "$(wc -c < /session-diagnostics/consumer.stdout)" -le 512 || exit 98
+  test "$(wc -c < /session-diagnostics/producer.stdout)" -le 512 || exit 98
+  test "$(wc -c < /session-diagnostics/consumer.stderr)" -le 8192 || exit 97
+  test "$(wc -c < /session-diagnostics/producer.stderr)" -le 8192 || exit 97
+  trace_calls_for() {
+    trace_calls=""
+    for syscall in mq_open mq_getsetattr mq_timedsend mq_timedreceive mq_unlink close; do
+      if grep -Eq " ${syscall}\\(" "$1"; then
+        if [ -n "$trace_calls" ]; then trace_calls="$trace_calls,"; fi
+        trace_calls="${trace_calls}${syscall}"
+      fi
+    done
+    printf '%s' "$trace_calls"
+  }
+  consumer_trace="$(trace_calls_for /session-diagnostics/consumer.stderr)"
+  producer_trace="$(trace_calls_for /session-diagnostics/producer.stderr)"
+  printf 'HANDOFF_CONTAINER_SESSION=single\n'
+  printf 'GUEST_EXIT_CODE_CONSUMER=%s\n' "$consumer_code"
+  cat /session-diagnostics/consumer.stdout
+  printf 'GUEST_EXIT_CODE_PRODUCER=%s\n' "$producer_code"
+  cat /session-diagnostics/producer.stdout
+  printf 'QEMU_SYSCALL_TRACE_CONSUMER=%s\n' "$consumer_trace"
+  printf 'QEMU_SYSCALL_TRACE_PRODUCER=%s\n' "$producer_trace"
+  if [ "$consumer_code" -ne 0 ] || [ "$producer_code" -ne 0 ]; then exit 40; fi
+  exit 0
+fi
     case "$1" in
  filesystem)
    guest=/inputs/mips32le-execution-smoke.elf
@@ -220,6 +263,9 @@ def _verify_inputs(inputs: Path, evidence: dict[str, Any]) -> dict[str, str]:
     queue_guest = evidence.get("synthetic_queue_guest", {})
     if queue_guest.get("source", {}).get("sha256") != MQUEUE_GUEST_SOURCE_SHA256:
         raise RuntimeRefused("POSIX queue source identity is not the reviewed fixture")
+    handoff_guest = evidence.get("synthetic_ipc_handoff_guest", {})
+    if handoff_guest.get("source", {}).get("sha256") != ipc_handoff.GUEST_SOURCE_SHA256:
+        raise RuntimeRefused("POSIX handoff source identity is not the reviewed fixture")
     qemu = [item for item in evidence.get("artifacts", []) if item.get("name") == "qemu-mipsel"]
     if len(qemu) != 1 or qemu[0].get("sha256") != QEMU_SHA256:
         raise RuntimeRefused("QEMU identity is not the reviewed interpreter")
@@ -227,6 +273,7 @@ def _verify_inputs(inputs: Path, evidence: dict[str, Any]) -> dict[str, str]:
         "qemu-mipsel": QEMU_SHA256,
         "mips32le-execution-smoke.elf": guest.get("elf", {}).get("sha256", ""),
         "mips32le-posix-mqueue.elf": queue_guest.get("elf", {}).get("sha256", ""),
+        ipc_handoff.GUEST_ELF: handoff_guest.get("elf", {}).get("sha256", ""),
     }
     if not inputs.is_dir() or {entry.name for entry in inputs.iterdir()} != set(expected):
         raise RuntimeRefused("unexpected runtime inputs")
@@ -546,7 +593,14 @@ def launch(
     session_id = uuid.uuid4().hex if session_id is None else session_id
     if not re.fullmatch(r"[a-z0-9][a-z0-9-]{0,47}", session_id):
         raise RuntimeRefused("unsafe session identifier")
-    if _case not in {"filesystem", "failure", "timeout", "mqueue-first", "mqueue-second"}:
+    if _case not in {
+        "filesystem",
+        "failure",
+        "timeout",
+        "mqueue-first",
+        "mqueue-second",
+        "ipc-handoff",
+    }:
         raise RuntimeRefused("unknown first-party synthetic case")
     identities = _verify_inputs(inputs, build_evidence)
     inputs, store = _safe_path(inputs), _safe_path(store)
@@ -572,6 +626,7 @@ def launch(
         "identities": identities,
         "guest_source_sha256": GUEST_SOURCE_SHA256,
         "queue_guest_source_sha256": MQUEUE_GUEST_SOURCE_SHA256,
+        "handoff_guest_source_sha256": ipc_handoff.GUEST_SOURCE_SHA256,
         "lifecycle": ["reserved"],
         "cleanup": {"container_removed": False},
         "unsupported_or_unverified": [
@@ -625,6 +680,7 @@ def launch(
             "timeout": 124,
             "mqueue-first": 0,
             "mqueue-second": 0,
+            "ipc-handoff": 0,
         }[_case]
         expected_output = {
             "filesystem": EXPECTED_OUTPUT,
@@ -632,7 +688,27 @@ def launch(
             "timeout": "",
             "mqueue-first": MQUEUE_FIRST_OUTPUT,
             "mqueue-second": MQUEUE_SECOND_OUTPUT,
+            "ipc-handoff": ipc_handoff.EXPECTED_CONTAINER_OUTPUT,
         }[_case]
+        if _case == "ipc-handoff":
+            handoff_observations = ipc_handoff.parse_execution_output(result.stdout)
+            receipt["execution"] = {
+                "exit_code": result.returncode,
+                "duration_seconds": elapsed,
+                "stdout_sha256": hashlib.sha256(result.stdout.encode()).hexdigest(),
+                "stdout_bytes": len(result.stdout.encode()),
+                "timed_out": result.returncode == 124,
+                "terminated": state.get("Running") is False,
+                "guest_exit_codes": handoff_observations.get("guest_exit_codes", {}),
+                "handoff": handoff_observations,
+            }
+            if handoff_observations.get("status") != "passed":
+                failure = handoff_observations.get("failure", {})
+                raise RuntimeRefused(
+                    "synthetic IPC handoff failed at "
+                    f"{failure.get('stage', 'output_mismatch')}: "
+                    f"{failure.get('errno', 'NONE')} ({failure.get('errno_number', 0)})"
+                )
         if _case.startswith("mqueue-"):
             queue_error = _mqueue_failure(result.stdout)
             if queue_error is None and result.returncode == 124:
@@ -663,7 +739,7 @@ def launch(
             or result.stdout != expected_output
         ):
             raise RuntimeRefused("guest output, exit or termination differs from the fixed case")
-        if not _case.startswith("mqueue-"):
+        if not _case.startswith("mqueue-") and _case != "ipc-handoff":
             receipt["execution"] = {
                 "exit_code": result.returncode,
                 "duration_seconds": elapsed,
@@ -971,6 +1047,7 @@ def acceptance(inputs: Path, evidence: dict[str, Any], store: Path) -> dict[str,
     for case in ("failure", "timeout"):
         sessions.append(launch(inputs, evidence, store, session_id=case, _case=case))
     mqueue_receipt = posix_mqueue_acceptance(inputs, evidence, store)
+    handoff_receipt = ipc_handoff.acceptance(inputs, evidence, store)
     return {
         "schema_version": "firmware-free-synthetic-runtime-acceptance/v1",
         "status": "passed",
@@ -998,5 +1075,6 @@ def acceptance(inputs: Path, evidence: dict[str, Any], store: Path) -> dict[str,
             "independent inspected containers and tmpfs; both O_EXCL probes passed"
         ),
         "posix_mqueue": mqueue_receipt,
+        "synthetic_ipc_handoff": handoff_receipt,
         "unsupported_or_unverified": first["unsupported_or_unverified"],
     }

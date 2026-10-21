@@ -118,6 +118,41 @@ curmsgs 0 matched. The fixed guest now verifies nonblocking behavior directly:
 an empty receive must return `EAGAIN`, avoiding a host-versus-target numeric flag
 assumption.
 
+## Two-process POSIX queue handoff
+
+The `session` acceptance additionally runs one fixed consumer and one fixed
+producer as separate MIPS32LE O32 QEMU processes at the same time inside each
+owned container. The consumer exclusively creates the request and acknowledgment
+queues, validates their mode and attributes, receives the fixed request, verifies
+its exact bytes and priority, sends the matching acknowledgment, then closes and
+unlinks both queues. The producer waits for queue readiness with bounded
+nonblocking opens, sends the fixed request, validates the acknowledgment bytes
+and priority, and closes both descriptors. Each queue uses mode 0600, two
+messages and 64-byte message bounds. No stock queue name or message format is
+used.
+
+This protocol uses two independent, five-second bounded guest roles and preserves
+the existing 15-second outer execution deadline. A fixed shell wrapper starts
+both QEMU processes before waiting for either, captures each role's bounded
+output and status separately, and exports only fixed result fields and an
+allowlisted syscall-name trace. The request/acknowledgment round trip proves
+that both processes overlapped in the same inspected container and therefore
+shared its private IPC namespace. The same protocol is then repeated in a fresh
+container to check session separation. Container ownership, inspection, removal,
+and all existing mount and resource controls remain governed by the existing
+runtime session.
+
+The additional `synthetic_ipc_handoff` receipt uses schema
+`firmware-free-mips32le-synthetic-ipc-handoff/v1`. It records pinned QEMU and
+guest source/ELF identities, fixed queue and payload attributes, the two role
+statuses, verified payload digests and priorities, syscall names, bounded
+output digests and durations, session identities, isolation inspection, and
+cleanup. Failure output is reduced to a fixed role, stage, and errno; raw
+diagnostics remain inside the private container. This is first-party IPC
+acceptance under unchanged `--ipc none`, without `/dev/mqueue`, limit changes or
+sysctl changes. Stock IPC compatibility remains **UNVERIFIED**, and M1-04 stock
+boot remains **NOT RUN**.
+
 The complete hosted acceptance passed on implementation head
 `cd6d40a2ae242976ba8f1872b127ed7da14cf250` ([synthetic runtime run](https://github.com/wihlarkop/snowsky-disc-lab/actions/runs/39656237048)); exact-head M0 also passed all four jobs ([M0 run](https://github.com/wihlarkop/snowsky-disc-lab/actions/runs/39656237120)). The sanitized v1 receipt records QEMU SHA-256 `2a58998c25a7836b910f255641a95e9d828967c75ed6b0de2e5490cb82038ddb`, queue-source SHA-256 `459656e8b14e24c2ab1f2ab97d2219c978b290203168d20e6c8a8554c0ae6795`, and guest-ELF SHA-256 `fc0c25cc07b072851f9ed20e1e1af6d084193a05a07776d4e6d15ecad2a824e5`.
 
