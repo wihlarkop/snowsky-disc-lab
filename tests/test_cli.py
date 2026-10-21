@@ -1,9 +1,12 @@
 """CLI integration and read-only diagnostic regressions."""
 
+import hashlib
+import json
 import subprocess
 from pathlib import Path
 
 import pytest
+from test_elf_inspection import _elf32_mips
 from typer.testing import CliRunner
 
 from snowsky_disc_lab.cli import app
@@ -89,3 +92,41 @@ def test_cli_rejects_bad_examples() -> None:
         kind = "firmware" if fixture.name.startswith("firmware") else "ui"
         result = runner.invoke(app, [kind, "validate", str(fixture)])
         assert result.exit_code == 2, (fixture, result.output)
+
+
+def test_ui_inspect_text_and_json_report_selected_elf(tmp_path: Path) -> None:
+    path = tmp_path / "candidate.elf"
+    raw = _elf32_mips()
+    path.write_bytes(raw)
+
+    text_result = runner.invoke(app, ["ui", "inspect", str(path)])
+    assert text_result.exit_code == 0, text_result.output
+    for value in ("ELF32", "little", "MIPS", "O32", "UNKNOWN", hashlib.sha256(raw).hexdigest()):
+        assert value in text_result.stdout
+
+    json_result = runner.invoke(app, ["ui", "inspect", str(path), "--format", "json"])
+    assert json_result.exit_code == 0, json_result.output
+    report = json.loads(json_result.stdout)
+    assert report["size_bytes"] == len(raw)
+    assert report["sha256"] == hashlib.sha256(raw).hexdigest()
+    assert report["compatibility"] == "UNKNOWN"
+    assert report["mips_abi"] == "O32"
+
+
+@pytest.mark.parametrize("contents", [b"not an elf", b"\x7fELF\x01\x01\x01"])
+def test_ui_inspect_invalid_or_truncated_elf_is_concise(tmp_path: Path, contents: bytes) -> None:
+    path = tmp_path / "bad.elf"
+    path.write_bytes(contents)
+    result = runner.invoke(app, ["ui", "inspect", str(path)])
+    assert result.exit_code == 2
+    assert "Traceback" not in result.output
+    assert "ELF" in result.output
+
+
+def test_ui_inspect_oversized_elf_is_concise(tmp_path: Path) -> None:
+    path = tmp_path / "large.elf"
+    path.write_bytes(b"\x7fELF" + b"\0" * (128 * 1024 * 1024))
+    result = runner.invoke(app, ["ui", "inspect", str(path)])
+    assert result.exit_code == 2
+    assert "Traceback" not in result.output
+    assert "size limit" in result.output
