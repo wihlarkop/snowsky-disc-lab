@@ -6,6 +6,7 @@ import json
 import os
 import subprocess
 from pathlib import Path
+from typing import Any
 
 import pytest
 
@@ -21,6 +22,141 @@ def _load_qemu_runtime_build():
 
 
 qemu_runtime_build = _load_qemu_runtime_build()
+
+
+def _valid_build_evidence() -> dict[str, Any]:
+    packages = [
+        {"package": name, "version": version, "architecture": architecture}
+        for name, version, architecture in (
+            ("fakeroot", "1.31-1.2", "amd64"),
+            ("libfakeroot", "1.31-1.2", "amd64"),
+            ("binutils-mipsel-linux-gnu", "2.40-2cross2", "amd64"),
+            ("gcc-mipsel-linux-gnu", "4:12.2.0-4", "amd64"),
+            ("libc6-dev-mipsel-cross", "2.36-8cross2", "all"),
+        )
+    ]
+    packages.sort(key=lambda item: (item["package"], item["version"], item["architecture"]))
+    package_bom = "".join(
+        f"{item['package']}\t{item['version']}\t{item['architecture']}\n" for item in packages
+    ).encode()
+    cross_packages = [
+        item
+        for item in packages
+        if item["package"].split(":", 1)[0] in qemu_runtime_build.CROSS_SHIM_PACKAGES
+    ]
+    inrelease = [
+        {
+            "file": f"snapshot_{suite}_InRelease",
+            "codename": suite,
+            "valid_signature_fingerprint": fingerprint,
+            "sha256": "1" * 64,
+            "verified": True,
+        }
+        for suite, fingerprint in sorted(qemu_runtime_build.DEBIAN_SIGNING_FINGERPRINTS.items())
+    ]
+    artifacts = [
+        {
+            "name": "qemu-mipsel",
+            "bytes": 1024,
+            "sha256": "a" * 64,
+            "elf_class": "ELF64",
+            "elf_data": "little endian",
+            "machine": "Advanced Micro Devices X86-64",
+            "flags": "0x0",
+            "has_interpreter": False,
+        },
+        *[
+            {
+                "name": name,
+                "bytes": 128,
+                "sha256": "b" * 64,
+                "elf_class": "ELF32",
+                "elf_data": "little endian",
+                "machine": "MIPS R3000",
+                "flags": "0x70001407",
+                "has_interpreter": False,
+            }
+            for name in ("fbshim.so", "asndshim.so", "tinyshim.so", "mqshim.so")
+        ],
+    ]
+    return {
+        "schema_version": "firmware-free-qemu-runtime-build/v1",
+        "status": "build-passed-binaries-ephemeral",
+        "artifacts": artifacts,
+        "debian_snapshot_inrelease": inrelease,
+        "debian_archive_keyring_sha256": "2" * 64,
+        "package_bom_sha256": qemu_runtime_build.hashlib.sha256(package_bom).hexdigest(),
+        "package_count": len(packages),
+        "installed_packages": packages,
+        "fakeroot_bootstrap_packages": [
+            {
+                "package": name,
+                "version": "1.31-1.2",
+                "architecture": "amd64",
+                "bytes": 100,
+                "sha256": "3" * 64,
+            }
+            for name in sorted(qemu_runtime_build.FAKEROOT_BOOTSTRAP_PACKAGES)
+        ],
+        "toolchain": {
+            "native": {
+                "gcc_version": "12.2.0",
+                "binutils_version": "GNU ld 2.40",
+                "meson_version": "1.0.1",
+                "ninja_version": "1.11.1",
+                "python_version": "Python 3.11.2",
+            },
+            "mipsel": {
+                "compiler": "mipsel-linux-gnu-gcc",
+                "compiler_version": "mipsel-linux-gnu-gcc (Debian 12.2.0) 12.2.0",
+                "version": "12.2.0",
+                "target": "mipsel-linux-gnu",
+                "reported_sysroot": "/",
+                "sysroot_tree": "/usr/mipsel-linux-gnu",
+                "sysroot_sha256": "4" * 64,
+                "sysroot_file_count": 1,
+                "sysroot_entry_count": 1,
+                "compiler_packages": cross_packages,
+            },
+            "executable_sha256": {
+                name: {"path": f"/usr/bin/{name}", "sha256": "5" * 64}
+                for name in qemu_runtime_build.BUILD_TOOL_NAMES
+            },
+        },
+        "build_logs": {
+            name: {"bytes": 1, "sha256": "6" * 64}
+            for name in sorted(
+                {
+                    "apt_update",
+                    "apt_install",
+                    "source_hash_check",
+                    "source_extract",
+                    "patch_application",
+                    "qemu_configure",
+                    "qemu_build",
+                    "shim_build",
+                }
+            )
+        },
+        "input_manifest_sha256": "7" * 64,
+        "configure_flags": list(qemu_runtime_build.QEMU_CONFIGURE_FLAGS),
+        "elapsed_seconds": 90,
+        "limits": {
+            "container_memory_bytes": 6 * 1024**3,
+            "container_cpus": 2,
+            "build_tmpfs_bytes": 6 * 1024**3,
+            "temporary_storage_bytes": 512 * 1024**2,
+            "input_mount": "read-only",
+            "capabilities": "all dropped",
+            "no_new_privileges": True,
+            "network_mode": "bridge; runner egress is not isolated at network level",
+        },
+        "retention": {
+            "copied_out": ["sanitized JSON build evidence only"],
+            "compiled_binaries_published": False,
+            "container_image_built_or_published": False,
+        },
+    }
 
 
 def test_source_audit_exports_container_owned_evidence_without_writable_host_mount(
@@ -735,35 +871,7 @@ def test_fakeroot_bootstrap_receipt_requires_exact_package_hashes(tmp_path: Path
 def test_build_container_copies_only_validated_json_then_removes_container(
     monkeypatch, tmp_path: Path
 ) -> None:
-    artifact = {
-        "name": "qemu-mipsel",
-        "bytes": 1024,
-        "sha256": "a" * 64,
-        "elf_class": "ELF64",
-        "elf_data": "little endian",
-        "machine": "Advanced Micro Devices X86-64",
-        "flags": "0x0",
-        "has_interpreter": False,
-    }
-    shims = [
-        {
-            "name": name,
-            "bytes": 128,
-            "sha256": "b" * 64,
-            "elf_class": "ELF32",
-            "elf_data": "little endian",
-            "machine": "MIPS R3000",
-            "flags": "0x70001407",
-            "has_interpreter": False,
-        }
-        for name in ("fbshim.so", "asndshim.so", "tinyshim.so", "mqshim.so")
-    ]
-    evidence = {
-        "schema_version": "firmware-free-qemu-runtime-build/v1",
-        "status": "build-passed-binaries-ephemeral",
-        "artifacts": [artifact, *shims],
-        "retention": {"compiled_binaries_published": False},
-    }
+    evidence = _valid_build_evidence()
     calls: list[list[str]] = []
 
     def fake_run(args: list[str], **_kwargs: object) -> subprocess.CompletedProcess[str]:
@@ -780,7 +888,10 @@ def test_build_container_copies_only_validated_json_then_removes_container(
     output = tmp_path / "report" / "build-evidence.json"
 
     result = qemu_runtime_build.run_build_container(
-        inputs, output, qemu_runtime_build.read_reference()
+        inputs,
+        output,
+        qemu_runtime_build.read_reference(),
+        expected_input_manifest_sha256=str(evidence["input_manifest_sha256"]),
     )
 
     assert result["status"] == "build-passed-binaries-ephemeral"
@@ -881,16 +992,8 @@ def test_build_container_stages_synthetic_guest_as_read_only_executable(
             "has_interpreter": False,
         },
     }
-    build_evidence = {
-        "schema_version": "firmware-free-qemu-runtime-build/v1",
-        "status": "build-passed-binaries-ephemeral",
-        "artifacts": [qemu_artifact, *shims],
-        "synthetic_guest": guest_evidence,
-        "synthetic_queue_guest": queue_guest_evidence,
-        "synthetic_ipc_handoff_guest": handoff_guest_evidence,
-        "synthetic_ipc_supervision_guest": supervision_guest_evidence,
-        "retention": {"compiled_binaries_published": False},
-    }
+    build_evidence = _valid_build_evidence()
+    build_evidence["artifacts"] = [qemu_artifact, *shims]
     binaries = {
         "/audit/execution-inputs/qemu-mipsel": qemu_bytes,
         "/audit/execution-inputs/mips32le-execution-smoke.elf": guest_bytes,
@@ -951,6 +1054,7 @@ def test_build_container_stages_synthetic_guest_as_read_only_executable(
         inputs,
         tmp_path / "report" / "build-evidence.json",
         qemu_runtime_build.read_reference(),
+        expected_input_manifest_sha256=str(build_evidence["input_manifest_sha256"]),
         smoke_inputs_dir=smoke_inputs,
         include_mqueue_guest=True,
         include_ipc_handoff_guest=True,
@@ -1000,7 +1104,10 @@ def test_failed_build_reports_bounded_container_logs_before_cleanup(
 
     with pytest.raises(qemu_runtime_build.StopBuild, match="qemu-build.log: ninja failed fixture"):
         qemu_runtime_build.run_build_container(
-            inputs, tmp_path / "report" / "build-evidence.json", qemu_runtime_build.read_reference()
+            inputs,
+            tmp_path / "report" / "build-evidence.json",
+            qemu_runtime_build.read_reference(),
+            expected_input_manifest_sha256="0" * 64,
         )
 
     assert [args[:2] for args in calls][-1] == ["docker", "rm"]
@@ -1091,6 +1198,114 @@ def test_repeat_status_has_explicit_top_level_build_status(
     repeat_status: str, expected: str
 ) -> None:
     assert qemu_runtime_build.build_status_for_repeat(repeat_status) == expected
+
+
+def test_build_identity_rejects_non_string_artifact_names() -> None:
+    evidence = _valid_build_evidence()
+    evidence["artifacts"][0]["name"] = ["qemu-mipsel"]
+    with pytest.raises(qemu_runtime_build.StopBuild, match="canonical order"):
+        qemu_runtime_build.validate_build_identity(evidence)
+
+
+def test_build_identity_rejects_incomplete_or_unknown_evidence() -> None:
+    evidence = _valid_build_evidence()
+    del evidence["toolchain"]
+    with pytest.raises(qemu_runtime_build.StopBuild, match="incomplete or contains unknown fields"):
+        qemu_runtime_build.validate_build_identity(evidence)
+
+
+def test_build_identity_requires_canonical_artifact_and_signature_order() -> None:
+    evidence = _valid_build_evidence()
+    evidence["debian_snapshot_inrelease"].reverse()
+    with pytest.raises(qemu_runtime_build.StopBuild, match="canonical order"):
+        qemu_runtime_build.validate_build_identity(evidence)
+
+
+def test_build_identity_rejects_package_bom_hash_mismatch() -> None:
+    evidence = _valid_build_evidence()
+    evidence["package_bom_sha256"] = "0" * 64
+    with pytest.raises(qemu_runtime_build.StopBuild, match="BOM digest"):
+        qemu_runtime_build.validate_build_identity(evidence)
+
+
+def test_build_identity_binds_mips_compiler_packages_to_installed_bom() -> None:
+    evidence = _valid_build_evidence()
+    evidence["toolchain"]["mipsel"]["compiler_packages"].pop()
+    with pytest.raises(qemu_runtime_build.StopBuild, match="MIPS compiler package identities"):
+        qemu_runtime_build.validate_build_identity(evidence)
+
+
+def test_clean_build_comparison_requires_complete_identity() -> None:
+    first = _valid_build_evidence()
+    second = json.loads(json.dumps(first))
+    del second["toolchain"]["native"]["gcc_version"]
+    with pytest.raises(qemu_runtime_build.StopBuild, match="native toolchain evidence"):
+        qemu_runtime_build.compare_clean_builds(first, second)
+
+
+def test_clean_build_comparison_reports_artifact_and_sysroot_differences() -> None:
+    first = _valid_build_evidence()
+    second = json.loads(json.dumps(first))
+    second["artifacts"][0]["bytes"] += 1
+    second["toolchain"]["mipsel"]["sysroot_sha256"] = "8" * 64
+
+    result = qemu_runtime_build.compare_clean_builds(first, second)
+
+    assert result["status"] == "different"
+    assert result["differences"] == ["artifact:qemu-mipsel", "toolchain-mipsel"]
+
+
+def test_run_build_container_rejects_manifest_different_from_host_preparation(
+    monkeypatch, tmp_path: Path
+) -> None:
+    evidence = _valid_build_evidence()
+
+    def fake_run(args: list[str], **_kwargs: object) -> subprocess.CompletedProcess[str]:
+        if args[:2] == ["docker", "cp"]:
+            target = Path(args[-1])
+            target.parent.mkdir(parents=True, exist_ok=True)
+            target.write_text(json.dumps(evidence), encoding="utf-8")
+        return subprocess.CompletedProcess(args, 0, stdout="")
+
+    monkeypatch.setattr(qemu_runtime_build, "run", fake_run)
+    inputs = tmp_path / "inputs"
+    inputs.mkdir()
+
+    with pytest.raises(
+        qemu_runtime_build.StopBuild, match="differs from the reviewed host manifest"
+    ):
+        qemu_runtime_build.run_build_container(
+            inputs,
+            tmp_path / "report" / "build-evidence.json",
+            qemu_runtime_build.read_reference(),
+            expected_input_manifest_sha256="9" * 64,
+        )
+
+
+def test_repeat_status_rejects_unknown_or_non_string_values() -> None:
+    for unsupported in ("skipped", [], None):
+        with pytest.raises(qemu_runtime_build.StopBuild, match="status is unsupported"):
+            qemu_runtime_build.build_status_for_repeat(unsupported)
+
+
+def test_qemu_build_workflow_allows_only_reviewed_branch_base_pairs() -> None:
+    import yaml
+
+    workflow_path = Path(__file__).resolve().parents[1] / ".github/workflows/qemu-runtime-build.yml"
+    workflow = yaml.load(workflow_path.read_text(encoding="utf-8"), Loader=yaml.BaseLoader)
+    pull_request = workflow["on"]["pull_request"]
+    assert pull_request["branches"] == ["codex/m1-extraction-toolchain-readiness", "main"]
+    guard = workflow["jobs"]["qemu-runtime-build"]["if"]
+    assert "github.event.pull_request.head.repo.full_name == 'wihlarkop/snowsky-disc-lab'" in guard
+    assert "github.event.pull_request.head.ref == 'codex/firmware-free-qemu-runtime-build'" in guard
+    assert (
+        "github.event.pull_request.base.ref == 'codex/m1-extraction-toolchain-readiness'" in guard
+    )
+    assert "github.event.pull_request.head.ref == 'codex/m1-runtime-repro-wsl2'" in guard
+    assert "github.event.pull_request.base.ref == 'main'" in guard
+    checkout = workflow["jobs"]["qemu-runtime-build"]["steps"][0]
+    assert "github.event.pull_request.head.sha" in checkout["with"]["ref"]
+    assert "github.event.pull_request.head.ref == '*'" not in guard
 
 
 def test_debian_license_inventory_distinguishes_expression_and_full_text() -> None:
