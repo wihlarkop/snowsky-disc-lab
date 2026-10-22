@@ -2,8 +2,8 @@
 
 This foundation adds an importable versioned registry model for candidate
 compatibility records. It is read-only: callers can validate JSON, query exact
-identity fields and compare two scenario records. It does not change the CLI,
-existing sanitized receipt reports, or their parser contracts.
+identity fields and compare two scenario records. The registry CLI reads explicitly selected local JSON files; existing sanitized
+receipt reports and their parser contracts retain their behavior.
 
 Each record names the product, device and hardware revision; main and recovery
 firmware; original package, rootfs and stock `mq_player` hashes; runner, runner
@@ -44,3 +44,45 @@ lowercase 40-character Git commits or 64-character digests. The JSON Schema in
 `schemas/lab-compatibility-registry-v1.schema.json` is the portable structural
 contract. Application validation additionally enforces cross-field rules,
 including provenance matching and deferred support-state promotion.
+
+
+## Read-only registry CLI
+
+```console
+disc-lab compat list REGISTRY.json --format json
+disc-lab compat list REGISTRY.json --format markdown
+disc-lab compat show REGISTRY.json --id RECORD_ID --format json
+disc-lab compat show REGISTRY.json --id RECORD_ID --format markdown
+```
+
+Markdown is the default. List JSON uses the unchanged registry v1 schema, sorted
+by exact record ID. Show JSON returns the selected complete record with unchanged
+identity, provenance, nulls and authority fields. IDs are case-sensitive and are
+never trimmed or matched approximately. Markdown shows every identity field
+(null becomes `unknown`), support separately from scenario outcome, separate
+upstream claims and Lab observations, evidence references and limitations.
+Untrusted text is escaped and control characters are neutralized; evidence URIs
+are displayed as text and never fetched or opened. Provenance labels remain
+unauthenticated declarations. No accepted record authorizes execution or proves
+stock compatibility, including when a synthetic scenario reports PASS.
+
+Exit status is 0 for successful rendering (including an empty list), 1 when a
+valid registry has no exact requested ID, and 2 for malformed command arguments,
+unsafe/missing/unreadable paths, oversized or invalid registry input. Refusal
+messages do not echo private paths, IDs or untrusted parser details. Only the
+selected file is read: there is no discovery, network request, database, service
+or registry mutation. Local regular files are required; network paths, alternate
+streams, device names, symlink/reparse-point ancestors and special files are
+refused before reading. A trusted, quiescent filesystem owner is assumed; these
+checks do not defend against a hostile same-user concurrent path swap.
+
+The 1 MiB UTF-8 limit applies both to imported JSON and canonical generated JSON,
+including indentation and the final newline. `build_registry` and `registry_json`
+reject generated output beyond this limit, including models constructed through
+Pydantic validation bypasses. Accepted generated registries remain readable by
+`parse_registry_json` without a schema change. Serialization is deterministic;
+query/assessment features and authenticated promotion remain separate work.
+
+This closes the list/show portion of M5-04. It does not complete M5, authenticate
+runtime evidence, execute fixtures, or establish stock V2.57 boot, stock IPC or
+physical-device acceptance. Those gates remain NOT RUN / UNVERIFIED.

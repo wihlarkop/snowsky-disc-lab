@@ -20,6 +20,14 @@ from snowsky_disc_lab.compat_evidence import (
     render_json,
     render_markdown,
 )
+from snowsky_disc_lab.compat_registry import (
+    MAX_REGISTRY_BYTES,
+    CompatibilityRegistry,
+    RegistryError,
+    build_registry,
+    parse_registry_json,
+    registry_json,
+)
 from snowsky_disc_lab.contracts import load_manifest
 from snowsky_disc_lab.doctor import collect_diagnostics
 from snowsky_disc_lab.elf_inspection import ElfInspectionError, inspect_elf
@@ -589,3 +597,169 @@ def compatibility_compare(
     typer.echo(
         _render_compat_comparison_markdown(comparison, earlier, later, diagnostics), nl=False
     )
+
+
+RegistryFormatOption = Annotated[Literal["json", "markdown"], typer.Option("--format")]
+
+
+def _read_compat_registry(path: Path) -> CompatibilityRegistry:
+    """Read one explicitly selected local regular file, retaining lexical link checks."""
+    text = str(path)
+    windows = PureWindowsPath(text)
+    if text.startswith(("\\\\", "//")) or windows.drive.startswith("\\\\"):
+        raise ValueError("registry path must be local")
+    if windows.drive and not windows.root:
+        raise ValueError("registry path must not be drive-relative")
+    # Refuse Windows alternate streams and device names on every host.
+    if any(
+        ":" in part or PureWindowsPath(part).is_reserved() or part == ".."
+        for part in windows.parts
+        if part != windows.anchor
+    ):
+        raise ValueError("registry path is unsafe")
+    if ":" in text and not (len(windows.drive) == 2 and windows.drive[1] == ":"):
+        raise ValueError("registry path is unsafe")
+    absolute = path.absolute()
+    try:
+        for component in (*reversed(absolute.parents), absolute):
+            metadata = component.lstat()
+            if stat.S_ISLNK(metadata.st_mode) or getattr(metadata, "st_file_attributes", 0) & 0x400:
+                raise ValueError("registry path must not traverse links or reparse points")
+        if not stat.S_ISREG(metadata.st_mode):
+            raise ValueError("registry must be a regular file")
+        with absolute.open("rb") as stream:
+            document = stream.read(MAX_REGISTRY_BYTES + 1)
+    except OSError:
+        raise ValueError("registry is missing or inaccessible") from None
+    try:
+        return parse_registry_json(document)
+    except (RegistryError, RecursionError):
+        raise ValueError(
+            "registry is malformed, contradictory, or exceeds the 1 MiB limit"
+        ) from None
+
+
+def _registry_text(value: str) -> str:
+    # Escape Markdown syntax without generating links or rendering terminal controls.
+    return "".join(
+        ("\\" + character if character in "\\`*_{}[]()#+-.!|<>=~&" else character)
+        if character.isprintable()
+        else " "
+        for character in value
+    )
+
+
+def _registry_markdown(registry: CompatibilityRegistry) -> str:
+    lines = [
+        "# Compatibility registry",
+        "",
+        "Declared, unauthenticated metadata; missing identity values are unknown.",
+        "Stock V2.57 boot, stock IPC and device acceptance: NOT RUN / UNVERIFIED.",
+        "Synthetic evidence never establishes stock verification. Execution: NOT AUTHORIZED.",
+        "",
+    ]
+    records = json.loads(registry_json(registry))["records"]
+    if not records:
+        lines.extend(["No records.", ""])
+    for record in records:
+        lines.extend(
+            [
+                "## Record: " + _registry_text(record["record_id"]),
+                "",
+                "Support state: " + record["support_state"],
+                "Scenario outcome: " + record["scenario_outcome"],
+                "",
+                "Identity:",
+                "",
+                "| Field | Exact value |",
+                "| --- | --- |",
+            ]
+        )
+        identity = record["identity"]
+        host = identity.pop("host_runtime")
+        identity.update({"host_runtime." + key: value for key, value in host.items()})
+        for key, value in sorted(identity.items()):
+            lines.append(
+                "| " + key + " | " + _registry_text("unknown" if value is None else value) + " |"
+            )
+        for provenance, heading in (
+            ("upstream", "Upstream claims"),
+            ("lab-run", "Lab observations"),
+        ):
+            lines.extend(["", heading + " (declared; unauthenticated):", ""])
+            items = [
+                item
+                for item in record["claims_and_observations"]
+                if item["provenance"] == provenance
+            ]
+            for item in sorted(
+                items,
+                key=lambda item: (item["field"], item["value"], item["evidence_reference_id"]),
+            ):
+                lines.append(
+                    "- "
+                    + _registry_text(item["field"])
+                    + ": "
+                    + _registry_text(item["value"])
+                    + " (evidence: "
+                    + _registry_text(item["evidence_reference_id"])
+                    + ")"
+                )
+            if not items:
+                lines.append("None declared.")
+        lines.extend(["", "Evidence references (text only; not opened):", ""])
+        for item in sorted(record["evidence"], key=lambda item: item["reference_id"]):
+            lines.append("- " + _registry_text(json.dumps(item, ensure_ascii=True, sort_keys=True)))
+        if not record["evidence"]:
+            lines.append("None declared.")
+        lines.extend(["", "Limitations:", ""])
+        lines.extend("- " + _registry_text(item) for item in sorted(record["limitations"]))
+        if not record["limitations"]:
+            lines.append("None declared; this does not establish compatibility.")
+        lines.append("")
+    return "\n".join(lines)
+
+
+def _emit_registry_selection(path: Path, record_id: str | None, output_format: str) -> None:
+    try:
+        registry = _read_compat_registry(path)
+        if record_id is not None:
+            matches = [record for record in registry.records if record.record_id == record_id]
+            if not matches:
+                typer.echo("Compatibility record not found (exact ID required).", err=True)
+                raise typer.Exit(code=1)
+            registry = build_registry(matches)
+        if output_format == "json":
+            output = registry_json(registry)
+            if record_id is not None:
+                output = (
+                    json.dumps(
+                        json.loads(output)["records"][0],
+                        ensure_ascii=False,
+                        sort_keys=True,
+                        indent=2,
+                    )
+                    + "\n"
+                )
+        else:
+            output = _registry_markdown(registry)
+    except (ValueError, RegistryError):
+        typer.echo("Compatibility registry refused: invalid local path or registry data.", err=True)
+        raise typer.Exit(code=2) from None
+    typer.echo(output, nl=False)
+
+
+@compat_app.command("list")
+def compatibility_list(registry: Path, output_format: RegistryFormatOption = "markdown") -> None:
+    """List an explicitly selected registry without changing data or promoting support."""
+    _emit_registry_selection(registry, None, output_format)
+
+
+@compat_app.command("show")
+def compatibility_show(
+    registry: Path,
+    record_id: Annotated[str, typer.Option("--id", help="Exact record identifier.")],
+    output_format: RegistryFormatOption = "markdown",
+) -> None:
+    """Show one exact record; exit 1 if absent, or 2 for invalid input."""
+    _emit_registry_selection(registry, record_id, output_format)

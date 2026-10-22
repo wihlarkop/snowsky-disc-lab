@@ -240,7 +240,14 @@ def parse_registry_json(source: str | bytes) -> CompatibilityRegistry:
             raise RegistryError("compatibility registry exceeds the 1 MiB limit")
         json.loads(source, object_pairs_hook=_reject_duplicate_keys)
         return CompatibilityRegistry.model_validate_json(source)
-    except (json.JSONDecodeError, ValidationError, TypeError, ValueError, RegistryError) as exc:
+    except (
+        json.JSONDecodeError,
+        ValidationError,
+        TypeError,
+        ValueError,
+        RegistryError,
+        RecursionError,
+    ) as exc:
         if isinstance(exc, RegistryError):
             raise
         raise RegistryError("invalid compatibility registry JSON or schema") from exc
@@ -250,9 +257,13 @@ def build_registry(records: Iterable[CompatibilityRecord]) -> CompatibilityRegis
     """Build a new validated immutable registry from records."""
     try:
         raw_records = [record.model_dump(mode="json") for record in records]
-        return CompatibilityRegistry.model_validate_json(
+        registry = CompatibilityRegistry.model_validate_json(
             json.dumps({"schema_version": REGISTRY_SCHEMA, "records": raw_records})
         )
+        registry_json(registry)
+        return registry
+    except RegistryError:
+        raise
     except (ValidationError, AttributeError, TypeError, ValueError) as exc:
         raise RegistryError("invalid compatibility registry data") from exc
 
@@ -278,7 +289,7 @@ def registry_json(registry: CompatibilityRegistry) -> str:
     checked = _checked_registry(registry)
     payload = checked.model_dump(mode="json")
     payload["records"].sort(key=lambda record: record["record_id"])
-    return (
+    output = (
         json.dumps(
             payload,
             ensure_ascii=False,
@@ -287,6 +298,9 @@ def registry_json(registry: CompatibilityRegistry) -> str:
         )
         + "\n"
     )
+    if len(output.encode("utf-8")) > MAX_REGISTRY_BYTES:
+        raise RegistryError("compatibility registry exceeds the 1 MiB limit")
+    return output
 
 
 def query_registry(
