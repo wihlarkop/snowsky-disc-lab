@@ -1,0 +1,39 @@
+{
+  "additionalProperties": false,
+  "description": "Reviewed path claims tied to the exact selected binary bytes.",
+  "properties": {
+    "apiVersion": {
+      "const": "lab-ui-binary-paths/v1",
+      "title": "Apiversion",
+      "type": "string"
+    },
+    "kind": {
+      "const": "UIBinaryPaths",
+      "title": "Kind",
+      "type": "string"
+    },
+    "binarySha256": {
+      "pattern": "^[0-9a-f]{64}$",
+      "title": "Binarysha256",
+      "type": "string"
+    },
+    "requiredPaths": {
+      "items": {
+        "maxLength": 256,
+        "minLength": 2,
+        "type": "string"
+      },
+      "maxItems": 128,
+      "title": "Requiredpaths",
+      "type": "array"
+    }
+  },
+  "required": [
+    "apiVersion",
+    "kind",
+    "binarySha256",
+    "requiredPaths"
+  ],
+  "title": "BinaryPathDeclaration",
+  "type": "object"
+}
