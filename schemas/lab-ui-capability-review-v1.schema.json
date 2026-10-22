@@ -1,0 +1,117 @@
+{
+  "$defs": {
+    "CapabilityName": {
+      "enum": [
+        "framebuffer-360",
+        "input-touch",
+        "physical-keys",
+        "mqueue-player",
+        "library-scan",
+        "pcm-local",
+        "playlist-queue",
+        "artwork-render",
+        "power-lifecycle",
+        "radio-network",
+        "signed-ui-update"
+      ],
+      "type": "string"
+    },
+    "CapabilityObservation": {
+      "additionalProperties": false,
+      "description": "Caller-supplied observation state; no evidence authentication implied.",
+      "properties": {
+        "name": {
+          "$ref": "#/$defs/CapabilityName"
+        },
+        "outcome": {
+          "$ref": "#/$defs/ObservationOutcome"
+        },
+        "reason": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/ObservationReason"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        }
+      },
+      "required": [
+        "name",
+        "outcome",
+        "reason"
+      ],
+      "title": "CapabilityObservation",
+      "type": "object"
+    },
+    "ObservationOutcome": {
+      "enum": [
+        "observed",
+        "unsupported",
+        "blocked",
+        "not-run"
+      ],
+      "type": "string"
+    },
+    "ObservationReason": {
+      "enum": [
+        "runtime-feature-unavailable",
+        "missing-stock-baseline",
+        "missing-runner-feature",
+        "missing-authorization",
+        "missing-identity",
+        "missing-readiness",
+        "missing-evidence"
+      ],
+      "type": "string"
+    }
+  },
+  "additionalProperties": false,
+  "description": "Fixed requests and caller-supplied observation states for a preflight review.",
+  "properties": {
+    "apiVersion": {
+      "const": "lab-ui-capability-review/v1",
+      "title": "Apiversion",
+      "type": "string"
+    },
+    "kind": {
+      "const": "UICapabilityReview",
+      "title": "Kind",
+      "type": "string"
+    },
+    "required": {
+      "items": {
+        "$ref": "#/$defs/CapabilityName"
+      },
+      "maxItems": 11,
+      "title": "Required",
+      "type": "array"
+    },
+    "optional": {
+      "items": {
+        "$ref": "#/$defs/CapabilityName"
+      },
+      "maxItems": 11,
+      "title": "Optional",
+      "type": "array"
+    },
+    "observations": {
+      "items": {
+        "$ref": "#/$defs/CapabilityObservation"
+      },
+      "maxItems": 11,
+      "title": "Observations",
+      "type": "array"
+    }
+  },
+  "required": [
+    "apiVersion",
+    "kind",
+    "required",
+    "optional",
+    "observations"
+  ],
+  "title": "CapabilityReview",
+  "type": "object"
+}

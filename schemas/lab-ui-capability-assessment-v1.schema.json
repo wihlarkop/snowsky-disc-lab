@@ -1,0 +1,181 @@
+{
+  "$defs": {
+    "CapabilityName": {
+      "enum": [
+        "framebuffer-360",
+        "input-touch",
+        "physical-keys",
+        "mqueue-player",
+        "library-scan",
+        "pcm-local",
+        "playlist-queue",
+        "artwork-render",
+        "power-lifecycle",
+        "radio-network",
+        "signed-ui-update"
+      ],
+      "type": "string"
+    },
+    "CapabilityResult": {
+      "additionalProperties": false,
+      "properties": {
+        "name": {
+          "$ref": "#/$defs/CapabilityName"
+        },
+        "required": {
+          "title": "Required",
+          "type": "boolean"
+        },
+        "declared": {
+          "title": "Declared",
+          "type": "boolean"
+        },
+        "observation": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/ObservationOutcome"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "observationReason": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/ObservationReason"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "outcome": {
+          "$ref": "#/$defs/ReviewOutcome"
+        },
+        "refusalCode": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/RefusalCode"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "handling": {
+          "enum": [
+            "observed",
+            "refuse",
+            "skip"
+          ],
+          "title": "Handling",
+          "type": "string"
+        }
+      },
+      "required": [
+        "name",
+        "required",
+        "declared",
+        "observation",
+        "observationReason",
+        "outcome",
+        "refusalCode",
+        "handling"
+      ],
+      "title": "CapabilityResult",
+      "type": "object"
+    },
+    "ObservationOutcome": {
+      "enum": [
+        "observed",
+        "unsupported",
+        "blocked",
+        "not-run"
+      ],
+      "type": "string"
+    },
+    "ObservationReason": {
+      "enum": [
+        "runtime-feature-unavailable",
+        "missing-stock-baseline",
+        "missing-runner-feature",
+        "missing-authorization",
+        "missing-identity",
+        "missing-readiness",
+        "missing-evidence"
+      ],
+      "type": "string"
+    },
+    "RefusalCode": {
+      "enum": [
+        "ui-undeclared",
+        "ui-unsupported",
+        "runtime-unsupported",
+        "prerequisite-blocked",
+        "observation-not-run"
+      ],
+      "type": "string"
+    },
+    "ReviewOutcome": {
+      "enum": [
+        "OBSERVED",
+        "UNSUPPORTED",
+        "BLOCKED",
+        "NOT RUN",
+        "UNKNOWN"
+      ],
+      "type": "string"
+    }
+  },
+  "additionalProperties": false,
+  "properties": {
+    "apiVersion": {
+      "const": "lab-ui-capability-assessment/v1",
+      "title": "Apiversion",
+      "type": "string"
+    },
+    "kind": {
+      "const": "UICapabilityAssessment",
+      "title": "Kind",
+      "type": "string"
+    },
+    "results": {
+      "items": {
+        "$ref": "#/$defs/CapabilityResult"
+      },
+      "maxItems": 11,
+      "title": "Results",
+      "type": "array"
+    },
+    "refusalCodes": {
+      "items": {
+        "$ref": "#/$defs/RefusalCode"
+      },
+      "title": "Refusalcodes",
+      "type": "array"
+    },
+    "skipCodes": {
+      "items": {
+        "$ref": "#/$defs/RefusalCode"
+      },
+      "title": "Skipcodes",
+      "type": "array"
+    },
+    "launchAuthorized": {
+      "const": false,
+      "default": false,
+      "title": "Launchauthorized",
+      "type": "boolean"
+    }
+  },
+  "required": [
+    "apiVersion",
+    "kind",
+    "results",
+    "refusalCodes",
+    "skipCodes"
+  ],
+  "title": "CapabilityAssessment",
+  "type": "object"
+}

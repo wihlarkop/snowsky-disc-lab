@@ -1,0 +1,11 @@
+{
+  "apiVersion": "lab-ui-capability-review/v1",
+  "kind": "UICapabilityReview",
+  "required": ["framebuffer-360", "input-touch", "mqueue-player", "radio-network"],
+  "optional": [],
+  "observations": [
+    {"name": "framebuffer-360", "outcome": "observed", "reason": null},
+    {"name": "input-touch", "outcome": "not-run", "reason": null},
+    {"name": "mqueue-player", "outcome": "blocked", "reason": "missing-stock-baseline"}
+  ]
+}

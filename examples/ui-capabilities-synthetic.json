@@ -1,0 +1,6 @@
+{
+  "apiVersion": "lab-ui-capabilities/v1",
+  "kind": "UICapabilities",
+  "declared": ["framebuffer-360", "input-touch", "mqueue-player"],
+  "unsupported": ["radio-network", "signed-ui-update"]
+}

@@ -1,0 +1,58 @@
+{
+  "$defs": {
+    "CapabilityName": {
+      "enum": [
+        "framebuffer-360",
+        "input-touch",
+        "physical-keys",
+        "mqueue-player",
+        "library-scan",
+        "pcm-local",
+        "playlist-queue",
+        "artwork-render",
+        "power-lifecycle",
+        "radio-network",
+        "signed-ui-update"
+      ],
+      "type": "string"
+    }
+  },
+  "additionalProperties": false,
+  "description": "A UI author's intent, separate from lab-ui/v1 firmware claims.",
+  "properties": {
+    "apiVersion": {
+      "const": "lab-ui-capabilities/v1",
+      "title": "Apiversion",
+      "type": "string"
+    },
+    "kind": {
+      "const": "UICapabilities",
+      "title": "Kind",
+      "type": "string"
+    },
+    "declared": {
+      "items": {
+        "$ref": "#/$defs/CapabilityName"
+      },
+      "maxItems": 11,
+      "title": "Declared",
+      "type": "array"
+    },
+    "unsupported": {
+      "items": {
+        "$ref": "#/$defs/CapabilityName"
+      },
+      "maxItems": 11,
+      "title": "Unsupported",
+      "type": "array"
+    }
+  },
+  "required": [
+    "apiVersion",
+    "kind",
+    "declared",
+    "unsupported"
+  ],
+  "title": "CapabilityDeclaration",
+  "type": "object"
+}

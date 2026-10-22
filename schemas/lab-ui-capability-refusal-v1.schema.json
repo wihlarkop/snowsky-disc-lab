@@ -1,0 +1,44 @@
+{
+  "$defs": {
+    "ContractRefusalCode": {
+      "enum": [
+        "invalid-structure",
+        "unsupported-version",
+        "unknown-capability",
+        "conflicting-declaration",
+        "contradictory-observation"
+      ],
+      "type": "string"
+    }
+  },
+  "additionalProperties": false,
+  "properties": {
+    "apiVersion": {
+      "const": "lab-ui-capability-refusal/v1",
+      "title": "Apiversion",
+      "type": "string"
+    },
+    "kind": {
+      "const": "UICapabilityRefusal",
+      "title": "Kind",
+      "type": "string"
+    },
+    "code": {
+      "$ref": "#/$defs/ContractRefusalCode"
+    },
+    "field": {
+      "maxLength": 64,
+      "pattern": "^(?:contract|apiVersion|kind|declared|unsupported|required|optional|observations)(?:\\.(?:[0-9]+|name|outcome|reason))*$",
+      "title": "Field",
+      "type": "string"
+    }
+  },
+  "required": [
+    "apiVersion",
+    "kind",
+    "code",
+    "field"
+  ],
+  "title": "CapabilityRefusal",
+  "type": "object"
+}
