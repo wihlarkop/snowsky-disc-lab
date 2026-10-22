@@ -220,6 +220,33 @@ IPC_SUPERVISION_GUEST_EVIDENCE_FILES = (
     ),
 )
 BUILD_EVIDENCE_MAX_BYTES = 1024 * 1024
+BUILD_TOOL_NAMES = (
+    "gcc",
+    "ld",
+    "ninja",
+    "meson",
+    "mipsel-linux-gnu-gcc",
+    "mipsel-linux-gnu-ld",
+    "mipsel-linux-gnu-readelf",
+)
+BUILD_EVIDENCE_FIELDS = {
+    "schema_version",
+    "status",
+    "artifacts",
+    "debian_snapshot_inrelease",
+    "debian_archive_keyring_sha256",
+    "package_bom_sha256",
+    "package_count",
+    "installed_packages",
+    "fakeroot_bootstrap_packages",
+    "toolchain",
+    "build_logs",
+    "input_manifest_sha256",
+    "configure_flags",
+    "elapsed_seconds",
+    "limits",
+    "retention",
+}
 SMOKE_GUEST_SOURCE = "scripts/ci/fixtures/mips32le_execution_smoke.c"
 SMOKE_GUEST_SOURCE_PATH = ROOT / SMOKE_GUEST_SOURCE
 SMOKE_GUEST_ELF_PATH = "/build/smoke/mips32le-execution-smoke.elf"
@@ -244,13 +271,14 @@ SMOKE_EXECUTION_OUTER_TIMEOUT_SECONDS = 30
 EXECUTION_DIAGNOSTIC_MAX_CHARS = 768
 PR13_REPRODUCIBLE_BUILD_HEAD = "36864ecbe6ab1dfd5b6fd672c680c48d0708c422"
 PR13_REPRODUCIBLE_BUILD_RUN = 39442532057
-EXPECTED_BUILD_ARTIFACTS = {
+EXPECTED_BUILD_ARTIFACT_ORDER = (
     "qemu-mipsel",
     "fbshim.so",
     "asndshim.so",
     "tinyshim.so",
     "mqshim.so",
-}
+)
+EXPECTED_BUILD_ARTIFACTS = set(EXPECTED_BUILD_ARTIFACT_ORDER)
 AUDIT_FILE_MAX_BYTES = {
     "inrelease.tsv": 4 * 1024,
     "archive-keyring-before.sha256": 128,
@@ -1968,23 +1996,42 @@ python3 /inputs/lab/qemu_runtime_build.py measure
 
 
 def validate_build_artifacts(artifacts: Any) -> None:
+    artifact_fields = {
+        "name",
+        "bytes",
+        "sha256",
+        "elf_class",
+        "elf_data",
+        "machine",
+        "flags",
+        "has_interpreter",
+    }
     if (
         not isinstance(artifacts, list)
         or len(artifacts) != len(EXPECTED_BUILD_ARTIFACTS)
         or any(not isinstance(item, dict) for item in artifacts)
         or {item.get("name") for item in artifacts} != EXPECTED_BUILD_ARTIFACTS
+        or tuple(item.get("name") for item in artifacts) != EXPECTED_BUILD_ARTIFACT_ORDER
     ):
-        raise StopBuild("build artifact set does not contain QEMU and all four reviewed shims")
+        raise StopBuild(
+            "build artifact set or canonical order does not match QEMU and all four shims"
+        )
     for item in artifacts:
         machine = item.get("machine")
         if (
-            not isinstance(item.get("name"), str)
+            item.keys() != artifact_fields
+            or not isinstance(item.get("name"), str)
             or not isinstance(item.get("bytes"), int)
+            or isinstance(item["bytes"], bool)
             or item["bytes"] <= 0
             or not isinstance(item.get("sha256"), str)
             or not re.fullmatch(r"[0-9a-f]{64}", item["sha256"])
             or item.get("has_interpreter") is not False
             or not isinstance(machine, str)
+            or not machine
+            or not isinstance(item.get("elf_class"), str)
+            or not isinstance(item.get("elf_data"), str)
+            or not isinstance(item.get("flags"), str)
         ):
             raise StopBuild("build artifact identity or static ELF report is invalid")
         if item["name"] == "qemu-mipsel":
@@ -1992,6 +2039,8 @@ def validate_build_artifacts(artifacts: Any) -> None:
                 item.get("elf_class") != "ELF64"
                 or item.get("elf_data") != "little endian"
                 or "x86-64" not in machine.lower()
+                or item["flags"] != "0x0"
+                or item["bytes"] > 150 * 1024 * 1024
             ):
                 raise StopBuild("QEMU artifact is not the expected static Linux x86_64 executable")
         elif (
@@ -1999,6 +2048,7 @@ def validate_build_artifacts(artifacts: Any) -> None:
             or item.get("elf_data") != "little endian"
             or "mips" not in machine.lower()
             or item.get("flags") != "0x70001407"
+            or item["bytes"] > 16 * 1024 * 1024
         ):
             raise StopBuild("shim ABI or NaN2008 ELF flags differ from the reviewed MIPS profile")
 
@@ -2044,6 +2094,293 @@ def read_fakeroot_bootstrap_evidence(path: Path) -> list[dict[str, Any]]:
     return sorted(packages, key=lambda item: item["package"])
 
 
+def _require_receipt_object(value: Any, fields: set[str], label: str) -> dict[str, Any]:
+    if not isinstance(value, dict) or value.keys() != fields:
+        raise StopBuild(f"{label} evidence is incomplete or contains unknown fields")
+    return value
+
+
+def _require_receipt_string(value: Any, label: str) -> str:
+    if (
+        not isinstance(value, str)
+        or not value
+        or value != value.strip()
+        or any(ord(character) < 32 for character in value)
+    ):
+        raise StopBuild(f"{label} evidence is missing or invalid")
+    return value
+
+
+def _require_receipt_digest(value: Any, label: str) -> str:
+    if not isinstance(value, str) or not re.fullmatch(r"[0-9a-f]{64}", value):
+        raise StopBuild(f"{label} digest is missing or invalid")
+    return value
+
+
+def _require_receipt_integer(value: Any, label: str, *, minimum: int = 0) -> int:
+    if not isinstance(value, int) or isinstance(value, bool) or value < minimum:
+        raise StopBuild(f"{label} evidence is missing or invalid")
+    return value
+
+
+def validate_build_identity(evidence: Any) -> None:
+    receipt = _require_receipt_object(evidence, BUILD_EVIDENCE_FIELDS, "QEMU build")
+    if (
+        receipt["schema_version"] != "firmware-free-qemu-runtime-build/v1"
+        or receipt["status"] != "build-passed-binaries-ephemeral"
+    ):
+        raise StopBuild("QEMU build evidence has an unsupported schema or status")
+    validate_build_artifacts(receipt["artifacts"])
+
+    inrelease = receipt["debian_snapshot_inrelease"]
+    if not isinstance(inrelease, list) or len(inrelease) != len(DEBIAN_SIGNING_FINGERPRINTS):
+        raise StopBuild("signed Debian snapshot evidence is incomplete")
+    observed_suites: set[str] = set()
+    for raw_record in inrelease:
+        record = _require_receipt_object(
+            raw_record,
+            {"file", "codename", "valid_signature_fingerprint", "sha256", "verified"},
+            "signed Debian snapshot",
+        )
+        suite = _require_receipt_string(record["codename"], "signed Debian suite")
+        filename = _require_receipt_string(record["file"], "signed Debian InRelease filename")
+        fingerprint = record["valid_signature_fingerprint"]
+        if (
+            suite not in DEBIAN_SIGNING_FINGERPRINTS
+            or suite in observed_suites
+            or PurePosixPath(filename).name != filename
+            or fingerprint != DEBIAN_SIGNING_FINGERPRINTS[suite]
+            or record["verified"] is not True
+        ):
+            raise StopBuild("signed Debian snapshot identity is invalid")
+        _require_receipt_digest(record["sha256"], "signed Debian InRelease")
+        observed_suites.add(suite)
+    if observed_suites != set(DEBIAN_SIGNING_FINGERPRINTS):
+        raise StopBuild("signed Debian snapshot suite set is incomplete")
+    if [item["codename"] for item in inrelease] != sorted(observed_suites):
+        raise StopBuild("signed Debian snapshot identities are not in canonical order")
+    _require_receipt_digest(receipt["debian_archive_keyring_sha256"], "Debian archive keyring")
+
+    packages = receipt["installed_packages"]
+    if not isinstance(packages, list) or not packages:
+        raise StopBuild("installed package identity list is missing")
+    package_count = _require_receipt_integer(
+        receipt["package_count"], "installed package count", minimum=1
+    )
+    if len(packages) != package_count:
+        raise StopBuild("installed package identity count does not match its receipt")
+    package_records = []
+    package_names = set()
+    for raw_package in packages:
+        package = _require_receipt_object(
+            raw_package, {"package", "version", "architecture"}, "installed package"
+        )
+        name = _require_receipt_string(package["package"], "installed package name")
+        version = _require_receipt_string(package["version"], "installed package version")
+        architecture = _require_receipt_string(
+            package["architecture"], "installed package architecture"
+        )
+        if architecture not in {"amd64", "all"} or name in package_names:
+            raise StopBuild(
+                "installed package identity is duplicated or has an unsupported architecture"
+            )
+        package_names.add(name)
+        package_records.append({"package": name, "version": version, "architecture": architecture})
+    sorted_packages = sorted(
+        package_records,
+        key=lambda item: (item["package"], item["version"], item["architecture"]),
+    )
+    if package_records != sorted_packages:
+        raise StopBuild("installed package identities are not in canonical order")
+    canonical_bom = "".join(
+        item["package"] + chr(9) + item["version"] + chr(9) + item["architecture"] + chr(10)
+        for item in package_records
+    ).encode("utf-8")
+    package_bom_sha256 = _require_receipt_digest(
+        receipt["package_bom_sha256"], "installed package BOM"
+    )
+    if hashlib.sha256(canonical_bom).hexdigest() != package_bom_sha256:
+        raise StopBuild("installed package BOM digest does not match its listed identities")
+
+    bootstrap = receipt["fakeroot_bootstrap_packages"]
+    if not isinstance(bootstrap, list) or len(bootstrap) != len(FAKEROOT_BOOTSTRAP_PACKAGES):
+        raise StopBuild("fakeroot bootstrap package identities are incomplete")
+    bootstrap_records = []
+    for raw_package in bootstrap:
+        package = _require_receipt_object(
+            raw_package,
+            {"package", "version", "architecture", "bytes", "sha256"},
+            "fakeroot bootstrap package",
+        )
+        name = _require_receipt_string(package["package"], "fakeroot package name")
+        _require_receipt_string(package["version"], "fakeroot package version")
+        architecture = _require_receipt_string(
+            package["architecture"], "fakeroot package architecture"
+        )
+        size = _require_receipt_integer(package["bytes"], "fakeroot package size", minimum=1)
+        if (
+            name not in FAKEROOT_BOOTSTRAP_PACKAGES
+            or architecture != "amd64"
+            or size > 4 * 1024 * 1024
+        ):
+            raise StopBuild("fakeroot bootstrap package identity is invalid")
+        _require_receipt_digest(package["sha256"], "fakeroot bootstrap package")
+        bootstrap_records.append(dict(package))
+    if {item["package"] for item in bootstrap_records} != set(
+        FAKEROOT_BOOTSTRAP_PACKAGES
+    ) or bootstrap_records != sorted(bootstrap_records, key=lambda item: item["package"]):
+        raise StopBuild("fakeroot bootstrap package set or order is invalid")
+
+    toolchain = _require_receipt_object(
+        receipt["toolchain"], {"native", "mipsel", "executable_sha256"}, "toolchain"
+    )
+    native = _require_receipt_object(
+        toolchain["native"],
+        {"gcc_version", "binutils_version", "meson_version", "ninja_version", "python_version"},
+        "native toolchain",
+    )
+    for name, version in native.items():
+        _require_receipt_string(version, f"native toolchain {name}")
+    mipsel = _require_receipt_object(
+        toolchain["mipsel"],
+        {
+            "compiler",
+            "compiler_version",
+            "version",
+            "target",
+            "reported_sysroot",
+            "sysroot_tree",
+            "sysroot_sha256",
+            "sysroot_file_count",
+            "sysroot_entry_count",
+            "compiler_packages",
+        },
+        "MIPS toolchain",
+    )
+    for name in (
+        "compiler",
+        "compiler_version",
+        "version",
+        "target",
+        "reported_sysroot",
+        "sysroot_tree",
+    ):
+        _require_receipt_string(mipsel[name], f"MIPS toolchain {name}")
+    if (
+        mipsel["compiler"] != "mipsel-linux-gnu-gcc"
+        or mipsel["target"] != "mipsel-linux-gnu"
+        or mipsel["sysroot_tree"] != "/usr/mipsel-linux-gnu"
+    ):
+        raise StopBuild("MIPS compiler target or sysroot location differs from the reviewed build")
+    _require_receipt_digest(mipsel["sysroot_sha256"], "MIPS sysroot")
+    file_count = _require_receipt_integer(
+        mipsel["sysroot_file_count"], "MIPS sysroot file count", minimum=1
+    )
+    entry_count = _require_receipt_integer(
+        mipsel["sysroot_entry_count"], "MIPS sysroot entry count", minimum=1
+    )
+    if file_count > entry_count or entry_count > 100_000:
+        raise StopBuild("MIPS sysroot inventory is outside its reviewed bound")
+    compiler_packages = mipsel["compiler_packages"]
+    if not isinstance(compiler_packages, list):
+        raise StopBuild("MIPS compiler package identities are missing")
+    cross_packages = [
+        item for item in package_records if item["package"].split(":", 1)[0] in CROSS_SHIM_PACKAGES
+    ]
+    if (
+        len(cross_packages) != len(CROSS_SHIM_PACKAGES)
+        or compiler_packages != cross_packages
+        or {item["package"].split(":", 1)[0] for item in compiler_packages}
+        != set(CROSS_SHIM_PACKAGES)
+    ):
+        raise StopBuild("MIPS compiler package identities do not match the installed package BOM")
+
+    executable_evidence = toolchain["executable_sha256"]
+    if not isinstance(executable_evidence, dict) or executable_evidence.keys() != set(
+        BUILD_TOOL_NAMES
+    ):
+        raise StopBuild("build tool executable identity set is incomplete")
+    for name, raw_identity in executable_evidence.items():
+        identity = _require_receipt_object(raw_identity, {"path", "sha256"}, f"build tool {name}")
+        executable_path = _require_receipt_string(identity["path"], f"build tool {name} path")
+        normalized_path = PurePosixPath(executable_path)
+        if (
+            not normalized_path.is_absolute()
+            or ".." in normalized_path.parts
+            or normalized_path.as_posix() != executable_path
+        ):
+            raise StopBuild("build tool executable path is not normalized")
+        _require_receipt_digest(identity["sha256"], f"build tool {name}")
+
+    _require_receipt_digest(receipt["input_manifest_sha256"], "build input manifest")
+    if receipt["configure_flags"] != list(QEMU_CONFIGURE_FLAGS):
+        raise StopBuild("QEMU configure flag identity differs from the reviewed build")
+    _require_receipt_integer(receipt["elapsed_seconds"], "build elapsed time")
+
+    required_logs = {
+        "apt_update",
+        "apt_install",
+        "source_hash_check",
+        "source_extract",
+        "patch_application",
+        "qemu_configure",
+        "qemu_build",
+        "shim_build",
+    }
+    optional_logs = {"synthetic_guest_build", "synthetic_guest_evidence"}
+    build_logs = receipt["build_logs"]
+    if (
+        not isinstance(build_logs, dict)
+        or required_logs - build_logs.keys()
+        or build_logs.keys() - required_logs - optional_logs
+    ):
+        raise StopBuild("sanitized build log identity set is incomplete or unknown")
+    for name, raw_log in build_logs.items():
+        log = _require_receipt_object(raw_log, {"bytes", "sha256"}, f"build log {name}")
+        _require_receipt_integer(log["bytes"], f"build log {name} size")
+        _require_receipt_digest(log["sha256"], f"build log {name}")
+
+    expected_limits = {
+        "container_memory_bytes": 6 * 1024**3,
+        "container_cpus": 2,
+        "build_tmpfs_bytes": 6 * 1024**3,
+        "temporary_storage_bytes": 512 * 1024**2,
+        "input_mount": "read-only",
+        "capabilities": "all dropped",
+        "no_new_privileges": True,
+        "network_mode": "bridge; runner egress is not isolated at network level",
+    }
+    limits = _require_receipt_object(
+        receipt["limits"], set(expected_limits), "build container limits"
+    )
+    if (
+        limits != expected_limits
+        or limits["no_new_privileges"] is not True
+        or any(
+            not isinstance(limits[name], int) or isinstance(limits[name], bool)
+            for name in (
+                "container_memory_bytes",
+                "container_cpus",
+                "build_tmpfs_bytes",
+                "temporary_storage_bytes",
+            )
+        )
+    ):
+        raise StopBuild("build container limits differ from the reviewed isolation profile")
+
+    retention = _require_receipt_object(
+        receipt["retention"],
+        {"copied_out", "compiled_binaries_published", "container_image_built_or_published"},
+        "build retention",
+    )
+    if (
+        retention["copied_out"] != ["sanitized JSON build evidence only"]
+        or retention["compiled_binaries_published"] is not False
+        or retention["container_image_built_or_published"] is not False
+    ):
+        raise StopBuild("build output retention differs from the reviewed policy")
+
+
 def copy_execution_binary(
     container_name: str,
     container_path: str,
@@ -2070,12 +2407,14 @@ def run_build_container(
     report_path: Path,
     reference: dict[str, Any],
     *,
+    expected_input_manifest_sha256: str,
     timeout_seconds: int = 2100,
     smoke_inputs_dir: Path | None = None,
     include_mqueue_guest: bool = False,
     include_ipc_handoff_guest: bool = False,
     include_ipc_supervision_guest: bool = False,
 ) -> dict[str, Any]:
+    _require_receipt_digest(expected_input_manifest_sha256, "expected build input manifest")
     if include_mqueue_guest and smoke_inputs_dir is None:
         raise StopBuild("POSIX queue guest requires execution input staging")
     if include_ipc_handoff_guest and (not include_mqueue_guest or smoke_inputs_dir is None):
@@ -2130,7 +2469,9 @@ def run_build_container(
             raise StopBuild("build evidence receipt has an unsupported schema")
         if evidence.get("status") != "build-passed-binaries-ephemeral":
             raise StopBuild("build evidence receipt does not record a successful build")
-        validate_build_artifacts(evidence.get("artifacts"))
+        validate_build_identity(evidence)
+        if evidence["input_manifest_sha256"] != expected_input_manifest_sha256:
+            raise StopBuild("build evidence input manifest differs from the reviewed host manifest")
         if evidence.get("retention", {}).get("compiled_binaries_published") is not False:
             raise StopBuild(
                 "build evidence does not confirm that compiled binaries were not published"
@@ -2584,17 +2925,8 @@ def measure_build_evidence() -> None:
 
     sysroot = Path("/usr/mipsel-linux-gnu")
     sysroot_sha256, sysroot_file_count, sysroot_entry_count = _tree_digest(sysroot)
-    tool_names = (
-        "gcc",
-        "ld",
-        "ninja",
-        "meson",
-        "mipsel-linux-gnu-gcc",
-        "mipsel-linux-gnu-ld",
-        "mipsel-linux-gnu-readelf",
-    )
     executable_evidence = {}
-    for name in tool_names:
+    for name in BUILD_TOOL_NAMES:
         located = shutil.which(name)
         if located is None:
             raise StopBuild(f"reviewed build tool is missing: {name}")
@@ -2631,6 +2963,7 @@ def measure_build_evidence() -> None:
     expected_suites = {"bookworm", "bookworm-updates", "bookworm-security"}
     if {item["codename"] for item in signatures} != expected_suites:
         raise StopBuild("the three expected Debian signed snapshot suites are not present")
+    signatures.sort(key=lambda item: item["codename"])
 
     build_logs = {}
     for label, name in (
@@ -2722,7 +3055,7 @@ def measure_build_evidence() -> None:
             "container_image_built_or_published": False,
         },
     }
-    validate_build_artifacts(evidence["artifacts"])
+    validate_build_identity(evidence)
     report_path = Path("/audit/build-evidence.json")
     if report_path.exists() or report_path.is_symlink():
         raise StopBuild("build evidence path already exists")
@@ -2840,46 +3173,74 @@ def _artifact_hashes(evidence: dict[str, Any]) -> dict[str, str]:
 
 
 def compare_clean_builds(first: dict[str, Any], second: dict[str, Any]) -> dict[str, Any]:
+    validate_build_identity(first)
+    validate_build_identity(second)
     differences = []
-    first_artifacts = _artifact_hashes(first)
     second_artifacts = _artifact_hashes(second)
+    first_artifact_identity = {item["name"]: item for item in first["artifacts"]}
+    second_artifact_identity = {item["name"]: item for item in second["artifacts"]}
     for name in sorted(EXPECTED_BUILD_ARTIFACTS):
-        if first_artifacts.get(name) != second_artifacts.get(name):
+        if first_artifact_identity[name] != second_artifact_identity[name]:
             differences.append(f"artifact:{name}")
-    if first.get("package_bom_sha256") != second.get("package_bom_sha256"):
+
+    if first["debian_snapshot_inrelease"] != second["debian_snapshot_inrelease"]:
+        differences.append("debian-snapshot-inrelease")
+    if first["debian_archive_keyring_sha256"] != second["debian_archive_keyring_sha256"]:
+        differences.append("debian-archive-keyring")
+    if first["fakeroot_bootstrap_packages"] != second["fakeroot_bootstrap_packages"]:
+        differences.append("fakeroot-bootstrap-packages")
+    if (
+        first["package_bom_sha256"] != second["package_bom_sha256"]
+        or first["installed_packages"] != second["installed_packages"]
+    ):
         differences.append("installed-package-bom")
-    first_toolchain = first.get("toolchain", {})
-    second_toolchain = second.get("toolchain", {})
-    if first_toolchain.get("mipsel", {}).get("sysroot_sha256") != second_toolchain.get(
-        "mipsel", {}
-    ).get("sysroot_sha256"):
-        differences.append("mipsel-sysroot")
-    if first_toolchain.get("executable_sha256") != second_toolchain.get("executable_sha256"):
+
+    first_toolchain = first["toolchain"]
+    second_toolchain = second["toolchain"]
+    if first_toolchain["native"] != second_toolchain["native"]:
+        differences.append("toolchain-native")
+    if first_toolchain["mipsel"] != second_toolchain["mipsel"]:
+        differences.append("toolchain-mipsel")
+    if first_toolchain["executable_sha256"] != second_toolchain["executable_sha256"]:
         differences.append("tool-executables")
-    if first.get("input_manifest_sha256") != second.get("input_manifest_sha256"):
+    if first["input_manifest_sha256"] != second["input_manifest_sha256"]:
         differences.append("source-input-manifest")
+    if first["configure_flags"] != second["configure_flags"]:
+        differences.append("qemu-configure-flags")
+    if first["limits"] != second["limits"]:
+        differences.append("build-container-limits")
+    if first["retention"] != second["retention"]:
+        differences.append("build-output-retention")
+
     return {
         "status": "identical" if not differences else "different",
         "compared": [
-            "QEMU and four shim SHA-256 values",
-            "installed package BOM SHA-256",
-            "MIPS sysroot SHA-256",
-            "tool executable SHA-256 values",
-            "reviewed input manifest SHA-256",
+            "QEMU executable and four shim artifact SHA-256 values",
+            "signed Debian InRelease identities and archive keyring SHA-256",
+            "fakeroot bootstrap package hashes and installed package BOM",
+            "native compiler/build tool versions and executable SHA-256 values",
+            "MIPS compiler version, target, package identities and sysroot digest",
+            "reviewed input manifest SHA-256 and QEMU configure flags",
+            "build container limits and output retention policy",
         ],
         "differences": differences,
         "second_artifact_sha256": second_artifacts,
-        "second_package_bom_sha256": second.get("package_bom_sha256"),
-        "second_sysroot_sha256": second_toolchain.get("mipsel", {}).get("sysroot_sha256"),
+        "second_package_bom_sha256": second["package_bom_sha256"],
+        "second_sysroot_sha256": second_toolchain["mipsel"]["sysroot_sha256"],
     }
 
 
 def build_status_for_repeat(repeat_status: str) -> str:
+    if not isinstance(repeat_status, str):
+        raise StopBuild("repeated build status is unsupported")
     suffix = {
         "identical": "identical",
         "different": "different",
         "attempted-failed": "failed",
-    }.get(repeat_status, "not-run")
+        "not-run": "not-run",
+    }.get(repeat_status)
+    if suffix is None:
+        raise StopBuild("repeated build status is unsupported")
     return f"firmware-free-build-passed-repeat-{suffix}"
 
 
@@ -2940,6 +3301,7 @@ def build(*, execution_smoke: bool = False, synthetic_session: bool = False) -> 
             inputs_dir,
             workdir / "build-evidence.json",
             reference,
+            expected_input_manifest_sha256=input_manifest_sha256,
             smoke_inputs_dir=smoke_inputs_dir,
             include_mqueue_guest=synthetic_session,
             include_ipc_handoff_guest=synthetic_session,
@@ -3002,6 +3364,7 @@ def build(*, execution_smoke: bool = False, synthetic_session: bool = False) -> 
                     inputs_dir,
                     second_path,
                     reference,
+                    expected_input_manifest_sha256=input_manifest_sha256,
                     timeout_seconds=min(estimate_seconds, available_seconds),
                 )
                 repeat = compare_clean_builds(first, second)
@@ -3121,6 +3484,11 @@ def build(*, execution_smoke: bool = False, synthetic_session: bool = False) -> 
         else "Firmware-free QEMU and MIPS shim build",
         receipt,
     )
+    if repeat_status in {"different", "attempted-failed"}:
+        raise StopBuild(
+            "the independent clean build did not produce complete identical evidence; "
+            "see the QEMU runtime receipt"
+        )
 
 
 def main() -> int:

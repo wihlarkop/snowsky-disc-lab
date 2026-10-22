@@ -95,7 +95,7 @@ Issue #1 delivers M0-01/M0-03 and the initial workflow. M0-02/M0-05 add immutabl
 **Goal:** prove the underlying emulator works on *our* supported host before introducing custom UIs.
 
 - [ ] **M1-01** Pin reviewed QEMU `2.x` commit, Docker image/tool dependencies, official V2.57 rootfs metadata and guest shims. Record known limitations.
-  - [Preparation evidence](M1-01-RUNTIME-PREPARATION.md) records immutable source/base-image/recipe/patch identities and upstream firmware references after PR #6's exact integrated-main CI passed. Built runtime/toolchain/shim identities and execution gates remain unresolved; this item is not fully closed.
+  - [Preparation evidence](M1-01-RUNTIME-PREPARATION.md) records immutable source/base-image/recipe/patch identities and upstream firmware references after PR #6's exact integrated-main CI passed. The [runtime reproducibility and Windows/WSL2 report](M1-07-WINDOWS-WSL2-VALIDATION.md) records strict build receipt checks, local host blockers and exact hosted CI results; M1-01 remains open until the new clean-build run and stock-runtime gates are reviewed.
 - [ ] **M1-02** Add an explicit, safe local official firmware intake path: ZIP/OTA folder selection, size/contiguity/hash checks, optional verified vendor signature when trust chain is reviewed; fail closed for unknown firmware.
   - [Safe intake foundation](FIRMWARE-INTAKE.md) implements bounded offline ZIP/package inspection, strict V2.57 structure and main-manifest ciphertext checks, and versioned receipts with no extraction/execution authority. Synthetic acceptance only; product/plaintext identity, vendor trust chain and actual-package acceptance remain unverified. Full M1-02 stays open.
 - [ ] **M1-03** Extract into per-firmware, per-run isolated ignored volumes; never upload firmware or mount real devices.
@@ -105,6 +105,7 @@ Issue #1 delivers M0-01/M0-03 and the initial workflow. M0-02/M0-05 add immutabl
 - [ ] **M1-05** Test touches/swipes/physical key model, SD import/index, local PCM output and WAV fixture comparisons.
 - [ ] **M1-06** Test stop/restart/power lifecycle and persistent guest data isolation; document qemu-user timing and hardware limitations.
 - [ ] **M1-07** Verify Windows 11 + WSL2/Docker path separately from Linux; do not assume Docker Desktop behavior matches native Linux.
+  - [Windows/WSL2 validation](M1-07-WINDOWS-WSL2-VALIDATION.md) records CLI access-denied results for WSL2/CIM and an unavailable Docker Engine pipe. No local QEMU or synthetic runtime was run; M1-07 remains open.
 - [ ] **M1-08** Produce a provenance-rich V2.57 stock test report with precise revision/hash, host details and measured timings where observed (not hardware-FPS claims).
 
 **Exit gate:** a new trusted environment can reproduce stock V2.57 boot, input, media scan, full short-track PCM playback and guest restart with artifacts attached locally; no physical DISC writes.
