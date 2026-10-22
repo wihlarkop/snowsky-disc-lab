@@ -10,7 +10,7 @@ The existing pinned QEMU build pipeline remains the source of build evidence. Th
 
 Independent clean builds now compare those identities and full artifact records. Missing or unknown evidence is an error; an incomplete comparison cannot be called `identical`. Repeat statuses are explicit. A differing or attempted-but-failed repeat makes the build command fail. A resource- or time-gated repeat remains `not-run`, with its reason recorded; it is not reported as reproducible.
 
-The existing firmware-free acceptance remains the implementation under test. The pull request CI runs the QEMU build/repeat workflow and the existing synthetic runtime session workflow. Hosted Linux results must be read from the exact pull request head and appended here before this report is considered complete.
+The existing firmware-free acceptance remains the implementation under test. The pull request CI runs the QEMU build/repeat workflow and the existing synthetic runtime session workflow.
 
 ## Windows host diagnostics
 
@@ -29,7 +29,39 @@ No Docker build, QEMU invocation, synthetic filesystem acceptance, message queue
 
 ## Hosted Linux evidence
 
-**Pending exact pull request CI.** Record the PR head SHA, workflow run IDs and conclusions, first and second build artifact SHA-256 values, package BOM and sysroot digests, and repeat status after the workflows finish. Do not mark a `not-run` repeat reproducible. These hosted results do not establish Windows/WSL2 behavior or stock firmware compatibility.
+The following PR-triggered workflow runs used code head `d5d053e02d7b2e0be9fd8b90a07a41214c039387` on branch `codex/m1-runtime-repro-wsl2`, based on `3625df30805f570c148fccc6bf6d928de7d6795e`. They are Linux hosted-runner results; this report-only follow-up does not change the tested implementation.
+
+### QEMU runtime build and repeat
+
+- Firmware-free QEMU runtime build run [#16](https://github.com/wihlarkop/snowsky-disc-lab/actions/runs/39797079902), job `qemu-runtime-build` (`119886965746`): **completed / success**.
+- Primary build status: `passed` (77.4 seconds). A resource-checked clean repeat completed in 76.9 seconds; overall receipt elapsed time was 169.6 seconds.
+- Repeat status: `identical`; the recorded comparison list was complete and had no differences. Host capacity checks were sufficient before both builds. Temporary build container cleanup was verified.
+- Both builds recorded these artifact SHA-256 values:
+
+  | Artifact | SHA-256 |
+  | --- | --- |
+  | `qemu-mipsel` | `2a58998c25a7836b910f255641a95e9d828967c75ed6b0de2e5490cb82038ddb` |
+  | `fbshim.so` | `9bb964e2e216ba105d3990c212f34e8d4e4b26e7f773e16e0e930e256d6d7abc` |
+  | `asndshim.so` | `c08f2c1e86cdf8a7ffebe50daedd47da6a6a2c9506ffc3f2114e17c39303a346` |
+  | `tinyshim.so` | `c9e81647d23b2025f4400f6997cf67350dae59ebcbef165bcca96bb3951aba16` |
+  | `mqshim.so` | `f3523ef246171ec60a02f70399bc3b735df48937bbb86f1f5996aa53b041048b` |
+
+- Package BOM SHA-256: `161eceffac7fdadb5b5999ad9a7ce86bde097ced47413366b94bcb326c888481` for both builds. MIPS sysroot SHA-256: `96cd2b889c0fb0b4e8507944aa3bce80a0d5088e1606e1a8a5d6d8198954047f` for both. Prepared input manifest SHA-256: `3d1ade1b5ec41b37f8ef5b261390f1d115dd199946bd8b7b7109e53ea7e68646`. Pinned QEMU source commit: `85ab00deb08ac112066377fd8083cc8727ed859a`; reviewed projection digest: `ef1f0b45f86d4724a7359694b2c3bc4c`.
+- This workflow built but did not invoke QEMU, boot a guest, process firmware, or publish artifacts. Its receipt records redistribution clearance as pending review; compiled outputs and container images were not published.
+
+### Synthetic runtime acceptance
+
+- Firmware-free synthetic runtime run [#17](https://github.com/wihlarkop/snowsky-disc-lab/actions/runs/39797079941), job `synthetic-runtime` (`119886964934`): **completed / success** on the same code head.
+- Synthetic runtime status: `passed`. Filesystem sessions, POSIX message queue sessions, IPC handoff, and IPC supervision passed; session containers and private temporary filesystems were removed. The supervision scenarios reaped their child processes, including the bounded timeout case.
+- Synthetic guest identity `mips32le-execution-smoke.elf`: `c03d59d5f42ab3eb8e4afb388a1fe249d7f141a7897aac9f6de9d38b7598a423`. The QEMU binary identity matched the build/repeat result above. This session receipt reports `repeat_build_status=not-run`; reproducibility evidence is from the separate QEMU run #16 above.
+- The synthetic runtime used a no-network, no-IPC guest container with all capabilities dropped, a read-only root filesystem, and bounded private temporary filesystems. QEMU user mode shares the host kernel; the hosted runner was not network-level egress isolated. This is firmware-free hosted Linux acceptance, not Windows/WSL2 validation or a dedicated-VM claim.
+
+### Other exact-head CI
+
+- Firmware-free M0 run [#87](https://github.com/wihlarkop/snowsky-disc-lab/actions/runs/39797080028): **completed / success**.
+- Separate QEMU MIPS32LE execution smoke run [#29](https://github.com/wihlarkop/snowsky-disc-lab/actions/runs/39797079896): **skipped** by that workflow's branch guard; it had no executed jobs. The synthetic runtime acceptance above is the executed guest evidence.
+
+These hosted results establish reproducible firmware-free build evidence and synthetic Linux runtime acceptance for the stated code head. They do not establish Windows/WSL2 behavior, redistribution clearance, or stock firmware compatibility.
 
 ## Remaining gates
 
