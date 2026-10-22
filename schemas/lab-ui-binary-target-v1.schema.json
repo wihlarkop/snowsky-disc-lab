@@ -1,0 +1,110 @@
+{
+  "additionalProperties": false,
+  "description": "Explicit target snapshot; its assertions require independent review.",
+  "properties": {
+    "apiVersion": {
+      "const": "lab-ui-binary-target/v1",
+      "title": "Apiversion",
+      "type": "string"
+    },
+    "kind": {
+      "const": "UIBinaryTarget",
+      "title": "Kind",
+      "type": "string"
+    },
+    "binarySha256": {
+      "pattern": "^[0-9a-f]{64}$",
+      "title": "Binarysha256",
+      "type": "string"
+    },
+    "runnerId": {
+      "pattern": "^[A-Za-z0-9][A-Za-z0-9._-]{0,127}$",
+      "title": "Runnerid",
+      "type": "string"
+    },
+    "profileId": {
+      "pattern": "^[A-Za-z0-9][A-Za-z0-9._-]{0,127}$",
+      "title": "Profileid",
+      "type": "string"
+    },
+    "mipsAbi": {
+      "const": "O32",
+      "title": "Mipsabi",
+      "type": "string"
+    },
+    "floatAbi": {
+      "enum": [
+        "soft",
+        "hard"
+      ],
+      "title": "Floatabi",
+      "type": "string"
+    },
+    "linkage": {
+      "enum": [
+        "static",
+        "dynamic"
+      ],
+      "title": "Linkage",
+      "type": "string"
+    },
+    "interpreter": {
+      "anyOf": [
+        {
+          "maxLength": 256,
+          "minLength": 2,
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "title": "Interpreter"
+    },
+    "reviewedDependencies": {
+      "items": {
+        "pattern": "^[A-Za-z0-9_+.-]{1,128}$",
+        "type": "string"
+      },
+      "maxItems": 256,
+      "title": "Revieweddependencies",
+      "type": "array"
+    },
+    "availablePaths": {
+      "items": {
+        "maxLength": 256,
+        "minLength": 2,
+        "type": "string"
+      },
+      "maxItems": 256,
+      "title": "Availablepaths",
+      "type": "array"
+    },
+    "absentPaths": {
+      "items": {
+        "maxLength": 256,
+        "minLength": 2,
+        "type": "string"
+      },
+      "maxItems": 256,
+      "title": "Absentpaths",
+      "type": "array"
+    }
+  },
+  "required": [
+    "apiVersion",
+    "kind",
+    "binarySha256",
+    "runnerId",
+    "profileId",
+    "mipsAbi",
+    "floatAbi",
+    "linkage",
+    "interpreter",
+    "reviewedDependencies",
+    "availablePaths",
+    "absentPaths"
+  ],
+  "title": "BinaryTarget",
+  "type": "object"
+}
