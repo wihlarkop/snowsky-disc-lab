@@ -39,7 +39,8 @@ disc-lab compat compare EARLIER.json LATER.json --format markdown
 ```
 
 Markdown is the default. The command uses bounded reads and rejects a regular
-file larger than the 1 MiB `MAX_RECEIPT_BYTES` limit. It uses the same strict
+file larger than the 1 MiB `MAX_RECEIPT_BYTES` limit. UNC and Windows network
+namespace paths are refused before filesystem access. It uses the same strict
 receipt parser as `compat report`. JSON retains both parsed receipts, both
 complete artifact identity maps, the scenario history, and any declared QEMU
 build-source identities. Markdown shows both artifact maps, each scenario's

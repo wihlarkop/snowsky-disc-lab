@@ -3,7 +3,7 @@
 import json
 import stat
 from dataclasses import asdict
-from pathlib import Path
+from pathlib import Path, PureWindowsPath
 from typing import Annotated, Literal
 
 import typer
@@ -418,6 +418,10 @@ def compatibility_report(
 
 
 def _read_comparison_receipt(path: Path, label: str) -> dict:
+    path_text = str(path)
+    windows_drive = PureWindowsPath(path_text).drive
+    if path_text.startswith(("\\\\", "//")) or windows_drive.startswith("\\\\"):
+        raise ValueError(f"{label} receipt path must be local")
     try:
         metadata = path.stat()
     except OSError:

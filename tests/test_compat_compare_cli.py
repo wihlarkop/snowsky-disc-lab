@@ -5,7 +5,7 @@ import pytest
 from test_compat_evidence import _ipc_handoff_receipt, _qemu_receipt, _receipt
 from typer.testing import CliRunner
 
-from snowsky_disc_lab.cli import app
+from snowsky_disc_lab.cli import _read_comparison_receipt, app
 from snowsky_disc_lab.compat_evidence import MAX_RECEIPT_BYTES
 
 runner = CliRunner()
@@ -178,6 +178,27 @@ def test_compare_refuses_non_regular_input(tmp_path: Path) -> None:
 
     assert result.exit_code == 2
     assert "Traceback" not in result.output
+
+
+@pytest.mark.parametrize(
+    "network_path",
+    [
+        r"\\server\share\receipt.json",
+        "//server/share/receipt.json",
+        r"\\?\UNC\server\share\receipt.json",
+    ],
+)
+def test_compare_rejects_unc_paths_before_filesystem_access(
+    monkeypatch: pytest.MonkeyPatch, network_path: str
+) -> None:
+    def forbidden(*args: object, **kwargs: object) -> None:
+        pytest.fail("network namespace paths must be rejected before filesystem access")
+
+    monkeypatch.setattr(Path, "stat", forbidden)
+    monkeypatch.setattr(Path, "open", forbidden)
+
+    with pytest.raises(ValueError, match="path must be local"):
+        _read_comparison_receipt(Path(network_path), "earlier")
 
 
 def test_compare_refuses_oversized_receipt_concisely(tmp_path: Path) -> None:
