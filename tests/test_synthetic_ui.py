@@ -75,6 +75,7 @@ def test_journey_validates_pixels_input_rejections_distinct_sessions_and_cleanup
         lambda r: r["sessions"][0]["isolation"].update(host_devices=True),
         lambda r: r["sessions"][0]["isolation"]["verified_host_config"].update(Privileged=0),
         lambda r: r["sessions"][1].update(observation=r["sessions"][0]["observation"]),
+        lambda r: r["sessions"][0]["isolation"].update(stdout_limit_bytes=1024),
         lambda r: r.update(authenticated=True),
     ]
     for mutate in mutations:

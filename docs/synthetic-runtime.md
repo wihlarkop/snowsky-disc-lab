@@ -279,6 +279,7 @@ the completed frame write. The wrapper reads the complete frame bytes before
 sending the six-byte `RIGHT\n` event through a private FIFO. The guest reads that
 event and draws a second frame with the cursor at column 3. The wrapper reads the
 second frame only after the guest exits and emits its matching-token completion.
+The UI transcript is bounded to 3072 ASCII bytes (including full frame hex).
 The Python host compares both complete observed byte arrays with an independent
 pixel oracle, then hashes the observed bytes. A log line or declared digest alone
 cannot satisfy this acceptance. No fixed sleep is used for readiness.

@@ -983,6 +983,9 @@ def launch(
         receipt["isolation"] = validate_container(
             _inspect(container_id), inputs, rootfs, token, args
         )
+        if _case in synthetic_ui.CASES:
+            # Complete frame bytes are exported as bounded hex for host verification.
+            receipt["isolation"]["stdout_limit_bytes"] = 3072
         # Recheck immutable artifacts immediately before start.
         _verify_inputs(inputs, build_evidence)
         _verify_layout(rootfs)

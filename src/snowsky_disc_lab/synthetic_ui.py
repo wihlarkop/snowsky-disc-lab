@@ -203,6 +203,7 @@ def validate_receipt(receipt: Any) -> None:
                 },
                 sort_keys=True,
             )
+            or isolation.get("stdout_limit_bytes") != 3072
             or isolation.get("uid_gid") != "65534:65534"
             or isolation.get("no_new_privileges") is not True
         ):
