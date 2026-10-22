@@ -23,6 +23,15 @@ DEADLINE_SECONDS = {
     "producer-failure-cancels-sibling": 5,
 }
 SCENARIOS = tuple(DEADLINE_SECONDS)
+_WRAPPER_EXIT_STAGES = {
+    93: "child_start_marker",
+    94: "kill_delivery",
+    95: "term_delivery",
+    96: "child_wait",
+    97: "diagnostic_limit",
+    98: "diagnostic_limit",
+    99: "scenario_selection",
+}
 QUEUE_NAMES = {
     "normal": {"request": handoff.REQUEST_QUEUE, "acknowledgment": handoff.ACK_QUEUE},
     "consumer-exits-before-request": {
@@ -313,7 +322,10 @@ def _read_record(fields: dict[str, str], scenario: str) -> dict[str, Any] | None
 def parse_execution_output(output: str, *, wrapper_exit_code: int = 0) -> dict[str, Any]:
     """Accept only the fixed matrix; suppress all unrecognized diagnostics."""
     if wrapper_exit_code != 0:
-        return _failure("supervisor-wrapper", "supervisor_exit")
+        return _failure(
+            "supervisor-wrapper",
+            _WRAPPER_EXIT_STAGES.get(wrapper_exit_code, "supervisor_exit"),
+        )
     try:
         encoded = output.encode("ascii")
     except (AttributeError, UnicodeEncodeError):

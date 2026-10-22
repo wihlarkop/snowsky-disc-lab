@@ -253,6 +253,8 @@ def test_ipc_supervision_command_uses_fixed_child_pids_and_bounded_signals():
     assert "/inputs/mips32le-posix-ipc-supervision.elf consumer" in command
     assert "/inputs/mips32le-posix-ipc-supervision.elf producer" in command
     assert "wait -n -p event_pid" in command
+    assert 'jobs -pr | grep -Fxq "$consumer_pid"' in command
+    assert 'reap_after_missed_signal consumer "$consumer_pid"' in command
     assert 'kill -TERM "$consumer_pid"' in command
     assert 'kill -TERM "$producer_pid"' in command
     assert 'kill -KILL "$consumer_pid"' in command

@@ -310,6 +310,23 @@ if [ "$1" = "ipc-supervision" ]; then
         exit 96
       fi
     }
+    reap_after_missed_signal() {
+      missed_role="$1"
+      missed_pid="$2"
+      set +e
+      wait "$missed_pid"
+      missed_status=$?
+      set -e
+      if [ "$missed_role" = consumer ]; then
+        consumer_pending=no
+        consumer_status="$missed_status"
+        consumer_reason="$(role_status_reason "$missed_status")"
+      else
+        producer_pending=no
+        producer_status="$missed_status"
+        producer_reason="$(role_status_reason "$missed_status")"
+      fi
+    }
     stop_timer() {
       if [ "$timer_pending" = yes ]; then
         kill "$timer_pid" 2>/dev/null || true
@@ -317,17 +334,43 @@ if [ "$1" = "ipc-supervision" ]; then
         timer_pending=no
       fi
     }
+    reap_completed_children() {
+      if [ "$consumer_pending" = yes ] && ! jobs -pr | grep -Fxq "$consumer_pid"; then
+        set +e
+        wait "$consumer_pid"
+        completed_status=$?
+        set -e
+        consumer_pending=no
+        consumer_status="$completed_status"
+        consumer_reason="$(role_status_reason "$completed_status")"
+      fi
+      if [ "$producer_pending" = yes ] && ! jobs -pr | grep -Fxq "$producer_pid"; then
+        set +e
+        wait "$producer_pid"
+        completed_status=$?
+        set -e
+        producer_pending=no
+        producer_status="$completed_status"
+        producer_reason="$(role_status_reason "$completed_status")"
+      fi
+    }
     send_term_to_pending() {
       if [ "$consumer_pending" = yes ]; then
-        kill -TERM "$consumer_pid" || exit 95
-        term_roles=consumer
+        if kill -TERM "$consumer_pid" 2>/dev/null; then
+          term_roles=consumer
+        else
+          reap_after_missed_signal consumer "$consumer_pid"
+        fi
       fi
       if [ "$producer_pending" = yes ]; then
-        kill -TERM "$producer_pid" || exit 95
-        if [ "$term_roles" = none ]; then
-          term_roles=producer
+        if kill -TERM "$producer_pid" 2>/dev/null; then
+          if [ "$term_roles" = none ]; then
+            term_roles=producer
+          else
+            term_roles="${term_roles},producer"
+          fi
         else
-          term_roles="${term_roles},producer"
+          reap_after_missed_signal producer "$producer_pid"
         fi
       fi
     }
@@ -342,21 +385,31 @@ if [ "$1" = "ipc-supervision" ]; then
       wait_event
       if [ "$timer_pending" = yes ] && [ "$event_pid" = "$timer_pid" ]; then
         timer_pending=no
-        deadline_expired=yes
-        send_term_to_pending
-        start_grace_if_needed
+        reap_completed_children
+        if [ "$consumer_pending" = yes ] || [ "$producer_pending" = yes ]; then
+          deadline_expired=yes
+          send_term_to_pending
+          start_grace_if_needed
+        fi
       elif [ "$grace_pending" = yes ] && [ "$event_pid" = "$grace_pid" ]; then
         grace_pending=no
+        reap_completed_children
         if [ "$consumer_pending" = yes ]; then
-          kill -KILL "$consumer_pid" || exit 94
-          kill_roles=consumer
+          if kill -KILL "$consumer_pid" 2>/dev/null; then
+            kill_roles=consumer
+          else
+            reap_after_missed_signal consumer "$consumer_pid"
+          fi
         fi
         if [ "$producer_pending" = yes ]; then
-          kill -KILL "$producer_pid" || exit 94
-          if [ "$kill_roles" = none ]; then
-            kill_roles=producer
+          if kill -KILL "$producer_pid" 2>/dev/null; then
+            if [ "$kill_roles" = none ]; then
+              kill_roles=producer
+            else
+              kill_roles="${kill_roles},producer"
+            fi
           else
-            kill_roles="${kill_roles},producer"
+            reap_after_missed_signal producer "$producer_pid"
           fi
         fi
       else

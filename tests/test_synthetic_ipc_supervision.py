@@ -64,6 +64,17 @@ def test_wrapper_failure_is_distinguished_and_raw_output_is_not_retained() -> No
     assert "QEMU is missing" not in repr(observed)
 
 
+def test_term_delivery_race_is_reported_as_a_sanitized_wrapper_stage() -> None:
+    supervision = _supervision_module()
+
+    observed = supervision.parse_execution_output("", wrapper_exit_code=95)
+
+    assert observed == {
+        "status": "failed",
+        "failure": {"category": "supervisor-wrapper", "stage": "term_delivery"},
+    }
+
+
 def test_acceptance_repeats_the_matrix_in_fresh_owned_containers(
     monkeypatch: pytest.MonkeyPatch, tmp_path: Path
 ) -> None:
