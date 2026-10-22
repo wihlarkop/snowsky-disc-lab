@@ -1200,6 +1200,13 @@ def test_repeat_status_has_explicit_top_level_build_status(
     assert qemu_runtime_build.build_status_for_repeat(repeat_status) == expected
 
 
+def test_build_identity_rejects_non_string_artifact_names() -> None:
+    evidence = _valid_build_evidence()
+    evidence["artifacts"][0]["name"] = ["qemu-mipsel"]
+    with pytest.raises(qemu_runtime_build.StopBuild, match="canonical order"):
+        qemu_runtime_build.validate_build_identity(evidence)
+
+
 def test_build_identity_rejects_incomplete_or_unknown_evidence() -> None:
     evidence = _valid_build_evidence()
     del evidence["toolchain"]

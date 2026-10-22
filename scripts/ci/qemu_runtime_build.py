@@ -2010,8 +2010,13 @@ def validate_build_artifacts(artifacts: Any) -> None:
         not isinstance(artifacts, list)
         or len(artifacts) != len(EXPECTED_BUILD_ARTIFACTS)
         or any(not isinstance(item, dict) for item in artifacts)
-        or {item.get("name") for item in artifacts} != EXPECTED_BUILD_ARTIFACTS
-        or tuple(item.get("name") for item in artifacts) != EXPECTED_BUILD_ARTIFACT_ORDER
+    ):
+        raise StopBuild("build artifact set does not contain QEMU and all four reviewed shims")
+    names = [item.get("name") for item in artifacts]
+    if (
+        any(not isinstance(name, str) for name in names)
+        or set(names) != EXPECTED_BUILD_ARTIFACTS
+        or tuple(names) != EXPECTED_BUILD_ARTIFACT_ORDER
     ):
         raise StopBuild(
             "build artifact set or canonical order does not match QEMU and all four shims"
