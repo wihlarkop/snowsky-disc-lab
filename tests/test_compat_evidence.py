@@ -558,6 +558,16 @@ def _qemu_receipt(*, repeat_status: str = "not-run", firmware_processed: bool = 
     }
 
 
+def _hosted_pr23_qemu_build_receipt() -> dict[str, Any]:
+    """Load sanitized hosted run 39770010964 from PR #23 head cd0d816."""
+    fixture = Path(__file__).parent / "fixtures" / "hosted-pr23-qemu-build-receipt.json"
+    return json.loads(fixture.read_text(encoding="utf-8"))
+
+
+def _hosted_pr23_supervision_receipt() -> dict[str, Any]:
+    return _hosted_pr23_qemu_build_receipt()["synthetic_runtime"]
+
+
 def test_parse_receipt_preserves_identity_and_does_not_promote_stock_compatibility() -> None:
     receipt = _receipt()
     assert [session["case"] for session in receipt["sessions"]] == [
@@ -587,6 +597,7 @@ def test_parse_receipt_preserves_identity_and_does_not_promote_stock_compatibili
     assert report["scenarios"]["synthetic-mqueue-first-session"]["status"] == "PASS"
     assert report["scenarios"]["synthetic-mqueue-second-session"]["status"] == "PASS"
     assert report["scenarios"]["synthetic-ipc-handoff"]["status"] == "NOT RUN"
+    assert report["scenarios"]["synthetic-ipc-supervision"]["status"] == "NOT RUN"
     assert report["scenarios"]["stock-v257-boot"]["status"] == "NOT RUN"
     assert report["scenarios"]["stock-ipc-compatibility"]["status"] == "NOT RUN"
     assert report["scenarios"]["arbitrary-user-binary-isolation"]["status"] == "UNSUPPORTED"
@@ -621,6 +632,179 @@ def test_qemu_envelope_accepts_current_main_ipc_handoff_receipt() -> None:
     assert report["scenarios"]["synthetic-ipc-handoff"]["status"] == "PASS"
     assert report["scenarios"]["stock-v257-boot"]["status"] == "NOT RUN"
     assert report["scenarios"]["stock-ipc-compatibility"]["status"] == "NOT RUN"
+
+
+def test_parse_sanitized_hosted_pr23_supervision_receipt() -> None:
+    receipt = _hosted_pr23_supervision_receipt()
+
+    report = parse_receipt(json.dumps(receipt), source="hosted-pr23-supervision.json")
+
+    assert report["synthetic_ipc_supervision"]["status"] == "PASS"
+    assert report["synthetic_ipc_supervision"]["sessions"] == 2
+    assert [case["scenario"] for case in report["synthetic_ipc_supervision"]["scenarios"]] == [
+        "normal",
+        "consumer-exits-before-request",
+        "producer-exits-before-ack",
+        "producer-exceeds-deadline",
+        "producer-failure-cancels-sibling",
+    ]
+    assert all(
+        case["status"] == "PASS" for case in report["synthetic_ipc_supervision"]["scenarios"]
+    )
+    assert (
+        report["artifacts"]["ipc-supervision-guest"]
+        == receipt["synthetic_ipc_supervision"]["identities"]["guest_elf_sha256"]
+    )
+    assert report["synthetic_ipc_supervision"]["stock_compatibility"] == "UNVERIFIED"
+    assert report["synthetic_ipc_supervision"]["m1_04_stock_boot"] == "NOT RUN"
+    assert report["support_status"] == "unknown"
+    assert report["evidence_authentication"] == {
+        "receipt_values": "declared",
+        "independent_authentication": "not performed",
+        "artifact_bytes_rehashed": False,
+    }
+
+
+def test_qemu_envelope_accepts_sanitized_hosted_pr23_supervision_receipt() -> None:
+    receipt = _hosted_pr23_qemu_build_receipt()
+
+    report = parse_receipt(json.dumps(receipt), source="hosted-pr23-qemu-summary.json")
+
+    assert report["build_source"] == receipt["source_identity"]
+    assert report["synthetic_ipc_supervision"]["status"] == "PASS"
+    assert report["scenarios"]["stock-ipc-compatibility"]["status"] == "NOT RUN"
+
+
+@pytest.mark.parametrize(
+    "mutate",
+    [
+        lambda receipt: receipt["synthetic_ipc_supervision"].update(unreviewed=True),
+        lambda receipt: receipt["toolchain"].update(unreviewed=True),
+        lambda receipt: receipt["toolchain"]["qemu_binary"].update(sha256="8" * 64),
+        lambda receipt: receipt["toolchain"]["mipsel_cross_toolchain"].update(target="mips"),
+        lambda receipt: receipt["toolchain"].update(upstream_commit=[]),
+        lambda receipt: receipt["sessions"][0]["cleanup"].update(container_stop_command=[]),
+        lambda receipt: receipt["synthetic_ipc_supervision"].update(
+            schema_version="firmware-free-mips32le-synthetic-ipc-supervision/v2"
+        ),
+        lambda receipt: receipt["identities"].pop("mips32le-posix-ipc-supervision.elf"),
+        lambda receipt: receipt["synthetic_ipc_supervision"]["identities"].update(
+            qemu_mipsel_sha256="8" * 64
+        ),
+        lambda receipt: receipt["synthetic_ipc_supervision"]["identities"].update(
+            guest_elf_sha256="8" * 64
+        ),
+        lambda receipt: receipt["synthetic_ipc_supervision"]["identities"].update(
+            guest_source_sha256="8" * 64
+        ),
+        lambda receipt: receipt["synthetic_ipc_supervision"]["sessions"].pop(),
+        lambda receipt: receipt["synthetic_ipc_supervision"]["sessions"][1].update(
+            session_identity=receipt["synthetic_ipc_supervision"]["sessions"][0]["session_identity"]
+        ),
+        lambda receipt: receipt["synthetic_ipc_supervision"]["sessions"][0]["observations"][
+            "scenarios"
+        ].pop(),
+        lambda receipt: receipt["synthetic_ipc_supervision"]["sessions"][0]["observations"][
+            "scenarios"
+        ][0]["children"]["consumer"].update(status=42),
+        lambda receipt: receipt["synthetic_ipc_supervision"]["sessions"][0]["observations"][
+            "scenarios"
+        ][1]["children"]["producer"].update(exit_reason="exit:143"),
+        lambda receipt: receipt["synthetic_ipc_supervision"]["sessions"][0]["observations"][
+            "scenarios"
+        ][1]["children"]["consumer"].update(
+            pid=receipt["synthetic_ipc_supervision"]["sessions"][0]["observations"]["scenarios"][1][
+                "children"
+            ]["producer"]["pid"]
+        ),
+        lambda receipt: receipt["synthetic_ipc_supervision"]["sessions"][0]["observations"][
+            "scenarios"
+        ][1]["children"]["producer"].update(reaped=False),
+        lambda receipt: receipt["synthetic_ipc_supervision"]["sessions"][0].update(
+            status="quarantined"
+        ),
+        lambda receipt: receipt["synthetic_ipc_supervision"]["scenarios"][0].update(
+            status="quarantined"
+        ),
+        lambda receipt: receipt["synthetic_ipc_supervision"]["sessions"][0]["observations"][
+            "scenarios"
+        ][3]["deadline"].update(seconds=5),
+        lambda receipt: receipt["synthetic_ipc_supervision"]["sessions"][0]["observations"][
+            "scenarios"
+        ][3]["kill_sent"].append("producer"),
+        lambda receipt: receipt["synthetic_ipc_supervision"]["sessions"][0]["observations"][
+            "scenarios"
+        ][1]["queue_names"].update(request="/unreviewed"),
+        lambda receipt: receipt["synthetic_ipc_supervision"]["sessions"][0]["observations"][
+            "scenarios"
+        ][1].update(sibling_reaped=False),
+        lambda receipt: receipt["synthetic_ipc_supervision"]["container_cleanup"].update(
+            ownership_verified_before_removal=False
+        ),
+        lambda receipt: receipt["synthetic_ipc_supervision"]["container_cleanup"].update(
+            all_private_tmpfs_released=1
+        ),
+        lambda receipt: receipt["synthetic_ipc_supervision"]["fresh_container_repeat"].update(
+            no_child_processes_left=False
+        ),
+        lambda receipt: receipt["synthetic_ipc_supervision"]["fresh_container_repeat"].update(
+            no_child_processes_left=1
+        ),
+        lambda receipt: receipt["synthetic_ipc_supervision"]["container_isolation"]["profiles"][0][
+            "verified_host_config"
+        ].update(IpcMode="private"),
+        lambda receipt: receipt["synthetic_ipc_supervision"].update(
+            stock_compatibility="COMPATIBLE"
+        ),
+        lambda receipt: receipt["synthetic_ipc_supervision"].update(m1_04_stock_boot="passed"),
+        lambda receipt: receipt["synthetic_ipc_supervision"]["sessions"][0]["observations"][
+            "scenarios"
+        ][0].update(actual_qemu_processes=False),
+        lambda receipt: receipt["synthetic_ipc_supervision"].update(status="failed"),
+        lambda receipt: receipt.update(status="failed"),
+    ],
+)
+def test_rejects_malformed_or_contradictory_hosted_pr23_supervision_receipt(mutate) -> None:
+    receipt = _hosted_pr23_supervision_receipt()
+    mutate(receipt)
+
+    with pytest.raises(CompatibilityEvidenceError):
+        parse_receipt(json.dumps(receipt), source="bad-hosted-pr23-supervision.json")
+
+
+def test_hosted_supervision_reports_are_deterministic() -> None:
+    document = json.dumps(_hosted_pr23_supervision_receipt())
+    source = "hosted-pr23-supervision.json"
+    first = parse_receipt(document, source=source)
+    second = parse_receipt(document, source=source)
+
+    assert first == second
+    assert render_json([first]) == render_json([second])
+    assert render_markdown([first]) == render_markdown([second])
+
+
+@pytest.mark.parametrize(
+    "mutate",
+    [
+        lambda receipt: receipt["build"]["qemu_archives"].update(unreviewed={}),
+        lambda receipt: receipt["build"]["qemu_archives"]["qemu_7.2+dfsg.orig.tar.xz"].update(
+            sha256="8" * 64
+        ),
+        lambda receipt: next(
+            artifact
+            for artifact in receipt["build"]["artifact_sha256_and_elf"]
+            if artifact["name"] == "qemu-mipsel"
+        ).update(sha256="8" * 64),
+        lambda receipt: receipt["build"]["debian_snapshot_inrelease"][0].update(verified=False),
+        lambda receipt: receipt["source_identity"].update(projection_digest="bad"),
+    ],
+)
+def test_rejects_malformed_hosted_qemu_build_evidence(mutate) -> None:
+    receipt = _hosted_pr23_qemu_build_receipt()
+    mutate(receipt)
+
+    with pytest.raises(CompatibilityEvidenceError):
+        parse_receipt(json.dumps(receipt), source="bad-hosted-pr23-qemu.json")
 
 
 def _failed_ipc_handoff_receipt(*, cleanup_failed: bool) -> dict[str, Any]:
