@@ -28,3 +28,27 @@ is still unknown and not run.
 
 Malformed inputs, unknown statuses, invalid identities, and contradictory
 stock firmware results raise `CompatibilityComparisonError`.
+
+## CLI comparison
+
+Compare exactly two local sanitized receipts with:
+
+```console
+disc-lab compat compare EARLIER.json LATER.json --format json
+disc-lab compat compare EARLIER.json LATER.json --format markdown
+```
+
+Markdown is the default. The command uses bounded reads and rejects a regular
+file larger than the 1 MiB `MAX_RECEIPT_BYTES` limit. It uses the same strict
+receipt parser as `compat report`. JSON retains both parsed receipts, both
+complete artifact identity maps, the scenario history, and any declared QEMU
+build-source identities. Markdown shows both artifact maps, each scenario's
+earlier and later status, classification, and discrepancy reason, plus both
+QEMU source identities when present.
+
+Source labels are the neutral words `earlier` and `later`; local paths and raw
+parser errors are not included in output. Missing, malformed, contradictory,
+or oversized receipts exit with status 2 and a concise error. Receipt values
+remain declared and unauthenticated, artifact bytes are not rehashed, missing
+scenarios are `NOT RUN`, stock V2.57 compatibility remains `UNKNOWN / NOT RUN`,
+and overall support remains `unknown`.

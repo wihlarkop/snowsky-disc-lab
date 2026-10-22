@@ -1,6 +1,7 @@
 """Public M0 command surface. Validation never executes manifest data."""
 
 import json
+import stat
 from dataclasses import asdict
 from pathlib import Path
 from typing import Annotated, Literal
@@ -10,6 +11,7 @@ from rich.console import Console
 from rich.table import Table
 from rich.text import Text
 
+from snowsky_disc_lab.compat_compare import CompatibilityComparisonError, compare_reports
 from snowsky_disc_lab.compat_evidence import (
     MAX_RECEIPT_BYTES,
     CompatibilityEvidenceError,
@@ -413,3 +415,133 @@ def compatibility_report(
         raise typer.Exit(code=2) from None
     output = render_json(reports) if output_format == "json" else render_markdown(reports)
     typer.echo(output, nl=False)
+
+
+def _read_comparison_receipt(path: Path, label: str) -> dict:
+    try:
+        metadata = path.stat()
+    except OSError:
+        raise ValueError(f"{label} receipt is missing or inaccessible") from None
+    if not stat.S_ISREG(metadata.st_mode):
+        raise ValueError(f"{label} receipt must be a regular file")
+    try:
+        with path.open("rb") as stream:
+            document = stream.read(MAX_RECEIPT_BYTES + 1)
+    except OSError:
+        raise ValueError(f"{label} receipt is missing or inaccessible") from None
+    if len(document) > MAX_RECEIPT_BYTES:
+        raise ValueError(f"{label} receipt exceeds the 1 MiB limit")
+    try:
+        return parse_receipt(document, source=label)
+    except (CompatibilityEvidenceError, TypeError, KeyError, AttributeError, RecursionError):
+        raise ValueError(f"{label} receipt is malformed or contradictory") from None
+
+
+def _compat_markdown_text(value: str) -> str:
+    rendered = "".join(character if character.isprintable() else " " for character in value)
+    for character in ("\\", "`", "*", "_", "[", "]", "<", ">", "|"):
+        rendered = rendered.replace(character, f"\\{character}")
+    return rendered
+
+
+def _render_compat_comparison_markdown(comparison: dict, earlier: dict, later: dict) -> str:
+    lines = [
+        "# Compatibility comparison",
+        "",
+        f"- Conditions match: {'yes' if comparison['conditions_match'] else 'no'}",
+        "- Earlier receipt schema: `{}` ({})".format(
+            _compat_markdown_text(earlier["receipt_schema"]), earlier["receipt_status"]
+        ),
+        "- Later receipt schema: `{}` ({})".format(
+            _compat_markdown_text(later["receipt_schema"]), later["receipt_status"]
+        ),
+        "- Execution scope: firmware-free synthetic execution",
+        "- Support status: UNKNOWN",
+        "- Receipt values: declared; independently authenticated: no",
+        "- Stock V2.57 boot and IPC compatibility: UNKNOWN / NOT RUN",
+        "",
+        "Artifact identities (SHA-256):",
+        "",
+        "| Artifact | Earlier | Later |",
+        "| --- | --- | --- |",
+    ]
+    artifact_names = sorted(set(earlier["artifacts"]) | set(later["artifacts"]))
+    lines.extend(
+        "| {} | `{}` | `{}` |".format(
+            _compat_markdown_text(name),
+            earlier["artifacts"].get(name, "not declared"),
+            later["artifacts"].get(name, "not declared"),
+        )
+        for name in artifact_names
+    )
+    lines.extend(
+        [
+            "",
+            "Scenario history (earlier to later):",
+            "",
+            "| Scenario | Earlier | Later | Result | Reason |",
+            "| --- | --- | --- | --- | --- |",
+        ]
+    )
+    for name, result in comparison["scenarios"].items():
+        lines.append(
+            "| {} | {} | {} | {} | {} |".format(
+                _compat_markdown_text(name),
+                result["before"],
+                result["after"],
+                result["classification"],
+                _compat_markdown_text(result.get("reason", "")),
+            )
+        )
+    lines.extend(
+        [
+            "",
+            "Parsed receipt history uses the neutral labels earlier and later.",
+            "",
+        ]
+    )
+    for label, report in (("Earlier", earlier), ("Later", later)):
+        if "build_source" not in report:
+            continue
+        lines.extend([f"{label} QEMU build source identity:", ""])
+        for name, value in sorted(report["build_source"].items()):
+            rendered = json.dumps(value, ensure_ascii=True, sort_keys=True, separators=(",", ":"))
+            lines.append(f"- `{_compat_markdown_text(name)}`: `{_compat_markdown_text(rendered)}`")
+        lines.append("")
+    lines.extend(
+        [
+            "Limitations:",
+            "",
+            "- Missing scenarios are treated as NOT RUN.",
+            "- Receipt values are declared and unauthenticated; artifact bytes were not rehashed.",
+            "- Synthetic comparison does not establish stock firmware compatibility.",
+            "",
+        ]
+    )
+    return "\n".join(lines)
+
+
+@compat_app.command("compare")
+def compatibility_compare(
+    earlier_path: Annotated[Path, typer.Argument(help="Earlier sanitized receipt JSON file.")],
+    later_path: Annotated[Path, typer.Argument(help="Later sanitized receipt JSON file.")],
+    output_format: Annotated[Literal["json", "markdown"], typer.Option("--format")] = "markdown",
+) -> None:
+    """Compare exactly two local sanitized receipts without promoting support."""
+    try:
+        earlier = _read_comparison_receipt(earlier_path, "earlier")
+        later = _read_comparison_receipt(later_path, "later")
+        comparison = compare_reports(earlier, later)
+    except (ValueError, CompatibilityComparisonError) as error:
+        # Input paths and parser details can contain untrusted or private text.
+        errors.print(f"Compatibility comparison refused: {error}.", markup=False, highlight=False)
+        raise typer.Exit(code=2) from None
+    comparison["later_report"] = later
+    comparison["artifact_identities"] = {
+        "earlier": earlier["artifacts"],
+        "later": later["artifacts"],
+    }
+    if output_format == "json":
+        typer.echo(json.dumps(comparison, ensure_ascii=True, sort_keys=True, indent=2))
+        return
+    typer.echo(_render_compat_comparison_markdown(comparison, earlier, later), nl=False)
