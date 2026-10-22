@@ -53,3 +53,34 @@ or oversized receipts exit with status 2 and a concise error. Receipt values
 remain declared and unauthenticated, artifact bytes are not rehashed, missing
 scenarios are `NOT RUN`, stock V2.57 compatibility remains `UNKNOWN / NOT RUN`,
 and overall support remains `unknown`.
+
+## Opt-in regression diagnostics
+
+The comparison's existing JSON and Markdown contracts stay unchanged by
+default. Add `--diagnostics` to include the separately versioned
+`firmware-free-synthetic-compatibility-diagnostics/v1` surface:
+
+```console
+disc-lab compat compare EARLIER.json LATER.json --format json --diagnostics
+disc-lab compat compare EARLIER.json LATER.json --diagnostics
+```
+
+Diagnostics list only comparable `PASS` to `FAIL` transitions. A differing
+receipt schema, artifact identity, or build-source identity yields
+`status: incomparable` and no domain findings. Improvements, missing
+scenarios, `BLOCKED`, `UNSUPPORTED`, and other status transitions remain
+visible in the existing comparison and are not relabeled as regressions.
+
+The domain vocabulary is `build`, `abi`, `input`, `framebuffer`, `ipc`,
+`audio`, `power-lifecycle`, and `environment`. The current parser evidence
+supports one specific mapping: `synthetic-ipc-handoff` maps to `ipc` only when
+the fixed handoff evidence marker, nested status, both roles, the one or two
+sessions allowed by the parsed failure lifecycle, and QEMU/guest identity
+links agree in both reports. Other scenario regressions
+remain `UNCLASSIFIED`; missing or free-form evidence never selects a domain.
+No current scenario supports a defensible mapping to the other seven domains.
+
+The new surface is deterministic and does not edit receipt inputs. Its
+diagnoses describe only declared, unauthenticated firmware-free synthetic
+evidence. They do not establish stock firmware behavior, emulator support,
+device support, or any previously unrun scenario.
