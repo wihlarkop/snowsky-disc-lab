@@ -30,7 +30,8 @@ jobs:
       (github.event_name == 'pull_request' &&
        github.repository == 'wihlarkop/snowsky-disc-lab' &&
        github.event.pull_request.head.repo.full_name == 'wihlarkop/snowsky-disc-lab' &&
-       github.event.pull_request.head.ref == 'codex/m1-bounded-supervision') ||
+       (github.event.pull_request.head.ref == 'codex/m1-bounded-supervision' ||
+        github.event.pull_request.head.ref == 'codex/m1-runtime-repro-wsl2')) ||
       (github.event_name == 'workflow_dispatch' &&
        github.repository == 'wihlarkop/snowsky-disc-lab' &&
        github.ref == 'refs/heads/main')
