@@ -328,6 +328,7 @@ def test_only_execution_build_compiles_the_first_party_guest() -> None:
         include_smoke_guest=True,
         include_mqueue_guest=True,
         include_ipc_handoff_guest=True,
+        include_ipc_supervision_guest=True,
     )
 
     assert "mipsel-linux-gnu-gcc -static -march=mips32 -mabi=32 -EL" not in ordinary
@@ -347,6 +348,9 @@ def test_only_execution_build_compiles_the_first_party_guest() -> None:
     assert "mips32le_posix_ipc_handoff.c -lrt" in session
     assert "measure-ipc-handoff-guest" in session
     assert "/audit/execution-inputs/mips32le-posix-ipc-handoff.elf" in session
+    assert "mips32le_posix_ipc_supervision.c -lrt" in session
+    assert "measure-ipc-supervision-guest" in session
+    assert "/audit/execution-inputs/mips32le-posix-ipc-supervision.elf" in session
     with pytest.raises(qemu_runtime_build.StopBuild, match="requires"):
         qemu_runtime_build.build_container_command(reference, include_mqueue_guest=True)
 
@@ -354,6 +358,7 @@ def test_only_execution_build_compiles_the_first_party_guest() -> None:
 def test_ipc_handoff_guest_is_staged_only_for_synthetic_sessions() -> None:
     parameters = inspect.signature(qemu_runtime_build.build_container_command).parameters
     assert "include_ipc_handoff_guest" in parameters
+    assert "include_ipc_supervision_guest" in parameters
 
     reference = qemu_runtime_build.read_reference()
     ordinary = qemu_runtime_build.build_container_command(reference)
@@ -363,6 +368,7 @@ def test_ipc_handoff_guest_is_staged_only_for_synthetic_sessions() -> None:
         include_smoke_guest=True,
         include_mqueue_guest=True,
         include_ipc_handoff_guest=True,
+        include_ipc_supervision_guest=True,
     )
 
     assert "mips32le_posix_ipc_handoff.c" not in ordinary
@@ -370,6 +376,11 @@ def test_ipc_handoff_guest_is_staged_only_for_synthetic_sessions() -> None:
     assert "/inputs/lab/fixtures/mips32le_posix_ipc_handoff.c" in session
     assert "measure-ipc-handoff-guest" in session
     assert "/audit/execution-inputs/mips32le-posix-ipc-handoff.elf" in session
+    assert "mips32le_posix_ipc_supervision.c" not in ordinary
+    assert "mips32le_posix_ipc_supervision.c" not in smoke
+    assert "/inputs/lab/fixtures/mips32le_posix_ipc_supervision.c" in session
+    assert "measure-ipc-supervision-guest" in session
+    assert "/audit/execution-inputs/mips32le-posix-ipc-supervision.elf" in session
     with pytest.raises(qemu_runtime_build.StopBuild, match="requires"):
         qemu_runtime_build.build_container_command(
             reference, include_smoke_guest=True, include_ipc_handoff_guest=True
@@ -786,6 +797,7 @@ def test_build_container_stages_synthetic_guest_as_read_only_executable(
     guest_bytes = b"synthetic mips elf"
     queue_guest_bytes = b"synthetic mips queue elf"
     handoff_guest_bytes = b"synthetic mips handoff elf"
+    supervision_guest_bytes = b"synthetic mips supervision elf"
     qemu_artifact = {
         "name": "qemu-mipsel",
         "bytes": len(qemu_bytes),
@@ -854,6 +866,21 @@ def test_build_container_stages_synthetic_guest_as_read_only_executable(
             "has_interpreter": False,
         },
     }
+    supervision_guest_evidence = {
+        "schema_version": "firmware-free-mips32le-synthetic-ipc-supervision-guest/v1",
+        "status": "synthetic-static-guest-built",
+        "source": {"sha256": qemu_runtime_build.IPC_SUPERVISION_GUEST_SOURCE_SHA256},
+        "elf": {
+            "bytes": len(supervision_guest_bytes),
+            "sha256": qemu_runtime_build.hashlib.sha256(supervision_guest_bytes).hexdigest(),
+            "elf_class": "ELF32",
+            "elf_data": "little endian",
+            "machine": "MIPS R3000",
+            "abi": "o32",
+            "isa": "mips32",
+            "has_interpreter": False,
+        },
+    }
     build_evidence = {
         "schema_version": "firmware-free-qemu-runtime-build/v1",
         "status": "build-passed-binaries-ephemeral",
@@ -861,6 +888,7 @@ def test_build_container_stages_synthetic_guest_as_read_only_executable(
         "synthetic_guest": guest_evidence,
         "synthetic_queue_guest": queue_guest_evidence,
         "synthetic_ipc_handoff_guest": handoff_guest_evidence,
+        "synthetic_ipc_supervision_guest": supervision_guest_evidence,
         "retention": {"compiled_binaries_published": False},
     }
     binaries = {
@@ -868,6 +896,7 @@ def test_build_container_stages_synthetic_guest_as_read_only_executable(
         "/audit/execution-inputs/mips32le-execution-smoke.elf": guest_bytes,
         "/audit/execution-inputs/mips32le-posix-mqueue.elf": queue_guest_bytes,
         "/audit/execution-inputs/mips32le-posix-ipc-handoff.elf": handoff_guest_bytes,
+        "/audit/execution-inputs/mips32le-posix-ipc-supervision.elf": supervision_guest_bytes,
     }
 
     def fake_run(args: list[str], **_kwargs: object) -> subprocess.CompletedProcess[str]:
@@ -883,6 +912,8 @@ def test_build_container_stages_synthetic_guest_as_read_only_executable(
                 target.write_text(json.dumps(queue_guest_evidence), encoding="utf-8")
             elif source == "/audit/synthetic-ipc-handoff-guest-evidence.json":
                 target.write_text(json.dumps(handoff_guest_evidence), encoding="utf-8")
+            elif source == "/audit/synthetic-ipc-supervision-guest-evidence.json":
+                target.write_text(json.dumps(supervision_guest_evidence), encoding="utf-8")
             else:
                 target.write_bytes(binaries[source])
         return subprocess.CompletedProcess(args, 0, stdout="")
@@ -923,6 +954,7 @@ def test_build_container_stages_synthetic_guest_as_read_only_executable(
         smoke_inputs_dir=smoke_inputs,
         include_mqueue_guest=True,
         include_ipc_handoff_guest=True,
+        include_ipc_supervision_guest=True,
     )
 
     assert copy_modes == [
@@ -930,10 +962,14 @@ def test_build_container_stages_synthetic_guest_as_read_only_executable(
         ("/audit/execution-inputs/mips32le-execution-smoke.elf", True),
         ("/audit/execution-inputs/mips32le-posix-mqueue.elf", True),
         ("/audit/execution-inputs/mips32le-posix-ipc-handoff.elf", True),
+        ("/audit/execution-inputs/mips32le-posix-ipc-supervision.elf", True),
     ]
     assert (smoke_inputs / "mips32le-execution-smoke.elf").read_bytes() == guest_bytes
     assert (smoke_inputs / "mips32le-posix-mqueue.elf").read_bytes() == queue_guest_bytes
     assert (smoke_inputs / "mips32le-posix-ipc-handoff.elf").read_bytes() == handoff_guest_bytes
+    assert (
+        smoke_inputs / "mips32le-posix-ipc-supervision.elf"
+    ).read_bytes() == supervision_guest_bytes
 
 
 def test_failed_build_reports_bounded_container_logs_before_cleanup(

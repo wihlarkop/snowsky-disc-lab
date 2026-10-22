@@ -21,6 +21,8 @@ _TOP_KEYS = {
     "session_isolation",
     "posix_mqueue",
     "synthetic_ipc_handoff",
+    "synthetic_ipc_supervision",
+    "toolchain",
     "unsupported_or_unverified",
     "failure",
 }
@@ -208,6 +210,101 @@ _IPC_HANDOFF_ERRNOS = {
     "EPERM": 1,
     "OTHER": -1,
 }
+_IPC_SUPERVISION_SCHEMA = "firmware-free-mips32le-synthetic-ipc-supervision/v1"
+_IPC_SUPERVISION_ELF = "mips32le-posix-ipc-supervision.elf"
+_IPC_SUPERVISION_SOURCE_SHA256 = "1d151ccbe7fb4c0965ad6d9bf290de8e6caaed0ca0a2dc7067aba91749c52e9f"
+_IPC_SUPERVISION_ROLES = ("consumer", "producer")
+_IPC_SUPERVISION_SCENARIOS: dict[str, dict[str, Any]] = {
+    "normal": {
+        "protocol": "request-ack-verified",
+        "request": "/snowsky_disc_lab_handoff_req_v1",
+        "acknowledgment": "/snowsky_disc_lab_handoff_ack_v1",
+        "acknowledgment_state": "consumed",
+        "failure": None,
+        "queue_created": True,
+        "deadline_seconds": 5,
+        "deadline_expired": False,
+        "term_sent": [],
+        "exit_statuses": {"consumer": 0, "producer": 0},
+        "outputs": {
+            "consumer": "d093763953c4dfa3eda1c03b1fcda977ef41de090a6f64ebccb7d9d3c385cafd",
+            "producer": "ce265f3a0ee5c44e8aef6b9a89a31f848b3883618b361cafbbeca5f960aaff49",
+        },
+    },
+    "consumer-exits-before-request": {
+        "protocol": "consumer-exit-before-request",
+        "request": "/snowsky_disc_lab_supervision_consumer_exit_req_v1",
+        "acknowledgment": "/snowsky_disc_lab_supervision_consumer_exit_ack_v1",
+        "acknowledgment_state": "not-sent",
+        "failure": {"kind": "guest-exit", "reason": "exit:42", "role": "consumer"},
+        "queue_created": True,
+        "deadline_seconds": 5,
+        "deadline_expired": False,
+        "term_sent": ["producer"],
+        "exit_statuses": {"consumer": 42, "producer": "signal"},
+        "outputs": {
+            "consumer": "6401cb6e5792066a4fe429e1c71ac9ee207475a11e1378d081a5a824728fffe7",
+            "producer": "b3f90efbdd4d24751304f65d8c0a1aa3fbc33ea23ebdf3ca628200413a388b46",
+        },
+    },
+    "producer-exits-before-ack": {
+        "protocol": "producer-exit-before-ack",
+        "request": "/snowsky_disc_lab_supervision_producer_exit_req_v1",
+        "acknowledgment": "/snowsky_disc_lab_supervision_producer_exit_ack_v1",
+        "acknowledgment_state": "queued-unconsumed",
+        "failure": {"kind": "guest-exit", "reason": "exit:43", "role": "producer"},
+        "queue_created": True,
+        "deadline_seconds": 5,
+        "deadline_expired": False,
+        "term_sent": ["consumer"],
+        "exit_statuses": {"consumer": "signal", "producer": 43},
+        "outputs": {
+            "consumer": "c6783bf9a27c62c8219a991cc0cd69833ebb0ef8d05a3ebd39bcb5a5e523af82",
+            "producer": "7bec62279d63d589f2e7a468df162beacaf0d28ceaa1672eac72dca5203c2bd5",
+        },
+    },
+    "producer-exceeds-deadline": {
+        "protocol": "producer-deadline-exceeded",
+        "request": "/snowsky_disc_lab_supervision_deadline_req_v1",
+        "acknowledgment": "/snowsky_disc_lab_supervision_deadline_ack_v1",
+        "acknowledgment_state": "queued-unconsumed",
+        "failure": {"kind": "deadline", "reason": "deadline", "role": "producer"},
+        "queue_created": True,
+        "deadline_seconds": 2,
+        "deadline_expired": True,
+        "term_sent": ["consumer", "producer"],
+        "exit_statuses": {"consumer": "signal", "producer": "signal"},
+        "outputs": {
+            "consumer": "c6783bf9a27c62c8219a991cc0cd69833ebb0ef8d05a3ebd39bcb5a5e523af82",
+            "producer": "fa6a9d569be3e0904d59946b529d4eb1f86282b87dc186da6a234c1a5564b39c",
+        },
+    },
+    "producer-failure-cancels-sibling": {
+        "protocol": "producer-failure-cancelled-consumer",
+        "request": "/snowsky_disc_lab_supervision_sibling_req_v1",
+        "acknowledgment": "/snowsky_disc_lab_supervision_sibling_ack_v1",
+        "acknowledgment_state": "not-created",
+        "failure": {"kind": "guest-exit", "reason": "exit:44", "role": "producer"},
+        "queue_created": False,
+        "deadline_seconds": 5,
+        "deadline_expired": False,
+        "term_sent": ["consumer"],
+        "exit_statuses": {"consumer": "signal", "producer": 44},
+        "outputs": {
+            "consumer": "23739fc116c4ec77cf310c3aaa37bf72d8f8043d86e3cbcc3e8a92222b882378",
+            "producer": "11985b97bf703badbb637e8d30324a06feecb2cff90657766474f6dce99548c3",
+        },
+    },
+}
+_IPC_SUPERVISION_OUTPUT_LIMIT = 6144
+_RUNTIME_LIFECYCLE = ["reserved", "created", "validated", "start-requested", "exited", "removed"]
+_SUPERVISION_OBSERVATIONS = {
+    "container_lifecycle": "actual owned Docker inspection and cleanup in hosted acceptance",
+    "deadline_and_signals": "actual bounded supervisor timer and child PID signals",
+    "guest_process_status": "actual fixed QEMU child wait statuses",
+    "raw_guest_diagnostics_exported": False,
+    "unit_test_fixtures": "simulated; not counted as acceptance evidence",
+}
 
 
 class CompatibilityEvidenceError(ValueError):
@@ -333,12 +430,22 @@ def _validate_session(session: dict[str, Any], *, queue: bool = False) -> None:
                 raise CompatibilityEvidenceError("invalid queue syscall error")
     if "cleanup" in session:
         cleanup = session["cleanup"]
-        if not isinstance(cleanup, dict) or cleanup.keys() - {
+        legacy_cleanup_fields = {
             "container_removed",
             "private_tmpfs_released",
             "host_metadata",
-        }:
+        }
+        extended_cleanup_fields = legacy_cleanup_fields | {
+            "container_stopped",
+            "ownership_verified_before_removal",
+            "container_stop_command",
+        }
+        if not isinstance(cleanup, dict) or cleanup.keys() - extended_cleanup_fields:
             raise CompatibilityEvidenceError("invalid session cleanup")
+        if cleanup.keys() & (extended_cleanup_fields - legacy_cleanup_fields) and (
+            cleanup.keys() != extended_cleanup_fields
+        ):
+            raise CompatibilityEvidenceError("incomplete extended session cleanup evidence")
         if "container_removed" in cleanup and not isinstance(cleanup["container_removed"], bool):
             raise CompatibilityEvidenceError("invalid container cleanup status")
         if "private_tmpfs_released" in cleanup and not isinstance(
@@ -347,6 +454,26 @@ def _validate_session(session: dict[str, Any], *, queue: bool = False) -> None:
             raise CompatibilityEvidenceError("invalid tmpfs cleanup status")
         if "host_metadata" in cleanup and not isinstance(cleanup["host_metadata"], str):
             raise CompatibilityEvidenceError("invalid retained host metadata")
+        if "container_stopped" in cleanup and not isinstance(cleanup["container_stopped"], bool):
+            raise CompatibilityEvidenceError("invalid container stopped status")
+        if "ownership_verified_before_removal" in cleanup and not isinstance(
+            cleanup["ownership_verified_before_removal"], bool
+        ):
+            raise CompatibilityEvidenceError("invalid container ownership evidence")
+        if "container_stop_command" in cleanup and (
+            not isinstance(cleanup["container_stop_command"], str)
+            or cleanup["container_stop_command"] not in {"not-needed", "succeeded", "failed"}
+        ):
+            raise CompatibilityEvidenceError("invalid exact-container stop result")
+        if cleanup.get("container_removed") is True and "removed" not in session.get(
+            "lifecycle", []
+        ):
+            raise CompatibilityEvidenceError("container cleanup contradicts session lifecycle")
+        if (
+            cleanup.get("private_tmpfs_released") is True
+            and cleanup.get("container_removed") is not True
+        ):
+            raise CompatibilityEvidenceError("tmpfs release contradicts container cleanup")
     if "isolation" in session:
         _validate_isolation(session["isolation"])
     if (
@@ -384,6 +511,13 @@ def _validate_session(session: dict[str, Any], *, queue: bool = False) -> None:
             or session["cleanup"].get("private_tmpfs_released") is not True
         ):
             raise CompatibilityEvidenceError("incomplete passed session cleanup")
+        if "container_stopped" in session["cleanup"] and (
+            session["cleanup"]["container_stopped"] is not True
+            or session["cleanup"]["ownership_verified_before_removal"] is not True
+            or session["cleanup"]["container_stop_command"] == "failed"
+            or session["cleanup"]["host_metadata"] != "retained; no recursive cleanup"
+        ):
+            raise CompatibilityEvidenceError("contradictory passed session cleanup evidence")
         execution = session["execution"]
         case = session["case"]
         expected_exit_timeout = {
@@ -846,17 +980,43 @@ def _validate_ipc_session(session: Any, position: int) -> dict[str, Any]:
         raise CompatibilityEvidenceError("passed IPC handoff session lacks isolation evidence")
 
     cleanup = session["cleanup"]
-    if not isinstance(cleanup, dict) or cleanup.keys() - {
+    legacy_cleanup_fields = {
         "container_removed",
         "private_tmpfs_released",
         "host_metadata",
-    }:
+    }
+    extended_cleanup_fields = legacy_cleanup_fields | {
+        "container_stopped",
+        "ownership_verified_before_removal",
+        "container_stop_command",
+    }
+    if not isinstance(cleanup, dict) or cleanup.keys() - extended_cleanup_fields:
         raise CompatibilityEvidenceError("invalid IPC handoff cleanup evidence")
-    if any(
-        key in cleanup and not isinstance(cleanup[key], bool)
-        for key in ("container_removed", "private_tmpfs_released")
-    ) or (
-        "host_metadata" in cleanup and cleanup["host_metadata"] != "retained; no recursive cleanup"
+    if cleanup.keys() & (extended_cleanup_fields - legacy_cleanup_fields) and (
+        cleanup.keys() != extended_cleanup_fields
+    ):
+        raise CompatibilityEvidenceError("incomplete extended IPC handoff cleanup evidence")
+    if (
+        any(
+            key in cleanup and not isinstance(cleanup[key], bool)
+            for key in (
+                "container_removed",
+                "private_tmpfs_released",
+                "container_stopped",
+                "ownership_verified_before_removal",
+            )
+        )
+        or (
+            "host_metadata" in cleanup
+            and cleanup["host_metadata"] != "retained; no recursive cleanup"
+        )
+        or (
+            "container_stop_command" in cleanup
+            and (
+                not isinstance(cleanup["container_stop_command"], str)
+                or cleanup["container_stop_command"] not in {"not-needed", "succeeded", "failed"}
+            )
+        )
     ):
         raise CompatibilityEvidenceError("invalid IPC handoff cleanup evidence")
     if (
@@ -864,11 +1024,22 @@ def _validate_ipc_session(session: Any, position: int) -> dict[str, Any]:
         and cleanup.get("container_removed") is not True
     ):
         raise CompatibilityEvidenceError("contradictory IPC handoff cleanup evidence")
-    if session["status"] == "passed" and cleanup != {
+    expected_cleanup = {
         "container_removed": True,
         "private_tmpfs_released": True,
         "host_metadata": "retained; no recursive cleanup",
-    }:
+    }
+    if cleanup.keys() == extended_cleanup_fields:
+        expected_cleanup.update(
+            {
+                "container_stopped": True,
+                "ownership_verified_before_removal": True,
+                "container_stop_command": cleanup["container_stop_command"],
+            }
+        )
+    if session["status"] == "passed" and (
+        cleanup != expected_cleanup or cleanup.get("container_stop_command") == "failed"
+    ):
         raise CompatibilityEvidenceError("incomplete successful IPC handoff cleanup")
     if cleanup.get("container_removed") is True and "removed" not in lifecycle:
         raise CompatibilityEvidenceError("IPC handoff lifecycle contradicts container cleanup")
@@ -1198,6 +1369,519 @@ def _validate_ipc_handoff(
     }
 
 
+def _validate_toolchain(value: Any, artifacts: dict[str, str]) -> None:
+    fields = {
+        "base_image",
+        "base_image_amd64_manifest",
+        "base_image_index_sha256",
+        "build_input_manifest_sha256",
+        "device_patch_sha256",
+        "mipsel_cross_toolchain",
+        "prior_reproducible_build",
+        "qemu_binary",
+        "qemu_package_version",
+        "qemu_source_archives",
+        "qemu_source_descriptor_sha256",
+        "upstream_commit",
+        "upstream_projection_digest",
+    }
+    value = _expect_object(value, fields, "runtime toolchain")
+    base_image = value["base_image"]
+    if not isinstance(base_image, str) or not re.fullmatch(
+        r"docker\.io/library/debian:12@sha256:[0-9a-f]{64}", base_image
+    ):
+        raise CompatibilityEvidenceError("invalid runtime toolchain base image")
+    for field in ("base_image_amd64_manifest", "base_image_index_sha256"):
+        digest = value[field]
+        if not isinstance(digest, str) or not re.fullmatch(r"sha256:[0-9a-f]{64}", digest):
+            raise CompatibilityEvidenceError("invalid runtime toolchain image digest")
+    if (
+        base_image.rsplit("sha256:", 1)[1] != value["base_image_index_sha256"][7:]
+        or not isinstance(value["qemu_package_version"], str)
+        or not value["qemu_package_version"]
+        or not isinstance(value["upstream_commit"], str)
+        or not re.fullmatch(r"[0-9a-f]{40}", value["upstream_commit"])
+        or not isinstance(value["upstream_projection_digest"], str)
+        or not re.fullmatch(r"[0-9a-f]{32}", value["upstream_projection_digest"])
+    ):
+        raise CompatibilityEvidenceError("contradictory runtime toolchain identity")
+    for field in (
+        "build_input_manifest_sha256",
+        "device_patch_sha256",
+        "qemu_source_descriptor_sha256",
+    ):
+        _digest(value[field], f"runtime toolchain.{field}")
+
+    qemu = _expect_object(value["qemu_binary"], {"bytes", "sha256"}, "runtime QEMU binary")
+    if (
+        not isinstance(qemu["bytes"], int)
+        or isinstance(qemu["bytes"], bool)
+        or qemu["bytes"] <= 0
+        or _digest(qemu["sha256"], "runtime toolchain.qemu_binary.sha256")
+        != artifacts["qemu-mipsel"]
+    ):
+        raise CompatibilityEvidenceError("contradictory runtime QEMU identity")
+
+    archives = value["qemu_source_archives"]
+    if not isinstance(archives, dict) or set(archives) != {
+        "qemu_7.2+dfsg-7+deb12u18.debian.tar.xz",
+        "qemu_7.2+dfsg.orig.tar.xz",
+    }:
+        raise CompatibilityEvidenceError("invalid runtime QEMU source archives")
+    for archive in archives.values():
+        archive = _expect_object(archive, {"bytes", "sha256", "verified"}, "QEMU archive")
+        if (
+            not isinstance(archive["bytes"], int)
+            or isinstance(archive["bytes"], bool)
+            or archive["bytes"] <= 0
+            or archive["verified"] is not True
+        ):
+            raise CompatibilityEvidenceError("invalid runtime QEMU source archive")
+        _digest(archive["sha256"], "runtime toolchain.qemu_source_archives.sha256")
+
+    compiler = _expect_object(
+        value["mipsel_cross_toolchain"],
+        {
+            "compiler",
+            "compiler_packages",
+            "compiler_version",
+            "reported_sysroot",
+            "sysroot_entry_count",
+            "sysroot_file_count",
+            "sysroot_sha256",
+            "sysroot_tree",
+            "target",
+            "version",
+        },
+        "MIPS cross toolchain",
+    )
+    if (
+        compiler["compiler"] != "mipsel-linux-gnu-gcc"
+        or compiler["target"] != "mipsel-linux-gnu"
+        or compiler["reported_sysroot"] != "/"
+        or compiler["sysroot_tree"] != "/usr/mipsel-linux-gnu"
+        or not isinstance(compiler["compiler_version"], str)
+        or not compiler["compiler_version"]
+        or not isinstance(compiler["version"], str)
+        or not compiler["version"]
+        or any(
+            not isinstance(compiler[field], int)
+            or isinstance(compiler[field], bool)
+            or compiler[field] <= 0
+            for field in ("sysroot_entry_count", "sysroot_file_count")
+        )
+    ):
+        raise CompatibilityEvidenceError("invalid MIPS cross toolchain identity")
+    _digest(compiler["sysroot_sha256"], "runtime toolchain.sysroot_sha256")
+    packages = compiler["compiler_packages"]
+    if not isinstance(packages, list) or len(packages) != 3:
+        raise CompatibilityEvidenceError("invalid MIPS cross toolchain packages")
+    package_names = set()
+    for package in packages:
+        package = _expect_object(
+            package, {"architecture", "package", "version"}, "toolchain package"
+        )
+        if any(not isinstance(package[field], str) or not package[field] for field in package):
+            raise CompatibilityEvidenceError("invalid MIPS cross toolchain package")
+        if package["package"] in package_names:
+            raise CompatibilityEvidenceError("duplicate MIPS cross toolchain package")
+        package_names.add(package["package"])
+
+    prior = _expect_object(
+        value["prior_reproducible_build"],
+        {"head", "match_scope", "result", "reused", "workflow_run"},
+        "prior reproducible build",
+    )
+    if (
+        not isinstance(prior["head"], str)
+        or not re.fullmatch(r"[0-9a-f]{40}", prior["head"])
+        or not isinstance(prior["match_scope"], str)
+        or not prior["match_scope"]
+        or prior["result"] != "matching second clean build"
+        or prior["reused"] is not True
+        or not isinstance(prior["workflow_run"], int)
+        or isinstance(prior["workflow_run"], bool)
+        or prior["workflow_run"] <= 0
+    ):
+        raise CompatibilityEvidenceError("invalid prior reproducible build evidence")
+
+
+def _validate_supervision_child(value: Any, role: str, expected: Any) -> dict[str, Any]:
+    child = _expect_object(
+        value,
+        {"pid", "status", "exit_reason", "reaped", "stdout_sha256"},
+        f"supervision {role} child",
+    )
+    if (
+        not isinstance(child["pid"], int)
+        or isinstance(child["pid"], bool)
+        or not 1 <= child["pid"] <= 1_000_000
+        or not isinstance(child["status"], int)
+        or isinstance(child["status"], bool)
+        or not 0 <= child["status"] <= 255
+        or child["reaped"] is not True
+    ):
+        raise CompatibilityEvidenceError("invalid supervision child status or reaping")
+    _digest(child["stdout_sha256"], f"supervision.{role}.stdout_sha256")
+    if expected == "signal":
+        if child["status"] not in {143, 137}:
+            raise CompatibilityEvidenceError("supervision child signal status contradicts scenario")
+        expected_reason = "signal:TERM" if child["status"] == 143 else "signal:KILL"
+    else:
+        if child["status"] != expected:
+            raise CompatibilityEvidenceError("supervision child exit status contradicts scenario")
+        expected_reason = f"exit:{expected}"
+    if child["exit_reason"] != expected_reason:
+        raise CompatibilityEvidenceError("supervision child exit reason contradicts status")
+    return child
+
+
+def _validate_supervision_scenario(value: Any, name: str) -> dict[str, Any]:
+    fields = {
+        "scenario",
+        "status",
+        "protocol",
+        "queue_names",
+        "queue_creation_observed",
+        "acknowledgment_state",
+        "failure",
+        "actual_qemu_processes",
+        "children",
+        "deadline",
+        "term_sent",
+        "kill_sent",
+        "sibling_reaped",
+    }
+    row = _expect_object(value, fields, "synthetic IPC supervision scenario")
+    expected = _IPC_SUPERVISION_SCENARIOS[name]
+    queue_names = {
+        "request": expected["request"],
+        "acknowledgment": expected["acknowledgment"],
+    }
+    if (
+        row["scenario"] != name
+        or row["status"] != "passed"
+        or row["protocol"] != expected["protocol"]
+        or not _matches_fixed_json(row["queue_names"], queue_names)
+        or row["queue_creation_observed"] is not expected["queue_created"]
+        or row["acknowledgment_state"] != expected["acknowledgment_state"]
+        or not _matches_fixed_json(row["failure"], expected["failure"])
+        or row["actual_qemu_processes"] is not True
+        or row["sibling_reaped"] is not (expected["failure"] is not None)
+    ):
+        raise CompatibilityEvidenceError("contradictory synthetic IPC supervision scenario")
+    children = _expect_object(row["children"], set(_IPC_SUPERVISION_ROLES), "supervision children")
+    parsed_children = {
+        role: _validate_supervision_child(children[role], role, expected["exit_statuses"][role])
+        for role in _IPC_SUPERVISION_ROLES
+    }
+    if parsed_children["consumer"]["pid"] == parsed_children["producer"]["pid"] or any(
+        parsed_children[role]["stdout_sha256"] != expected["outputs"][role]
+        for role in _IPC_SUPERVISION_ROLES
+    ):
+        raise CompatibilityEvidenceError("contradictory synthetic IPC supervision child identity")
+    expected_kills = [
+        role for role in _IPC_SUPERVISION_ROLES if parsed_children[role]["status"] == 137
+    ]
+    deadline = _expect_object(
+        row["deadline"],
+        {"seconds", "expired", "term_sent", "kill_sent"},
+        "supervision deadline",
+    )
+    for sent in (row["term_sent"], row["kill_sent"], deadline["term_sent"], deadline["kill_sent"]):
+        if not isinstance(sent, list) or any(role not in _IPC_SUPERVISION_ROLES for role in sent):
+            raise CompatibilityEvidenceError("invalid supervision signal recipients")
+    if (
+        deadline["seconds"] != expected["deadline_seconds"]
+        or deadline["expired"] is not expected["deadline_expired"]
+        or not _matches_fixed_json(deadline["term_sent"], expected["term_sent"])
+        or not _matches_fixed_json(row["term_sent"], expected["term_sent"])
+        or not _matches_fixed_json(deadline["kill_sent"], expected_kills)
+        or not _matches_fixed_json(row["kill_sent"], expected_kills)
+        or any(role not in expected["term_sent"] for role in expected_kills)
+    ):
+        raise CompatibilityEvidenceError(
+            "contradictory synthetic IPC supervision deadline or signals"
+        )
+    return row
+
+
+def _validate_ipc_supervision(
+    receipt: dict[str, Any], artifacts: dict[str, str], *, parent_status: str
+) -> dict[str, Any] | None:
+    if "synthetic_ipc_supervision" not in receipt:
+        return None
+    fields = {
+        "schema_version",
+        "status",
+        "scope",
+        "identities",
+        "roles",
+        "scenarios",
+        "sessions",
+        "fresh_container_repeat",
+        "container_cleanup",
+        "container_isolation",
+        "observations_are_actual_qemu",
+        "stock_compatibility",
+        "m1_04_stock_boot",
+    }
+    supervision = _expect_object(
+        receipt["synthetic_ipc_supervision"], fields, "synthetic IPC supervision receipt"
+    )
+    if (
+        supervision["schema_version"] != _IPC_SUPERVISION_SCHEMA
+        or supervision["status"] != "passed"
+        or supervision["scope"] != "fixed first-party MIPS32LE two-process failure supervision"
+        or parent_status == "passed"
+        and supervision["status"] != parent_status
+        or supervision["observations_are_actual_qemu"] is not True
+        or supervision["stock_compatibility"] != "UNVERIFIED"
+        or supervision["m1_04_stock_boot"] != "NOT RUN"
+    ):
+        raise CompatibilityEvidenceError(
+            "unsupported or contradictory synthetic IPC supervision status"
+        )
+    identities = _expect_object(
+        supervision["identities"],
+        {"qemu_mipsel_sha256", "guest_source_sha256", "guest_elf_sha256"},
+        "synthetic IPC supervision identities",
+    )
+    for key, digest in identities.items():
+        _digest(digest, f"synthetic_ipc_supervision.identities.{key}")
+    if (
+        identities["qemu_mipsel_sha256"] != artifacts["qemu-mipsel"]
+        or identities["guest_source_sha256"] != _IPC_SUPERVISION_SOURCE_SHA256
+        or identities["guest_elf_sha256"] != artifacts[_IPC_SUPERVISION_ELF]
+    ):
+        raise CompatibilityEvidenceError(
+            "contradictory synthetic IPC supervision artifact identities"
+        )
+    roles = _expect_object(
+        supervision["roles"],
+        {"consumer", "producer", "process_identity"},
+        "synthetic IPC supervision roles",
+    )
+    if roles != {
+        "consumer": "fixed request reader and acknowledgment sender",
+        "producer": "fixed request sender and acknowledgment observer",
+        "process_identity": "container-local QEMU PID recorded independently per role",
+    }:
+        raise CompatibilityEvidenceError("contradictory synthetic IPC supervision roles")
+
+    sessions = supervision["sessions"]
+    if not isinstance(sessions, list) or len(sessions) != 2:
+        raise CompatibilityEvidenceError("incomplete synthetic IPC supervision sessions")
+    parsed_sessions = []
+    session_ids = set()
+    lifecycle = _RUNTIME_LIFECYCLE
+    session_fields = {
+        "case",
+        "cleanup",
+        "execution",
+        "isolation",
+        "lifecycle",
+        "observations",
+        "session_id",
+        "session_identity",
+        "status",
+    }
+    for index, session in enumerate(sessions):
+        session = _expect_object(session, session_fields, "synthetic IPC supervision session")
+        label = ("first", "fresh")[index]
+        identity = session["session_identity"]
+        if (
+            session["session_id"] != f"ipc-supervision-{label}"
+            or session["case"] != "ipc-supervision"
+            or session["status"] != "passed"
+            or not isinstance(identity, str)
+            or not re.fullmatch(r"[0-9a-f]{32}", identity)
+            or identity in session_ids
+            or session["lifecycle"] != lifecycle
+        ):
+            raise CompatibilityEvidenceError(
+                "invalid synthetic IPC supervision session identity or status"
+            )
+        session_ids.add(identity)
+        execution = _expect_object(
+            session["execution"],
+            {
+                "duration_seconds",
+                "exit_code",
+                "stdout_bytes",
+                "stdout_sha256",
+                "terminated",
+                "timed_out",
+            },
+            "synthetic IPC supervision execution",
+        )
+        _nonnegative_number(execution["duration_seconds"], "IPC supervision duration")
+        _digest(execution["stdout_sha256"], "IPC supervision stdout_sha256")
+        if (
+            execution["duration_seconds"] <= 0
+            or execution["duration_seconds"] > 15
+            or execution["exit_code"] != 0
+            or isinstance(execution["exit_code"], bool)
+            or not isinstance(execution["stdout_bytes"], int)
+            or isinstance(execution["stdout_bytes"], bool)
+            or not 0 < execution["stdout_bytes"] <= _IPC_SUPERVISION_OUTPUT_LIMIT
+            or execution["terminated"] is not True
+            or execution["timed_out"] is not False
+        ):
+            raise CompatibilityEvidenceError(
+                "contradictory synthetic IPC supervision wrapper execution"
+            )
+        if session["lifecycle"] != lifecycle:
+            raise CompatibilityEvidenceError("incomplete synthetic IPC supervision lifecycle")
+        cleanup = _expect_object(
+            session["cleanup"],
+            {
+                "container_removed",
+                "container_stop_command",
+                "container_stopped",
+                "host_metadata",
+                "ownership_verified_before_removal",
+                "private_tmpfs_released",
+            },
+            "synthetic IPC supervision session cleanup",
+        )
+        if cleanup != {
+            "container_removed": True,
+            "container_stop_command": "not-needed",
+            "container_stopped": True,
+            "host_metadata": "retained; no recursive cleanup",
+            "ownership_verified_before_removal": True,
+            "private_tmpfs_released": True,
+        }:
+            raise CompatibilityEvidenceError(
+                "incomplete or unsafe synthetic IPC supervision cleanup"
+            )
+        _validate_isolation(session["isolation"])
+        observations = _expect_object(
+            session["observations"],
+            {"actual_vs_simulated", "scenario_count", "scenarios", "status"},
+            "synthetic IPC supervision observations",
+        )
+        if (
+            observations["status"] != "passed"
+            or observations["scenario_count"] != len(_IPC_SUPERVISION_SCENARIOS)
+            or isinstance(observations["scenario_count"], bool)
+            or not _matches_fixed_json(
+                observations["actual_vs_simulated"], _SUPERVISION_OBSERVATIONS
+            )
+        ):
+            raise CompatibilityEvidenceError("invalid synthetic IPC supervision observations")
+        rows = observations["scenarios"]
+        if not isinstance(rows, list) or [
+            row.get("scenario") if isinstance(row, dict) else None for row in rows
+        ] != list(_IPC_SUPERVISION_SCENARIOS):
+            raise CompatibilityEvidenceError(
+                "incomplete or reordered synthetic IPC supervision matrix"
+            )
+        parsed_rows = [
+            _validate_supervision_scenario(row, name)
+            for row, name in zip(rows, _IPC_SUPERVISION_SCENARIOS, strict=True)
+        ]
+        session["observations"] = {**observations, "scenarios": parsed_rows}
+        parsed_sessions.append(session)
+
+    if not _matches_fixed_json(
+        supervision["scenarios"], parsed_sessions[0]["observations"]["scenarios"]
+    ):
+        raise CompatibilityEvidenceError("contradictory top-level synthetic IPC supervision matrix")
+    if not all(
+        row["children"][role]["reaped"]
+        for session in parsed_sessions
+        for row in session["observations"]["scenarios"]
+        for role in _IPC_SUPERVISION_ROLES
+    ):
+        raise CompatibilityEvidenceError("synthetic IPC supervision left a child unreaped")
+
+    fresh = _expect_object(
+        supervision["fresh_container_repeat"],
+        {
+            "distinct_session_identities",
+            "first_container_removed_before_second",
+            "no_child_processes_left",
+            "same_fixed_queue_names_recreated",
+        },
+        "synthetic IPC supervision container repeat",
+    )
+    if not _matches_fixed_json(
+        fresh,
+        {
+            "distinct_session_identities": True,
+            "first_container_removed_before_second": True,
+            "no_child_processes_left": True,
+            "same_fixed_queue_names_recreated": True,
+        },
+    ):
+        raise CompatibilityEvidenceError("contradictory synthetic IPC supervision repeat evidence")
+    cleanup_summary = _expect_object(
+        supervision["container_cleanup"],
+        {
+            "all_containers_stopped_and_removed",
+            "all_private_tmpfs_released",
+            "ownership_verified_before_removal",
+            "queue_state_persists_after_container_removal",
+        },
+        "synthetic IPC supervision container cleanup",
+    )
+    if not _matches_fixed_json(
+        cleanup_summary,
+        {
+            "all_containers_stopped_and_removed": True,
+            "all_private_tmpfs_released": True,
+            "ownership_verified_before_removal": True,
+            "queue_state_persists_after_container_removal": False,
+        },
+    ):
+        raise CompatibilityEvidenceError("contradictory synthetic IPC supervision cleanup summary")
+    isolation = _expect_object(
+        supervision["container_isolation"],
+        {"ipc_mode", "network_mode", "new_mounts_or_sysctls", "profiles"},
+        "synthetic IPC supervision container isolation",
+    )
+    profiles = [session["isolation"] for session in parsed_sessions]
+    if (
+        isolation["ipc_mode"] != "none"
+        or isolation["network_mode"] != "none"
+        or isolation["new_mounts_or_sysctls"] is not False
+        or not _matches_fixed_json(isolation["profiles"], profiles)
+    ):
+        raise CompatibilityEvidenceError("unsafe synthetic IPC supervision isolation")
+
+    return {
+        "status": "PASS",
+        "receipt_status": "passed",
+        "sessions": len(parsed_sessions),
+        "roles": list(_IPC_SUPERVISION_ROLES),
+        "identities": {
+            "qemu-mipsel": identities["qemu_mipsel_sha256"],
+            "guest-source": identities["guest_source_sha256"],
+            "guest-elf": identities["guest_elf_sha256"],
+        },
+        "scenarios": [
+            {
+                "scenario": row["scenario"],
+                "status": "PASS",
+                "observed_failure": row["failure"],
+                "child_exit_statuses": {
+                    role: row["children"][role]["status"] for role in _IPC_SUPERVISION_ROLES
+                },
+                "children_reaped": all(
+                    row["children"][role]["reaped"] for role in _IPC_SUPERVISION_ROLES
+                ),
+                "deadline": row["deadline"],
+            }
+            for row in parsed_sessions[0]["observations"]["scenarios"]
+        ],
+        "stock_compatibility": "UNVERIFIED",
+        "m1_04_stock_boot": "NOT RUN",
+        "independently_authenticated": False,
+    }
+
+
 def _nonnegative_number(value: Any, field: str) -> None:
     if not isinstance(value, (int, float)) or isinstance(value, bool) or value < 0:
         raise CompatibilityEvidenceError(f"invalid numeric value: {field}")
@@ -1286,7 +1970,7 @@ def parse_receipt(document: str | bytes, *, source: str) -> dict[str, Any]:
         ):
             raise CompatibilityEvidenceError("invalid shim source digest")
         if (
-            not isinstance(build["qemu_archives"], list)
+            not isinstance(build["qemu_archives"], (list, dict))
             or not isinstance(build["qemu_configure_flags"], list)
             or not isinstance(build["artifact_sha256_and_elf"], list)
             or not isinstance(build["installed_packages"], list)
@@ -1301,21 +1985,61 @@ def parse_receipt(document: str | bytes, *, source: str) -> dict[str, Any]:
         _nonnegative_number(build["elapsed_seconds"], "build.elapsed_seconds")
         if not isinstance(build["qemu_version"], str) or not build["qemu_version"]:
             raise CompatibilityEvidenceError("invalid QEMU version")
-        for field in (
-            "qemu_archives",
-            "qemu_configure_flags",
-            "artifact_sha256_and_elf",
-            "installed_packages",
-        ):
+        if isinstance(build["qemu_archives"], dict):
+            if set(build["qemu_archives"]) != {
+                "qemu_7.2+dfsg-7+deb12u18.debian.tar.xz",
+                "qemu_7.2+dfsg.orig.tar.xz",
+            }:
+                raise CompatibilityEvidenceError("invalid QEMU archive map")
+            for archive in build["qemu_archives"].values():
+                archive = _expect_object(archive, {"bytes", "sha256", "verified"}, "QEMU archive")
+                if (
+                    not isinstance(archive["bytes"], int)
+                    or isinstance(archive["bytes"], bool)
+                    or archive["bytes"] <= 0
+                    or archive["verified"] is not True
+                ):
+                    raise CompatibilityEvidenceError("invalid QEMU source archive")
+                _digest(archive["sha256"], "build.qemu_archives.sha256")
+        for field in ("qemu_configure_flags", "artifact_sha256_and_elf", "installed_packages"):
             if not isinstance(build[field], list):
                 raise CompatibilityEvidenceError(f"invalid QEMU build array: {field}")
         if not isinstance(build["shim_source_sha256"], dict) or any(
             not isinstance(key, str) for key in build["shim_source_sha256"]
         ):
             raise CompatibilityEvidenceError("invalid shim source map")
-        for field in ("debian_snapshot_inrelease", "toolchain", "container_limits", "build_logs"):
+        for field in ("toolchain", "container_limits", "build_logs"):
             if not isinstance(build[field], dict):
                 raise CompatibilityEvidenceError(f"invalid QEMU build map: {field}")
+        inrelease = build["debian_snapshot_inrelease"]
+        if isinstance(inrelease, list):
+            allowed_codenames = {"bookworm", "bookworm-updates", "bookworm-security"}
+            if len(inrelease) != 3:
+                raise CompatibilityEvidenceError("incomplete Debian snapshot evidence")
+            seen_codenames = set()
+            for record in inrelease:
+                record = _expect_object(
+                    record,
+                    {"codename", "file", "sha256", "valid_signature_fingerprint", "verified"},
+                    "Debian snapshot record",
+                )
+                if (
+                    not isinstance(record["codename"], str)
+                    or record["codename"] not in allowed_codenames
+                    or record["codename"] in seen_codenames
+                    or not isinstance(record["file"], str)
+                    or not record["file"]
+                    or not isinstance(record["valid_signature_fingerprint"], str)
+                    or not re.fullmatch(r"[0-9A-F]{40}", record["valid_signature_fingerprint"])
+                    or record["verified"] is not True
+                ):
+                    raise CompatibilityEvidenceError("invalid Debian snapshot evidence")
+                _digest(record["sha256"], "build.debian_snapshot_inrelease.sha256")
+                seen_codenames.add(record["codename"])
+            if seen_codenames != allowed_codenames:
+                raise CompatibilityEvidenceError("incomplete Debian snapshot evidence")
+        elif not isinstance(inrelease, dict):
+            raise CompatibilityEvidenceError("invalid legacy Debian snapshot map")
         if not isinstance(build["temporary_container_cleanup"], str):
             raise CompatibilityEvidenceError("invalid temporary container cleanup status")
         repeated = build["repeated_clean_build_comparison"]
@@ -1413,7 +2137,7 @@ def parse_receipt(document: str | bytes, *, source: str) -> dict[str, Any]:
             or not isinstance(commit, str)
             or not re.fullmatch(r"[0-9a-f]{40}", commit)
             or not isinstance(projection, str)
-            or not _SHA256.fullmatch(projection)
+            or not re.fullmatch(r"(?:[0-9a-f]{32}|[0-9a-f]{64})", projection)
             or identity.get("firmware_tree_fetched") is not False
             or not isinstance(identity.get("source_lock_changed"), bool)
             or not isinstance(identity.get("reviewed_file_sha256"), dict)
@@ -1466,6 +2190,37 @@ def parse_receipt(document: str | bytes, *, source: str) -> dict[str, Any]:
         if not isinstance(nested, dict):
             raise CompatibilityEvidenceError("QEMU receipt has no synthetic runtime evidence")
         report = parse_receipt(json.dumps(nested), source=source)
+        runtime_toolchain = nested.get("toolchain")
+        runtime_archives = (
+            runtime_toolchain.get("qemu_source_archives")
+            if isinstance(runtime_toolchain, dict)
+            else None
+        )
+        build_archives = build["qemu_archives"]
+        if (
+            isinstance(build_archives, dict)
+            and isinstance(runtime_archives, dict)
+            and (
+                build_archives.keys() != runtime_archives.keys()
+                or any(
+                    build_archives[name]["sha256"] != runtime_archives[name]["sha256"]
+                    or build_archives[name]["bytes"] != runtime_archives[name]["bytes"]
+                    for name in build_archives.keys() & runtime_archives.keys()
+                )
+            )
+        ):
+            raise CompatibilityEvidenceError("conflicting nested QEMU source archive identities")
+        qemu_build_artifacts = [
+            artifact
+            for artifact in build["artifact_sha256_and_elf"]
+            if isinstance(artifact, dict) and artifact.get("name") == "qemu-mipsel"
+        ]
+        if qemu_build_artifacts and (
+            len(qemu_build_artifacts) != 1
+            or _digest(qemu_build_artifacts[0].get("sha256"), "build QEMU artifact sha256")
+            != report["artifacts"]["qemu-mipsel"]
+        ):
+            raise CompatibilityEvidenceError("conflicting nested QEMU executable identities")
         report["build_source"] = dict(identity)
         report["build_receipt_status"] = receipt["status"]
         report["repeat_build_status"] = repeat_status
@@ -1500,9 +2255,13 @@ def parse_receipt(document: str | bytes, *, source: str) -> dict[str, Any]:
     }
     if "synthetic_ipc_handoff" in receipt:
         expected_artifact_names.add(_IPC_HANDOFF_ELF)
+    if "synthetic_ipc_supervision" in receipt:
+        expected_artifact_names.add(_IPC_SUPERVISION_ELF)
     if set(identities) != expected_artifact_names:
         raise CompatibilityEvidenceError("unknown or incomplete artifact identities")
     artifacts = {name: _digest(value, name) for name, value in identities.items()}
+    if "toolchain" in receipt:
+        _validate_toolchain(receipt["toolchain"], artifacts)
     guest_source = _digest(receipt.get("guest_source_sha256"), "guest_source_sha256")
     synthetic_input = _digest(receipt.get("synthetic_input_sha256"), "synthetic_input_sha256")
     sessions = receipt.get("sessions")
@@ -1544,6 +2303,7 @@ def parse_receipt(document: str | bytes, *, source: str) -> dict[str, Any]:
         raise CompatibilityEvidenceError("contradictory synthetic runtime failure record")
     _validate_optional_sections(receipt)
     ipc_handoff_result = _validate_ipc_handoff(receipt, artifacts, parent_status=status)
+    ipc_supervision_result = _validate_ipc_supervision(receipt, artifacts, parent_status=status)
     if receipt.get("failure", {}).get("category") == "synthetic-ipc-handoff-failed" and (
         ipc_handoff_result is None or ipc_handoff_result["receipt_status"] != "failed"
     ):
@@ -1971,6 +2731,11 @@ def parse_receipt(document: str | bytes, *, source: str) -> dict[str, Any]:
     if ipc_handoff_result is not None:
         artifacts["ipc-handoff-guest"] = ipc_handoff_result["identities"]["guest-elf"]
         artifacts["ipc-handoff-guest-source"] = ipc_handoff_result["identities"]["guest-source"]
+    if ipc_supervision_result is not None:
+        artifacts["ipc-supervision-guest"] = ipc_supervision_result["identities"]["guest-elf"]
+        artifacts["ipc-supervision-guest-source"] = ipc_supervision_result["identities"][
+            "guest-source"
+        ]
 
     all_session_results = {
         case: ("quarantined" if "quarantined" in results else "passed")
@@ -1988,6 +2753,10 @@ def parse_receipt(document: str | bytes, *, source: str) -> dict[str, Any]:
     if ipc_handoff_result is not None:
         all_session_results["ipc-handoff"] = (
             "passed" if ipc_handoff_result["status"] == "PASS" else "quarantined"
+        )
+    if ipc_supervision_result is not None:
+        all_session_results["ipc-supervision"] = (
+            "passed" if ipc_supervision_result["status"] == "PASS" else "quarantined"
         )
     if status == "failed" and not any(
         result == "quarantined" for result in all_session_results.values()
@@ -2053,6 +2822,15 @@ def parse_receipt(document: str | bytes, *, source: str) -> dict[str, Any]:
             "status": ipc_handoff_result["status"],
             "evidence": ("receipt-declared handoff evidence; artifact provenance is unverified"),
         }
+    if ipc_supervision_result is not None:
+        scenarios["synthetic-ipc-supervision"] = {
+            "status": ipc_supervision_result["status"],
+            "evidence": (
+                "receipt-declared supervision evidence; artifact provenance is unverified"
+            ),
+        }
+    else:
+        scenarios["synthetic-ipc-supervision"] = {"status": "NOT RUN", "evidence": None}
     return {
         "source": source,
         "receipt_schema": _SCHEMA,
@@ -2066,6 +2844,7 @@ def parse_receipt(document: str | bytes, *, source: str) -> dict[str, Any]:
             "artifact_bytes_rehashed": False,
         },
         "synthetic_ipc_handoff": ipc_handoff_result,
+        "synthetic_ipc_supervision": ipc_supervision_result,
         "guest_source_sha256": guest_source,
         "queue_guest_source_sha256": artifacts["mqueue-guest-source"],
         "synthetic_input_sha256": synthetic_input,

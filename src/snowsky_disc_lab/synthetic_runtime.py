@@ -20,6 +20,7 @@ from pathlib import Path
 from typing import Any
 
 from . import synthetic_ipc_handoff as ipc_handoff
+from . import synthetic_ipc_supervision as ipc_supervision
 
 BASE_IMAGE = (
     "docker.io/library/debian:12@sha256:"
@@ -184,6 +185,303 @@ if [ "$1" = "ipc-handoff" ]; then
   if [ "$consumer_code" -ne 0 ] || [ "$producer_code" -ne 0 ]; then exit 40; fi
   exit 0
 fi
+if [ "$1" = "ipc-supervision" ]; then
+  role_status_reason() {
+    case "$1" in
+      143) printf 'signal:TERM' ;;
+      137) printf 'signal:KILL' ;;
+      *) printf 'exit:%s' "$1" ;;
+    esac
+  }
+  run_supervised_case() {
+    scenario="$1"
+    deadline="$2"
+    consumer_file="/session-diagnostics/${scenario}-consumer"
+    producer_file="/session-diagnostics/${scenario}-producer"
+    consumer_pending=yes
+    producer_pending=yes
+    timer_pending=yes
+    grace_pending=no
+    deadline_expired=no
+    consumer_status=255
+    producer_status=255
+    consumer_reason=not-started
+    producer_reason=not-started
+    term_roles=none
+    kill_roles=none
+    consumer_started=no
+    producer_started=no
+    consumer_pid=0
+    producer_pid=0
+    case "$scenario" in
+      normal)
+        failure_kind=none; failure_role=none; failure_reason=none
+        protocol=request-ack-verified
+        ;;
+      consumer-exits-before-request)
+        failure_kind=guest-exit; failure_role=consumer; failure_reason=exit:42
+        protocol=consumer-exit-before-request
+        ;;
+      producer-exits-before-ack)
+        failure_kind=guest-exit; failure_role=producer; failure_reason=exit:43
+        protocol=producer-exit-before-ack
+        ;;
+      producer-exceeds-deadline)
+        failure_kind=deadline; failure_role=producer; failure_reason=deadline
+        protocol=producer-deadline-exceeded
+        ;;
+      producer-failure-cancels-sibling)
+        failure_kind=guest-exit; failure_role=producer; failure_reason=exit:44
+        protocol=producer-failure-cancelled-consumer
+        ;;
+      *) exit 99 ;;
+    esac
+    start_consumer() {
+      if [ "$scenario" = normal ]; then
+        QEMU_STRACE=1 /inputs/qemu-mipsel /inputs/mips32le-posix-ipc-handoff.elf consumer \
+          > "${consumer_file}.stdout" 2> "${consumer_file}.stderr" &
+      else
+        /inputs/qemu-mipsel /inputs/mips32le-posix-ipc-supervision.elf consumer "$scenario" \
+          > "${consumer_file}.stdout" 2> "${consumer_file}.stderr" &
+      fi
+      consumer_pid=$!
+    }
+    start_producer() {
+      if [ "$scenario" = normal ]; then
+        QEMU_STRACE=1 /inputs/qemu-mipsel /inputs/mips32le-posix-ipc-handoff.elf producer \
+          > "${producer_file}.stdout" 2> "${producer_file}.stderr" &
+      else
+        /inputs/qemu-mipsel /inputs/mips32le-posix-ipc-supervision.elf producer "$scenario" \
+          > "${producer_file}.stdout" 2> "${producer_file}.stderr" &
+      fi
+      producer_pid=$!
+    }
+    wait_for_child_marker() {
+      marker="$1"
+      output_file="$2"
+      child_pid="$3"
+      attempt=0
+      while [ "$attempt" -lt 100 ]; do
+        if grep -Fxq "$marker" "$output_file" 2>/dev/null; then return 0; fi
+        if ! kill -0 "$child_pid" 2>/dev/null; then return 1; fi
+        sleep 0.02
+        attempt=$((attempt + 1))
+      done
+      return 1
+    }
+    sleep "$deadline" &
+    timer_pid=$!
+    if [ "$scenario" = consumer-exits-before-request ]; then
+      start_producer
+      wait_for_child_marker 'SYNTHETIC_SUPERVISION_ROLE=producer' \
+        "${producer_file}.stdout" "$producer_pid" || exit 93
+      start_consumer
+    elif [ "$scenario" = producer-failure-cancels-sibling ]; then
+      start_consumer
+      wait_for_child_marker 'SYNTHETIC_SUPERVISION_ROLE=consumer' \
+        "${consumer_file}.stdout" "$consumer_pid" || exit 93
+      start_producer
+    else
+      start_consumer
+      start_producer
+    fi
+    wait_event() {
+      wait_targets=()
+      if [ "$consumer_pending" = yes ]; then wait_targets+=("$consumer_pid"); fi
+      if [ "$producer_pending" = yes ]; then wait_targets+=("$producer_pid"); fi
+      if [ "$timer_pending" = yes ]; then wait_targets+=("$timer_pid"); fi
+      if [ "$grace_pending" = yes ]; then wait_targets+=("$grace_pid"); fi
+      unset event_pid
+      set +e
+      wait -n -p event_pid "${wait_targets[@]}"
+      event_status=$?
+      set -e
+    }
+    record_guest_status() {
+      if [ "$event_pid" = "$consumer_pid" ]; then
+        consumer_pending=no
+        consumer_status="$event_status"
+        consumer_reason="$(role_status_reason "$event_status")"
+      elif [ "$event_pid" = "$producer_pid" ]; then
+        producer_pending=no
+        producer_status="$event_status"
+        producer_reason="$(role_status_reason "$event_status")"
+      else
+        exit 96
+      fi
+    }
+    reap_after_missed_signal() {
+      missed_role="$1"
+      missed_pid="$2"
+      set +e
+      wait "$missed_pid"
+      missed_status=$?
+      set -e
+      if [ "$missed_role" = consumer ]; then
+        consumer_pending=no
+        consumer_status="$missed_status"
+        consumer_reason="$(role_status_reason "$missed_status")"
+      else
+        producer_pending=no
+        producer_status="$missed_status"
+        producer_reason="$(role_status_reason "$missed_status")"
+      fi
+    }
+    stop_timer() {
+      if [ "$timer_pending" = yes ]; then
+        kill "$timer_pid" 2>/dev/null || true
+        wait "$timer_pid" 2>/dev/null || true
+        timer_pending=no
+      fi
+    }
+    reap_completed_children() {
+      if [ "$consumer_pending" = yes ] && ! jobs -pr | grep -Fxq "$consumer_pid"; then
+        set +e
+        wait "$consumer_pid"
+        completed_status=$?
+        set -e
+        consumer_pending=no
+        consumer_status="$completed_status"
+        consumer_reason="$(role_status_reason "$completed_status")"
+      fi
+      if [ "$producer_pending" = yes ] && ! jobs -pr | grep -Fxq "$producer_pid"; then
+        set +e
+        wait "$producer_pid"
+        completed_status=$?
+        set -e
+        producer_pending=no
+        producer_status="$completed_status"
+        producer_reason="$(role_status_reason "$completed_status")"
+      fi
+    }
+    send_term_to_pending() {
+      if [ "$consumer_pending" = yes ]; then
+        if kill -TERM "$consumer_pid" 2>/dev/null; then
+          term_roles=consumer
+        else
+          reap_after_missed_signal consumer "$consumer_pid"
+        fi
+      fi
+      if [ "$producer_pending" = yes ]; then
+        if kill -TERM "$producer_pid" 2>/dev/null; then
+          if [ "$term_roles" = none ]; then
+            term_roles=producer
+          else
+            term_roles="${term_roles},producer"
+          fi
+        else
+          reap_after_missed_signal producer "$producer_pid"
+        fi
+      fi
+    }
+    start_grace_if_needed() {
+      if [ "$consumer_pending" = yes ] || [ "$producer_pending" = yes ]; then
+        sleep 1 &
+        grace_pid=$!
+        grace_pending=yes
+      fi
+    }
+    while [ "$consumer_pending" = yes ] || [ "$producer_pending" = yes ]; do
+      wait_event
+      if [ "$timer_pending" = yes ] && [ "$event_pid" = "$timer_pid" ]; then
+        timer_pending=no
+        reap_completed_children
+        if [ "$consumer_pending" = yes ] || [ "$producer_pending" = yes ]; then
+          deadline_expired=yes
+          send_term_to_pending
+          start_grace_if_needed
+        fi
+      elif [ "$grace_pending" = yes ] && [ "$event_pid" = "$grace_pid" ]; then
+        grace_pending=no
+        reap_completed_children
+        if [ "$consumer_pending" = yes ]; then
+          if kill -KILL "$consumer_pid" 2>/dev/null; then
+            kill_roles=consumer
+          else
+            reap_after_missed_signal consumer "$consumer_pid"
+          fi
+        fi
+        if [ "$producer_pending" = yes ]; then
+          if kill -KILL "$producer_pid" 2>/dev/null; then
+            if [ "$kill_roles" = none ]; then
+              kill_roles=producer
+            else
+              kill_roles="${kill_roles},producer"
+            fi
+          else
+            reap_after_missed_signal producer "$producer_pid"
+          fi
+        fi
+      else
+        record_guest_status
+        if [ "$scenario" != normal ] || [ "$event_status" -ne 0 ]; then
+          if [ "$timer_pending" = yes ]; then stop_timer; fi
+          if [ "$term_roles" = none ]; then
+            send_term_to_pending
+            start_grace_if_needed
+          fi
+        fi
+      fi
+    done
+    stop_timer
+    if [ "$grace_pending" = yes ]; then
+      kill "$grace_pid" 2>/dev/null || true
+      wait "$grace_pid" 2>/dev/null || true
+      grace_pending=no
+    fi
+    test "$(wc -c < "${consumer_file}.stdout")" -le 512 || exit 98
+    test "$(wc -c < "${producer_file}.stdout")" -le 512 || exit 98
+    test "$(wc -c < "${consumer_file}.stderr")" -le 8192 || exit 97
+    test "$(wc -c < "${producer_file}.stderr")" -le 8192 || exit 97
+    consumer_hash="$(sha256sum "${consumer_file}.stdout" | cut -d ' ' -f 1)"
+    producer_hash="$(sha256sum "${producer_file}.stdout" | cut -d ' ' -f 1)"
+    if [ "$scenario" = normal ]; then
+      consumer_expected='HANDOFF_ROLE=consumer'
+      producer_expected='HANDOFF_ROLE=producer'
+    else
+      consumer_expected='SYNTHETIC_SUPERVISION_ROLE=consumer'
+      producer_expected='SYNTHETIC_SUPERVISION_ROLE=producer'
+    fi
+    if head -n 1 "${consumer_file}.stdout" | grep -Fxq "$consumer_expected"; then
+      consumer_started=yes
+    fi
+    if head -n 1 "${producer_file}.stdout" | grep -Fxq "$producer_expected"; then
+      producer_started=yes
+    fi
+    test "$consumer_started" = yes && test "$producer_started" = yes || exit 93
+    if [ "$consumer_status" -eq 143 ]; then test "$consumer_reason" = signal:TERM || exit 92; fi
+    if [ "$consumer_status" -eq 137 ]; then test "$consumer_reason" = signal:KILL || exit 92; fi
+    if [ "$producer_status" -eq 143 ]; then test "$producer_reason" = signal:TERM || exit 92; fi
+    if [ "$producer_status" -eq 137 ]; then test "$producer_reason" = signal:KILL || exit 92; fi
+    printf 'SUPERVISION_CASE=%s\n' "$scenario"
+    printf 'SUPERVISION_CONSUMER_PID=%s\n' "$consumer_pid"
+    printf 'SUPERVISION_CONSUMER_STATUS=%s\n' "$consumer_status"
+    printf 'SUPERVISION_CONSUMER_EXIT_REASON=%s\n' "$consumer_reason"
+    printf 'SUPERVISION_CONSUMER_OUTPUT_SHA256=%s\n' "$consumer_hash"
+    printf 'SUPERVISION_CONSUMER_STARTED=%s\n' "$consumer_started"
+    printf 'SUPERVISION_PRODUCER_PID=%s\n' "$producer_pid"
+    printf 'SUPERVISION_PRODUCER_STATUS=%s\n' "$producer_status"
+    printf 'SUPERVISION_PRODUCER_EXIT_REASON=%s\n' "$producer_reason"
+    printf 'SUPERVISION_PRODUCER_OUTPUT_SHA256=%s\n' "$producer_hash"
+    printf 'SUPERVISION_PRODUCER_STARTED=%s\n' "$producer_started"
+    printf 'SUPERVISION_FAILURE_KIND=%s\n' "$failure_kind"
+    printf 'SUPERVISION_FAILURE_ROLE=%s\n' "$failure_role"
+    printf 'SUPERVISION_FAILURE_REASON=%s\n' "$failure_reason"
+    printf 'SUPERVISION_DEADLINE_SECONDS=%s\n' "$deadline"
+    printf 'SUPERVISION_DEADLINE_EXPIRED=%s\n' "$deadline_expired"
+    printf 'SUPERVISION_TERM_SENT=%s\n' "$term_roles"
+    printf 'SUPERVISION_KILL_SENT=%s\n' "$kill_roles"
+    printf 'SUPERVISION_CHILDREN_REAPED=yes\n'
+    printf 'SUPERVISION_PROTOCOL=%s\n' "$protocol"
+    printf 'SUPERVISION_CASE_END\n'
+  }
+  run_supervised_case normal 5
+  run_supervised_case consumer-exits-before-request 5
+  run_supervised_case producer-exits-before-ack 5
+  run_supervised_case producer-exceeds-deadline 2
+  run_supervised_case producer-failure-cancels-sibling 5
+  exit 0
+fi
     case "$1" in
  filesystem)
    guest=/inputs/mips32le-execution-smoke.elf
@@ -266,6 +564,9 @@ def _verify_inputs(inputs: Path, evidence: dict[str, Any]) -> dict[str, str]:
     handoff_guest = evidence.get("synthetic_ipc_handoff_guest", {})
     if handoff_guest.get("source", {}).get("sha256") != ipc_handoff.GUEST_SOURCE_SHA256:
         raise RuntimeRefused("POSIX handoff source identity is not the reviewed fixture")
+    supervision_guest = evidence.get("synthetic_ipc_supervision_guest", {})
+    if supervision_guest.get("source", {}).get("sha256") != ipc_supervision.GUEST_SOURCE_SHA256:
+        raise RuntimeRefused("POSIX supervision source identity is not the reviewed fixture")
     qemu = [item for item in evidence.get("artifacts", []) if item.get("name") == "qemu-mipsel"]
     if len(qemu) != 1 or qemu[0].get("sha256") != QEMU_SHA256:
         raise RuntimeRefused("QEMU identity is not the reviewed interpreter")
@@ -274,6 +575,7 @@ def _verify_inputs(inputs: Path, evidence: dict[str, Any]) -> dict[str, str]:
         "mips32le-execution-smoke.elf": guest.get("elf", {}).get("sha256", ""),
         "mips32le-posix-mqueue.elf": queue_guest.get("elf", {}).get("sha256", ""),
         ipc_handoff.GUEST_ELF: handoff_guest.get("elf", {}).get("sha256", ""),
+        ipc_supervision.GUEST_ELF: supervision_guest.get("elf", {}).get("sha256", ""),
     }
     if not inputs.is_dir() or {entry.name for entry in inputs.iterdir()} != set(expected):
         raise RuntimeRefused("unexpected runtime inputs")
@@ -600,6 +902,7 @@ def launch(
         "mqueue-first",
         "mqueue-second",
         "ipc-handoff",
+        "ipc-supervision",
     }:
         raise RuntimeRefused("unknown first-party synthetic case")
     identities = _verify_inputs(inputs, build_evidence)
@@ -627,6 +930,7 @@ def launch(
         "guest_source_sha256": GUEST_SOURCE_SHA256,
         "queue_guest_source_sha256": MQUEUE_GUEST_SOURCE_SHA256,
         "handoff_guest_source_sha256": ipc_handoff.GUEST_SOURCE_SHA256,
+        "supervision_guest_source_sha256": ipc_supervision.GUEST_SOURCE_SHA256,
         "lifecycle": ["reserved"],
         "cleanup": {"container_removed": False},
         "unsupported_or_unverified": [
@@ -681,6 +985,7 @@ def launch(
             "mqueue-first": 0,
             "mqueue-second": 0,
             "ipc-handoff": 0,
+            "ipc-supervision": 0,
         }[_case]
         expected_output = {
             "filesystem": EXPECTED_OUTPUT,
@@ -689,6 +994,7 @@ def launch(
             "mqueue-first": MQUEUE_FIRST_OUTPUT,
             "mqueue-second": MQUEUE_SECOND_OUTPUT,
             "ipc-handoff": ipc_handoff.EXPECTED_CONTAINER_OUTPUT,
+            "ipc-supervision": None,
         }[_case]
         if _case == "ipc-handoff":
             handoff_observations = ipc_handoff.parse_execution_output(result.stdout)
@@ -708,6 +1014,26 @@ def launch(
                     "synthetic IPC handoff failed at "
                     f"{failure.get('stage', 'output_mismatch')}: "
                     f"{failure.get('errno', 'NONE')} ({failure.get('errno_number', 0)})"
+                )
+        if _case == "ipc-supervision":
+            supervision_observations = ipc_supervision.parse_execution_output(
+                result.stdout, wrapper_exit_code=result.returncode
+            )
+            receipt["execution"] = {
+                "exit_code": result.returncode,
+                "duration_seconds": elapsed,
+                "stdout_sha256": hashlib.sha256(result.stdout.encode()).hexdigest(),
+                "stdout_bytes": len(result.stdout.encode()),
+                "timed_out": False,
+                "terminated": state.get("Running") is False,
+                "supervision": supervision_observations,
+            }
+            if supervision_observations.get("status") != "passed":
+                failure = supervision_observations.get("failure", {})
+                raise RuntimeRefused(
+                    "synthetic IPC supervision failed at "
+                    f"{failure.get('category', 'guest-observation')}: "
+                    f"{failure.get('stage', 'output_mismatch')}"
                 )
         if _case.startswith("mqueue-"):
             queue_error = _mqueue_failure(result.stdout)
@@ -736,10 +1062,10 @@ def launch(
             or state.get("OOMKilled") is not False
             or state.get("ExitCode") != expected_code
             or result.returncode != expected_code
-            or result.stdout != expected_output
+            or (_case != "ipc-supervision" and result.stdout != expected_output)
         ):
             raise RuntimeRefused("guest output, exit or termination differs from the fixed case")
-        if not _case.startswith("mqueue-") and _case != "ipc-handoff":
+        if not _case.startswith("mqueue-") and _case not in {"ipc-handoff", "ipc-supervision"}:
             receipt["execution"] = {
                 "exit_code": result.returncode,
                 "duration_seconds": elapsed,
@@ -767,17 +1093,36 @@ def launch(
     finally:
         if container_id:
             try:
-                if not _owned(_inspect(container_id), token):
+                owned_state = _inspect(container_id)
+                if not _owned(owned_state, token):
                     raise RuntimeRefused("container ownership changed; cleanup refused")
+                state = owned_state.get("State", {})
+                stop_command_result = "not-needed"
+                if state.get("Running") is True:
+                    stopped = _docker(["docker", "stop", "--time", "1", container_id])
+                    if stopped.returncode:
+                        stop_command_result = "failed"
+                    else:
+                        stop_command_result = "succeeded"
+                    owned_state = _inspect(container_id)
+                    if not _owned(owned_state, token):
+                        raise RuntimeRefused("container ownership changed; cleanup refused")
                 removed = _docker(["docker", "rm", "--force", container_id])
                 if removed.returncode:
                     raise RuntimeRefused("owned container cleanup failed")
                 receipt["cleanup"] = {
                     "container_removed": True,
+                    "container_stopped": True,
+                    "ownership_verified_before_removal": True,
+                    "container_stop_command": stop_command_result,
                     "private_tmpfs_released": True,
                     "host_metadata": "retained; no recursive cleanup",
                 }
                 receipt["lifecycle"].append("removed")
+                if stop_command_result == "failed":
+                    failure = failure or (
+                        "owned container graceful stop failed; exact-container cleanup completed"
+                    )
             except (RuntimeRefused, OSError, subprocess.SubprocessError):
                 failure = failure or "owned container cleanup or ownership verification failed"
         if failure:
@@ -1048,6 +1393,7 @@ def acceptance(inputs: Path, evidence: dict[str, Any], store: Path) -> dict[str,
         sessions.append(launch(inputs, evidence, store, session_id=case, _case=case))
     mqueue_receipt = posix_mqueue_acceptance(inputs, evidence, store)
     handoff_receipt = ipc_handoff.acceptance(inputs, evidence, store)
+    supervision_receipt = ipc_supervision.acceptance(inputs, evidence, store)
     return {
         "schema_version": "firmware-free-synthetic-runtime-acceptance/v1",
         "status": "passed",
@@ -1076,5 +1422,6 @@ def acceptance(inputs: Path, evidence: dict[str, Any], store: Path) -> dict[str,
         ),
         "posix_mqueue": mqueue_receipt,
         "synthetic_ipc_handoff": handoff_receipt,
+        "synthetic_ipc_supervision": supervision_receipt,
         "unsupported_or_unverified": first["unsupported_or_unverified"],
     }

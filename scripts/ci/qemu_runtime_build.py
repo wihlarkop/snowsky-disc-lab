@@ -153,6 +153,14 @@ AUDIT_LOG_FILES += (
         "/audit/synthetic-ipc-handoff-guest-evidence.log",
         "synthetic-ipc-handoff-guest-evidence.log",
     ),
+    (
+        "/audit/synthetic-ipc-supervision-guest-build.log",
+        "synthetic-ipc-supervision-guest-build.log",
+    ),
+    (
+        "/audit/synthetic-ipc-supervision-guest-evidence.log",
+        "synthetic-ipc-supervision-guest-evidence.log",
+    ),
     ("/audit/execution-input-staging.log", "execution-input-staging.log"),
 )
 FAKEROOT_BOOTSTRAP_PACKAGES = ("fakeroot", "libfakeroot")
@@ -205,6 +213,12 @@ IPC_HANDOFF_GUEST_EVIDENCE_FILES = (
         "synthetic-ipc-handoff-guest-evidence.json",
     ),
 )
+IPC_SUPERVISION_GUEST_EVIDENCE_FILES = (
+    (
+        "/audit/synthetic-ipc-supervision-guest-evidence.json",
+        "synthetic-ipc-supervision-guest-evidence.json",
+    ),
+)
 BUILD_EVIDENCE_MAX_BYTES = 1024 * 1024
 SMOKE_GUEST_SOURCE = "scripts/ci/fixtures/mips32le_execution_smoke.c"
 SMOKE_GUEST_SOURCE_PATH = ROOT / SMOKE_GUEST_SOURCE
@@ -218,6 +232,13 @@ IPC_HANDOFF_GUEST_SOURCE_PATH = ROOT / IPC_HANDOFF_GUEST_SOURCE
 IPC_HANDOFF_GUEST_ELF = "mips32le-posix-ipc-handoff.elf"
 IPC_HANDOFF_GUEST_ELF_PATH = f"/build/smoke/{IPC_HANDOFF_GUEST_ELF}"
 IPC_HANDOFF_GUEST_SOURCE_SHA256 = "f03c5fdd638038dfc96ee9684fe6a044cba2a16accbf219c31a3d81c042ed6aa"
+IPC_SUPERVISION_GUEST_SOURCE = "scripts/ci/fixtures/mips32le_posix_ipc_supervision.c"
+IPC_SUPERVISION_GUEST_SOURCE_PATH = ROOT / IPC_SUPERVISION_GUEST_SOURCE
+IPC_SUPERVISION_GUEST_ELF = "mips32le-posix-ipc-supervision.elf"
+IPC_SUPERVISION_GUEST_ELF_PATH = f"/build/smoke/{IPC_SUPERVISION_GUEST_ELF}"
+IPC_SUPERVISION_GUEST_SOURCE_SHA256 = (
+    "1d151ccbe7fb4c0965ad6d9bf290de8e6caaed0ca0a2dc7067aba91749c52e9f"
+)
 SMOKE_GUEST_TIMEOUT_SECONDS = 2
 SMOKE_EXECUTION_OUTER_TIMEOUT_SECONDS = 30
 EXECUTION_DIAGNOSTIC_MAX_CHARS = 768
@@ -244,6 +265,7 @@ AUDIT_FILE_MAX_BYTES = {
     "synthetic-guest-evidence.json": 16 * 1024,
     "synthetic-mqueue-guest-evidence.json": 16 * 1024,
     "synthetic-ipc-handoff-guest-evidence.json": 16 * 1024,
+    "synthetic-ipc-supervision-guest-evidence.json": 16 * 1024,
     **{name: 1024 * 1024 for _, name in AUDIT_LOG_FILES},
 }
 
@@ -900,11 +922,14 @@ def prepare_build_inputs(
     include_smoke_guest: bool = False,
     include_mqueue_guest: bool = False,
     include_ipc_handoff_guest: bool = False,
+    include_ipc_supervision_guest: bool = False,
 ) -> str:
     if include_mqueue_guest and not include_smoke_guest:
         raise StopBuild("POSIX queue guest requires the fixed execution smoke build")
     if include_ipc_handoff_guest and not include_mqueue_guest:
         raise StopBuild("POSIX IPC handoff guest requires the fixed queue acceptance build")
+    if include_ipc_supervision_guest and not include_ipc_handoff_guest:
+        raise StopBuild("POSIX IPC supervision guest requires the fixed handoff acceptance build")
     source_paths = {
         "LICENSE": upstream / "LICENSE",
         "emulator/docker/Dockerfile": upstream / "emulator/docker/Dockerfile",
@@ -998,6 +1023,24 @@ def prepare_build_inputs(
             raise StopBuild("copied first-party POSIX IPC handoff source changed")
         expected_hashes[f"lab/fixtures/{IPC_HANDOFF_GUEST_SOURCE_PATH.name}"] = (
             IPC_HANDOFF_GUEST_SOURCE_SHA256
+        )
+
+    if include_ipc_supervision_guest:
+        if (
+            IPC_SUPERVISION_GUEST_SOURCE_PATH.is_symlink()
+            or not IPC_SUPERVISION_GUEST_SOURCE_PATH.is_file()
+            or IPC_SUPERVISION_GUEST_SOURCE_PATH.stat().st_size > 16 * 1024
+            or digest(IPC_SUPERVISION_GUEST_SOURCE_PATH) != IPC_SUPERVISION_GUEST_SOURCE_SHA256
+        ):
+            raise StopBuild("first-party POSIX IPC supervision source identity is invalid")
+        supervision_source_target = (
+            destination / "lab" / "fixtures" / IPC_SUPERVISION_GUEST_SOURCE_PATH.name
+        )
+        shutil.copyfile(IPC_SUPERVISION_GUEST_SOURCE_PATH, supervision_source_target)
+        if digest(supervision_source_target) != IPC_SUPERVISION_GUEST_SOURCE_SHA256:
+            raise StopBuild("copied first-party POSIX IPC supervision source changed")
+        expected_hashes[f"lab/fixtures/{IPC_SUPERVISION_GUEST_SOURCE_PATH.name}"] = (
+            IPC_SUPERVISION_GUEST_SOURCE_SHA256
         )
 
     helper = ROOT / "scripts" / "ci" / "qemu_runtime_build.py"
@@ -1636,6 +1679,7 @@ def build_container_command(
     include_smoke_guest: bool = False,
     include_mqueue_guest: bool = False,
     include_ipc_handoff_guest: bool = False,
+    include_ipc_supervision_guest: bool = False,
 ) -> str:
     inputs = reference["buildInputs"]
     native_packages = tuple(inputs["nativeBuildPackageRequests"])
@@ -1651,10 +1695,13 @@ def build_container_command(
     smoke_guest_steps = ""
     mqueue_guest_steps = ""
     ipc_handoff_guest_steps = ""
+    ipc_supervision_guest_steps = ""
     if include_mqueue_guest and not include_smoke_guest:
         raise StopBuild("POSIX queue guest requires the fixed execution smoke build")
     if include_ipc_handoff_guest and not include_mqueue_guest:
         raise StopBuild("POSIX IPC handoff guest requires the fixed queue acceptance build")
+    if include_ipc_supervision_guest and not include_ipc_handoff_guest:
+        raise StopBuild("POSIX IPC supervision guest requires the fixed handoff acceptance build")
     if include_smoke_guest:
         smoke_guest_steps = r"""
 install -d -m 0700 /build/smoke
@@ -1714,6 +1761,25 @@ python3 /inputs/lab/qemu_runtime_build.py measure-ipc-handoff-guest \
   cmp -s /build/smoke/mips32le-posix-ipc-handoff.elf \
     /audit/execution-inputs/mips32le-posix-ipc-handoff.elf
   test -s /audit/execution-inputs/mips32le-posix-ipc-handoff.elf
+} >>/audit/execution-input-staging.log 2>&1
+"""
+    if include_ipc_supervision_guest:
+        ipc_supervision_guest_steps = r"""
+mark_phase synthetic-ipc-supervision-guest-build /audit/synthetic-ipc-supervision-guest-build.log
+mipsel-linux-gnu-gcc -static -march=mips32 -mabi=32 -EL -O2 -fno-pie -no-pie \
+  -Wl,--build-id=none -o /build/smoke/mips32le-posix-ipc-supervision.elf \
+  /inputs/lab/fixtures/mips32le_posix_ipc_supervision.c -lrt \
+  >/audit/synthetic-ipc-supervision-guest-build.log 2>&1
+mark_phase synthetic-ipc-supervision-guest-evidence \
+  /audit/synthetic-ipc-supervision-guest-evidence.log
+python3 /inputs/lab/qemu_runtime_build.py measure-ipc-supervision-guest \
+  >/audit/synthetic-ipc-supervision-guest-evidence.log 2>&1
+{
+  install -m 0555 /build/smoke/mips32le-posix-ipc-supervision.elf \
+    /audit/execution-inputs/mips32le-posix-ipc-supervision.elf
+  cmp -s /build/smoke/mips32le-posix-ipc-supervision.elf \
+    /audit/execution-inputs/mips32le-posix-ipc-supervision.elf
+  test -s /audit/execution-inputs/mips32le-posix-ipc-supervision.elf
 } >>/audit/execution-input-staging.log 2>&1
 """
     archive_checks = "\n".join(
@@ -1884,6 +1950,7 @@ WORK=/build/shims bash /inputs/upstream/emulator/shims/build_shims.sh \
 __SMOKE_GUEST_STEPS__
 __MQUEUE_GUEST_STEPS__
 __IPC_HANDOFF_GUEST_STEPS__
+__IPC_SUPERVISION_GUEST_STEPS__
 mark_phase build-evidence-collection ""
 python3 /inputs/lab/qemu_runtime_build.py measure
 """
@@ -1896,6 +1963,7 @@ python3 /inputs/lab/qemu_runtime_build.py measure
         .replace("__SMOKE_GUEST_STEPS__", smoke_guest_steps)
         .replace("__MQUEUE_GUEST_STEPS__", mqueue_guest_steps)
         .replace("__IPC_HANDOFF_GUEST_STEPS__", ipc_handoff_guest_steps)
+        .replace("__IPC_SUPERVISION_GUEST_STEPS__", ipc_supervision_guest_steps)
     )
 
 
@@ -2006,16 +2074,22 @@ def run_build_container(
     smoke_inputs_dir: Path | None = None,
     include_mqueue_guest: bool = False,
     include_ipc_handoff_guest: bool = False,
+    include_ipc_supervision_guest: bool = False,
 ) -> dict[str, Any]:
     if include_mqueue_guest and smoke_inputs_dir is None:
         raise StopBuild("POSIX queue guest requires execution input staging")
     if include_ipc_handoff_guest and (not include_mqueue_guest or smoke_inputs_dir is None):
         raise StopBuild("POSIX IPC handoff guest requires queue execution input staging")
+    if include_ipc_supervision_guest and (
+        not include_ipc_handoff_guest or smoke_inputs_dir is None
+    ):
+        raise StopBuild("POSIX IPC supervision guest requires handoff execution input staging")
     command = build_container_command(
         reference,
         include_smoke_guest=smoke_inputs_dir is not None,
         include_mqueue_guest=include_mqueue_guest,
         include_ipc_handoff_guest=include_ipc_handoff_guest,
+        include_ipc_supervision_guest=include_ipc_supervision_guest,
     )
     container_name = f"qemu-runtime-build-{uuid.uuid4().hex[:16]}"
     create_attempted = False
@@ -2210,6 +2284,58 @@ def run_build_container(
                     executable=True,
                 )
                 evidence["synthetic_ipc_handoff_guest"] = handoff_receipt
+            if include_ipc_supervision_guest:
+                copy_audit_files(
+                    container_name,
+                    report_path.parent,
+                    IPC_SUPERVISION_GUEST_EVIDENCE_FILES,
+                    required=True,
+                )
+                supervision_receipt_path = (
+                    report_path.parent / "synthetic-ipc-supervision-guest-evidence.json"
+                )
+                try:
+                    supervision_receipt = json.loads(
+                        supervision_receipt_path.read_text(encoding="utf-8")
+                    )
+                except (OSError, json.JSONDecodeError) as exc:
+                    raise StopBuild(
+                        "synthetic IPC supervision guest evidence is malformed"
+                    ) from exc
+                if (
+                    not isinstance(supervision_receipt, dict)
+                    or supervision_receipt.get("schema_version")
+                    != "firmware-free-mips32le-synthetic-ipc-supervision-guest/v1"
+                    or supervision_receipt.get("status") != "synthetic-static-guest-built"
+                    or supervision_receipt.get("source", {}).get("sha256")
+                    != IPC_SUPERVISION_GUEST_SOURCE_SHA256
+                ):
+                    raise StopBuild(
+                        "synthetic IPC supervision guest build evidence does not match its source"
+                    )
+                supervision_elf = supervision_receipt.get("elf", {})
+                if (
+                    not isinstance(supervision_elf, dict)
+                    or supervision_elf.get("elf_class") != "ELF32"
+                    or supervision_elf.get("elf_data") != "little endian"
+                    or not isinstance(supervision_elf.get("machine"), str)
+                    or not supervision_elf["machine"].startswith("MIPS")
+                    or supervision_elf.get("abi") != "o32"
+                    or supervision_elf.get("isa") not in {"mips32", "mips32r2"}
+                    or supervision_elf.get("has_interpreter") is not False
+                ):
+                    raise StopBuild(
+                        "synthetic IPC supervision guest ELF is not static MIPS32LE O32"
+                    )
+                copy_execution_binary(
+                    container_name,
+                    f"/audit/execution-inputs/{IPC_SUPERVISION_GUEST_ELF}",
+                    smoke_inputs_dir / IPC_SUPERVISION_GUEST_ELF,
+                    str(supervision_elf.get("sha256", "")),
+                    16 * 1024 * 1024,
+                    executable=True,
+                )
+                evidence["synthetic_ipc_supervision_guest"] = supervision_receipt
         return evidence
     finally:
         if create_attempted:
@@ -2414,6 +2540,30 @@ def measure_ipc_handoff_guest() -> None:
         "elf": synthetic_guest_elf_evidence(guest),
     }
     output = Path("/audit/synthetic-ipc-handoff-guest-evidence.json")
+    output.write_text(json.dumps(evidence, sort_keys=True, indent=2) + "\n", encoding="utf-8")
+
+
+def measure_ipc_supervision_guest() -> None:
+    source = Path(f"/inputs/lab/fixtures/{Path(IPC_SUPERVISION_GUEST_SOURCE).name}")
+    if (
+        source.is_symlink()
+        or not source.is_file()
+        or source.stat().st_size > 16 * 1024
+        or digest(source) != IPC_SUPERVISION_GUEST_SOURCE_SHA256
+    ):
+        raise StopBuild("first-party POSIX IPC supervision source is missing or changed")
+    guest = Path(IPC_SUPERVISION_GUEST_ELF_PATH)
+    evidence = {
+        "schema_version": "firmware-free-mips32le-synthetic-ipc-supervision-guest/v1",
+        "status": "synthetic-static-guest-built",
+        "source": {
+            "path": IPC_SUPERVISION_GUEST_SOURCE,
+            "bytes": source.stat().st_size,
+            "sha256": digest(source),
+        },
+        "elf": synthetic_guest_elf_evidence(guest),
+    }
+    output = Path("/audit/synthetic-ipc-supervision-guest-evidence.json")
     output.write_text(json.dumps(evidence, sort_keys=True, indent=2) + "\n", encoding="utf-8")
 
 
@@ -2780,6 +2930,7 @@ def build(*, execution_smoke: bool = False, synthetic_session: bool = False) -> 
             include_smoke_guest=execution_smoke,
             include_mqueue_guest=synthetic_session,
             include_ipc_handoff_guest=synthetic_session,
+            include_ipc_supervision_guest=synthetic_session,
         )
         build_started = time.monotonic()
         smoke_inputs_dir = workdir / "execution-inputs" if execution_smoke else None
@@ -2792,6 +2943,7 @@ def build(*, execution_smoke: bool = False, synthetic_session: bool = False) -> 
             smoke_inputs_dir=smoke_inputs_dir,
             include_mqueue_guest=synthetic_session,
             include_ipc_handoff_guest=synthetic_session,
+            include_ipc_supervision_guest=synthetic_session,
         )
         first_elapsed = round(time.monotonic() - build_started, 1)
         if first.get("debian_archive_keyring_sha256") != debian.get(
@@ -2981,10 +3133,11 @@ def main() -> int:
         "measure-smoke-guest",
         "measure-posix-mqueue-guest",
         "measure-ipc-handoff-guest",
+        "measure-ipc-supervision-guest",
     }:
         print(
             "usage: qemu_runtime_build.py "
-            "{preflight|build|smoke|session|measure|measure-smoke-guest|measure-posix-mqueue-guest|measure-ipc-handoff-guest}",
+            "{preflight|build|smoke|session|measure|measure-smoke-guest|measure-posix-mqueue-guest|measure-ipc-handoff-guest|measure-ipc-supervision-guest}",
             file=sys.stderr,
         )
         return 2
@@ -3003,6 +3156,8 @@ def main() -> int:
             measure_posix_mqueue_guest()
         elif sys.argv[1] == "measure-ipc-handoff-guest":
             measure_ipc_handoff_guest()
+        elif sys.argv[1] == "measure-ipc-supervision-guest":
+            measure_ipc_supervision_guest()
         else:
             measure_build_evidence()
     except (StopBuild, OSError, subprocess.SubprocessError, json.JSONDecodeError) as exc:

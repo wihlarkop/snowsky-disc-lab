@@ -1,0 +1,3822 @@
+{
+  "apt_sandbox": "APT ran as container UID 0 because SETUID/SETGID capabilities are dropped; fakeroot simulated dpkg file ownership metadata from two packages downloaded through the signed pinned snapshot, avoiding CAP_CHOWN. Dpkg::Use-Pty=false and Dir::Log=/dev/null avoid APT's term.log ownership change; explicit audit logs retain diagnostics. The container retained --cap-drop=ALL and no-new-privileges.",
+  "base_image": {
+    "index_digest": "sha256:6ebd97fa83deb272194a2cf015b3d26a4d538e9ad3a7a79d544c8af5b0a01443",
+    "local_config_digest": "sha256:39db83443324e7ef683bd854a90c6615741fecbfe005bc10228129e03af1e950",
+    "platform": "linux/amd64",
+    "platform_manifest": "sha256:2f65600e1252c5649d2213e1d1ea4d74253d26514dc6530102a875e429245929",
+    "reference": "docker.io/library/debian:12@sha256:6ebd97fa83deb272194a2cf015b3d26a4d538e9ad3a7a79d544c8af5b0a01443"
+  },
+  "build": {
+    "artifact_sha256_and_elf": [
+      {
+        "bytes": 17252176,
+        "elf_class": "ELF64",
+        "elf_data": "little endian",
+        "flags": "0x0",
+        "has_interpreter": false,
+        "machine": "Advanced Micro Devices X86-64",
+        "name": "qemu-mipsel",
+        "sha256": "2a58998c25a7836b910f255641a95e9d828967c75ed6b0de2e5490cb82038ddb"
+      },
+      {
+        "bytes": 13472,
+        "elf_class": "ELF32",
+        "elf_data": "little endian",
+        "flags": "0x70001407",
+        "has_interpreter": false,
+        "machine": "MIPS R3000",
+        "name": "fbshim.so",
+        "sha256": "9bb964e2e216ba105d3990c212f34e8d4e4b26e7f773e16e0e930e256d6d7abc"
+      },
+      {
+        "bytes": 10228,
+        "elf_class": "ELF32",
+        "elf_data": "little endian",
+        "flags": "0x70001407",
+        "has_interpreter": false,
+        "machine": "MIPS R3000",
+        "name": "asndshim.so",
+        "sha256": "c08f2c1e86cdf8a7ffebe50daedd47da6a6a2c9506ffc3f2114e17c39303a346"
+      },
+      {
+        "bytes": 12004,
+        "elf_class": "ELF32",
+        "elf_data": "little endian",
+        "flags": "0x70001407",
+        "has_interpreter": false,
+        "machine": "MIPS R3000",
+        "name": "tinyshim.so",
+        "sha256": "c9e81647d23b2025f4400f6997cf67350dae59ebcbef165bcca96bb3951aba16"
+      },
+      {
+        "bytes": 4256,
+        "elf_class": "ELF32",
+        "elf_data": "little endian",
+        "flags": "0x70001407",
+        "has_interpreter": false,
+        "machine": "MIPS R3000",
+        "name": "mqshim.so",
+        "sha256": "f3523ef246171ec60a02f70399bc3b735df48937bbb86f1f5996aa53b041048b"
+      }
+    ],
+    "build_logs": {
+      "apt_install": {
+        "bytes": 45165,
+        "sha256": "29824d78f9e0f85a3d5690001efef213cd718d9f29abc90d2b978e0c58d596c0"
+      },
+      "apt_update": {
+        "bytes": 702,
+        "sha256": "7764aa1b0a6fa3e54c654508ef54d008fbe373b9727a7e847bdb490bf6b017df"
+      },
+      "patch_application": {
+        "bytes": 35,
+        "sha256": "462c917238cb6bc2efe917a53afb7d63b0a58c664b274dc5e64bb3c91b607ec3"
+      },
+      "qemu_build": {
+        "bytes": 26805,
+        "sha256": "63c76cc01834bb273e5900f582ab6914dd43732facd723a7bcbcd64b5b1a9ad8"
+      },
+      "qemu_configure": {
+        "bytes": 14384,
+        "sha256": "f8049cac50c05674b4479c3a15695d45900ec920887408730cd40c073279b747"
+      },
+      "shim_build": {
+        "bytes": 128,
+        "sha256": "43cd84572372611bfdc4622d8dc121dccce3d69d92102404962e2029bd04fc7b"
+      },
+      "source_extract": {
+        "bytes": 2460,
+        "sha256": "6d206656c89453e228cd2280c9c6d0232009840c7c5ee615eb91bfc555277f87"
+      },
+      "source_hash_check": {
+        "bytes": 772,
+        "sha256": "bff9d1e4df2300b1b5c3c86c3dc399d7e09a6ad2c56f35d10f2087af714a96b4"
+      },
+      "synthetic_guest_build": {
+        "bytes": 0,
+        "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+      },
+      "synthetic_guest_evidence": {
+        "bytes": 0,
+        "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+      }
+    },
+    "container_limits": {
+      "build_tmpfs_bytes": 6442450944,
+      "capabilities": "all dropped",
+      "container_cpus": 2,
+      "container_memory_bytes": 6442450944,
+      "input_mount": "read-only",
+      "network_mode": "bridge; runner egress is not isolated at network level",
+      "no_new_privileges": true,
+      "temporary_storage_bytes": 536870912
+    },
+    "debian_archive_keyring_sha256": "506b815cbb32d9b6066b4a2aa524071e071761e7e7f68c3ac74f3061ba852017",
+    "debian_snapshot_inrelease": [
+      {
+        "codename": "bookworm-security",
+        "file": "snapshot.debian.org_archive_debian-security_20260910T000000Z_dists_bookworm-security_InRelease",
+        "sha256": "b4ccc0044b05dae9e00bdad71c337da7230575627350f0d0ae75646af890b5a0",
+        "valid_signature_fingerprint": "ED541312A33F1128F10B1C6C54404762BBB6E853",
+        "verified": true
+      },
+      {
+        "codename": "bookworm-updates",
+        "file": "snapshot.debian.org_archive_debian_20260910T000000Z_dists_bookworm-updates_InRelease",
+        "sha256": "b9557f62f7e7c9a94406bbf955625eb0aff04afdb7f35cdd975b6b15b74a73f5",
+        "valid_signature_fingerprint": "4CB50190207B4758A3F73A796ED0E7B82643E131",
+        "verified": true
+      },
+      {
+        "codename": "bookworm",
+        "file": "snapshot.debian.org_archive_debian_20260910T000000Z_dists_bookworm_InRelease",
+        "sha256": "77737fa4b34f2693e982cc9ee35736816c35a7778fc2d326cc1bbf5b301fe1aa",
+        "valid_signature_fingerprint": "4CB50190207B4758A3F73A796ED0E7B82643E131",
+        "verified": true
+      }
+    ],
+    "elapsed_seconds": 78.5,
+    "installed_package_bom_sha256": "161eceffac7fdadb5b5999ad9a7ce86bde097ced47413366b94bcb326c888481",
+    "installed_package_count": 202,
+    "installed_packages": [
+      {
+        "architecture": "all",
+        "package": "adduser",
+        "version": "3.134"
+      },
+      {
+        "architecture": "amd64",
+        "package": "apt",
+        "version": "2.6.1"
+      },
+      {
+        "architecture": "amd64",
+        "package": "base-files",
+        "version": "12.4+deb12u15"
+      },
+      {
+        "architecture": "amd64",
+        "package": "base-passwd",
+        "version": "3.6.1"
+      },
+      {
+        "architecture": "amd64",
+        "package": "bash",
+        "version": "5.2.15-2+b13"
+      },
+      {
+        "architecture": "amd64",
+        "package": "binutils",
+        "version": "2.40-2"
+      },
+      {
+        "architecture": "amd64",
+        "package": "binutils-common:amd64",
+        "version": "2.40-2"
+      },
+      {
+        "architecture": "amd64",
+        "package": "binutils-mipsel-linux-gnu",
+        "version": "2.40-2cross2"
+      },
+      {
+        "architecture": "amd64",
+        "package": "binutils-x86-64-linux-gnu",
+        "version": "2.40-2"
+      },
+      {
+        "architecture": "amd64",
+        "package": "bsdutils",
+        "version": "1:2.38.1-5+deb12u3"
+      },
+      {
+        "architecture": "amd64",
+        "package": "build-essential",
+        "version": "12.9"
+      },
+      {
+        "architecture": "amd64",
+        "package": "bzip2",
+        "version": "1.0.8-5+b1"
+      },
+      {
+        "architecture": "amd64",
+        "package": "coreutils",
+        "version": "9.1-1"
+      },
+      {
+        "architecture": "amd64",
+        "package": "cpp",
+        "version": "4:12.2.0-3"
+      },
+      {
+        "architecture": "amd64",
+        "package": "cpp-12",
+        "version": "12.2.0-14+deb12u1"
+      },
+      {
+        "architecture": "amd64",
+        "package": "cpp-12-mipsel-linux-gnu",
+        "version": "12.2.0-14cross5"
+      },
+      {
+        "architecture": "amd64",
+        "package": "cpp-mipsel-linux-gnu",
+        "version": "4:12.2.0-4"
+      },
+      {
+        "architecture": "amd64",
+        "package": "dash",
+        "version": "0.5.12-2"
+      },
+      {
+        "architecture": "all",
+        "package": "debconf",
+        "version": "1.5.82"
+      },
+      {
+        "architecture": "all",
+        "package": "debian-archive-keyring",
+        "version": "2023.3+deb12u2"
+      },
+      {
+        "architecture": "amd64",
+        "package": "debianutils",
+        "version": "5.7-0.5~deb12u1"
+      },
+      {
+        "architecture": "amd64",
+        "package": "diffutils",
+        "version": "1:3.8-4"
+      },
+      {
+        "architecture": "amd64",
+        "package": "dpkg",
+        "version": "1.21.23"
+      },
+      {
+        "architecture": "all",
+        "package": "dpkg-dev",
+        "version": "1.21.23"
+      },
+      {
+        "architecture": "amd64",
+        "package": "e2fsprogs",
+        "version": "1.47.0-2+b2"
+      },
+      {
+        "architecture": "amd64",
+        "package": "fakeroot",
+        "version": "1.31-1.2"
+      },
+      {
+        "architecture": "amd64",
+        "package": "findutils",
+        "version": "4.9.0-4"
+      },
+      {
+        "architecture": "amd64",
+        "package": "g++",
+        "version": "4:12.2.0-3"
+      },
+      {
+        "architecture": "amd64",
+        "package": "g++-12",
+        "version": "12.2.0-14+deb12u1"
+      },
+      {
+        "architecture": "amd64",
+        "package": "gcc",
+        "version": "4:12.2.0-3"
+      },
+      {
+        "architecture": "amd64",
+        "package": "gcc-12",
+        "version": "12.2.0-14+deb12u1"
+      },
+      {
+        "architecture": "amd64",
+        "package": "gcc-12-base:amd64",
+        "version": "12.2.0-14+deb12u1"
+      },
+      {
+        "architecture": "all",
+        "package": "gcc-12-cross-base-mipsen",
+        "version": "12.2.0-14cross5"
+      },
+      {
+        "architecture": "amd64",
+        "package": "gcc-12-mipsel-linux-gnu",
+        "version": "12.2.0-14cross5"
+      },
+      {
+        "architecture": "amd64",
+        "package": "gcc-12-mipsel-linux-gnu-base:amd64",
+        "version": "12.2.0-14cross5"
+      },
+      {
+        "architecture": "amd64",
+        "package": "gcc-mipsel-linux-gnu",
+        "version": "4:12.2.0-4"
+      },
+      {
+        "architecture": "amd64",
+        "package": "gpgv",
+        "version": "2.2.40-1.1+deb12u2"
+      },
+      {
+        "architecture": "amd64",
+        "package": "grep",
+        "version": "3.8-5"
+      },
+      {
+        "architecture": "amd64",
+        "package": "gzip",
+        "version": "1.12-1"
+      },
+      {
+        "architecture": "amd64",
+        "package": "hostname",
+        "version": "3.23+nmu1"
+      },
+      {
+        "architecture": "all",
+        "package": "init-system-helpers",
+        "version": "1.65.2+deb12u1"
+      },
+      {
+        "architecture": "amd64",
+        "package": "libacl1:amd64",
+        "version": "2.3.1-3"
+      },
+      {
+        "architecture": "amd64",
+        "package": "libapt-pkg6.0:amd64",
+        "version": "2.6.1"
+      },
+      {
+        "architecture": "amd64",
+        "package": "libasan8:amd64",
+        "version": "12.2.0-14+deb12u1"
+      },
+      {
+        "architecture": "all",
+        "package": "libatomic1-mipsel-cross",
+        "version": "12.2.0-14cross5"
+      },
+      {
+        "architecture": "amd64",
+        "package": "libatomic1:amd64",
+        "version": "12.2.0-14+deb12u1"
+      },
+      {
+        "architecture": "amd64",
+        "package": "libattr1-dev:amd64",
+        "version": "1:2.5.1-4"
+      },
+      {
+        "architecture": "amd64",
+        "package": "libattr1:amd64",
+        "version": "1:2.5.1-4"
+      },
+      {
+        "architecture": "all",
+        "package": "libaudit-common",
+        "version": "1:3.0.9-1"
+      },
+      {
+        "architecture": "amd64",
+        "package": "libaudit1:amd64",
+        "version": "1:3.0.9-1"
+      },
+      {
+        "architecture": "amd64",
+        "package": "libbinutils:amd64",
+        "version": "2.40-2"
+      },
+      {
+        "architecture": "amd64",
+        "package": "libblkid-dev:amd64",
+        "version": "2.38.1-5+deb12u3"
+      },
+      {
+        "architecture": "amd64",
+        "package": "libblkid1:amd64",
+        "version": "2.38.1-5+deb12u3"
+      },
+      {
+        "architecture": "amd64",
+        "package": "libbz2-1.0:amd64",
+        "version": "1.0.8-5+b1"
+      },
+      {
+        "architecture": "amd64",
+        "package": "libc-bin",
+        "version": "2.36-9+deb12u14"
+      },
+      {
+        "architecture": "amd64",
+        "package": "libc-dev-bin",
+        "version": "2.36-9+deb12u14"
+      },
+      {
+        "architecture": "all",
+        "package": "libc6-dev-mipsel-cross",
+        "version": "2.36-8cross2"
+      },
+      {
+        "architecture": "amd64",
+        "package": "libc6-dev:amd64",
+        "version": "2.36-9+deb12u14"
+      },
+      {
+        "architecture": "all",
+        "package": "libc6-mipsel-cross",
+        "version": "2.36-8cross2"
+      },
+      {
+        "architecture": "amd64",
+        "package": "libc6:amd64",
+        "version": "2.36-9+deb12u14"
+      },
+      {
+        "architecture": "amd64",
+        "package": "libcap-ng-dev:amd64",
+        "version": "0.8.3-1+b3"
+      },
+      {
+        "architecture": "amd64",
+        "package": "libcap-ng0:amd64",
+        "version": "0.8.3-1+b3"
+      },
+      {
+        "architecture": "amd64",
+        "package": "libcap2:amd64",
+        "version": "1:2.66-4+deb12u3+b1"
+      },
+      {
+        "architecture": "amd64",
+        "package": "libcc1-0:amd64",
+        "version": "12.2.0-14+deb12u1"
+      },
+      {
+        "architecture": "amd64",
+        "package": "libcom-err2:amd64",
+        "version": "1.47.0-2+b2"
+      },
+      {
+        "architecture": "amd64",
+        "package": "libcrypt-dev:amd64",
+        "version": "1:4.4.33-2"
+      },
+      {
+        "architecture": "amd64",
+        "package": "libcrypt1:amd64",
+        "version": "1:4.4.33-2"
+      },
+      {
+        "architecture": "amd64",
+        "package": "libctf-nobfd0:amd64",
+        "version": "2.40-2"
+      },
+      {
+        "architecture": "amd64",
+        "package": "libctf0:amd64",
+        "version": "2.40-2"
+      },
+      {
+        "architecture": "amd64",
+        "package": "libdb5.3:amd64",
+        "version": "5.3.28+dfsg2-1"
+      },
+      {
+        "architecture": "amd64",
+        "package": "libdebconfclient0:amd64",
+        "version": "0.270"
+      },
+      {
+        "architecture": "all",
+        "package": "libdpkg-perl",
+        "version": "1.21.23"
+      },
+      {
+        "architecture": "amd64",
+        "package": "libelf1:amd64",
+        "version": "0.188-2.1"
+      },
+      {
+        "architecture": "amd64",
+        "package": "libexpat1:amd64",
+        "version": "2.5.0-1+deb12u3"
+      },
+      {
+        "architecture": "amd64",
+        "package": "libext2fs2:amd64",
+        "version": "1.47.0-2+b2"
+      },
+      {
+        "architecture": "amd64",
+        "package": "libfakeroot:amd64",
+        "version": "1.31-1.2"
+      },
+      {
+        "architecture": "amd64",
+        "package": "libffi-dev:amd64",
+        "version": "3.4.4-1"
+      },
+      {
+        "architecture": "amd64",
+        "package": "libffi8:amd64",
+        "version": "3.4.4-1"
+      },
+      {
+        "architecture": "all",
+        "package": "libgcc-12-dev-mipsel-cross",
+        "version": "12.2.0-14cross5"
+      },
+      {
+        "architecture": "amd64",
+        "package": "libgcc-12-dev:amd64",
+        "version": "12.2.0-14+deb12u1"
+      },
+      {
+        "architecture": "all",
+        "package": "libgcc-s1-mipsel-cross",
+        "version": "12.2.0-14cross5"
+      },
+      {
+        "architecture": "amd64",
+        "package": "libgcc-s1:amd64",
+        "version": "12.2.0-14+deb12u1"
+      },
+      {
+        "architecture": "amd64",
+        "package": "libgcrypt20:amd64",
+        "version": "1.10.1-3+deb12u1"
+      },
+      {
+        "architecture": "amd64",
+        "package": "libgdbm-compat4:amd64",
+        "version": "1.23-3"
+      },
+      {
+        "architecture": "amd64",
+        "package": "libgdbm6:amd64",
+        "version": "1.23-3"
+      },
+      {
+        "architecture": "amd64",
+        "package": "libglib2.0-0:amd64",
+        "version": "2.74.6-2+deb12u9"
+      },
+      {
+        "architecture": "amd64",
+        "package": "libglib2.0-bin",
+        "version": "2.74.6-2+deb12u9"
+      },
+      {
+        "architecture": "all",
+        "package": "libglib2.0-data",
+        "version": "2.74.6-2+deb12u9"
+      },
+      {
+        "architecture": "amd64",
+        "package": "libglib2.0-dev-bin",
+        "version": "2.74.6-2+deb12u9"
+      },
+      {
+        "architecture": "amd64",
+        "package": "libglib2.0-dev:amd64",
+        "version": "2.74.6-2+deb12u9"
+      },
+      {
+        "architecture": "amd64",
+        "package": "libgmp10:amd64",
+        "version": "2:6.2.1+dfsg1-1.1"
+      },
+      {
+        "architecture": "amd64",
+        "package": "libgnutls30:amd64",
+        "version": "3.7.9-2+deb12u7"
+      },
+      {
+        "architecture": "all",
+        "package": "libgomp1-mipsel-cross",
+        "version": "12.2.0-14cross5"
+      },
+      {
+        "architecture": "amd64",
+        "package": "libgomp1:amd64",
+        "version": "12.2.0-14+deb12u1"
+      },
+      {
+        "architecture": "amd64",
+        "package": "libgpg-error0:amd64",
+        "version": "1.46-1"
+      },
+      {
+        "architecture": "amd64",
+        "package": "libgprofng0:amd64",
+        "version": "2.40-2"
+      },
+      {
+        "architecture": "amd64",
+        "package": "libgssapi-krb5-2:amd64",
+        "version": "1.20.1-2+deb12u5"
+      },
+      {
+        "architecture": "amd64",
+        "package": "libhogweed6:amd64",
+        "version": "3.8.1-2"
+      },
+      {
+        "architecture": "amd64",
+        "package": "libidn2-0:amd64",
+        "version": "2.3.3-1+b1"
+      },
+      {
+        "architecture": "amd64",
+        "package": "libisl23:amd64",
+        "version": "0.25-1.1"
+      },
+      {
+        "architecture": "amd64",
+        "package": "libitm1:amd64",
+        "version": "12.2.0-14+deb12u1"
+      },
+      {
+        "architecture": "amd64",
+        "package": "libjansson4:amd64",
+        "version": "2.14-2"
+      },
+      {
+        "architecture": "amd64",
+        "package": "libk5crypto3:amd64",
+        "version": "1.20.1-2+deb12u5"
+      },
+      {
+        "architecture": "amd64",
+        "package": "libkeyutils1:amd64",
+        "version": "1.6.3-2"
+      },
+      {
+        "architecture": "amd64",
+        "package": "libkrb5-3:amd64",
+        "version": "1.20.1-2+deb12u5"
+      },
+      {
+        "architecture": "amd64",
+        "package": "libkrb5support0:amd64",
+        "version": "1.20.1-2+deb12u5"
+      },
+      {
+        "architecture": "amd64",
+        "package": "liblsan0:amd64",
+        "version": "12.2.0-14+deb12u1"
+      },
+      {
+        "architecture": "amd64",
+        "package": "liblz4-1:amd64",
+        "version": "1.9.4-1"
+      },
+      {
+        "architecture": "amd64",
+        "package": "liblzma5:amd64",
+        "version": "5.4.1-1+deb12u1"
+      },
+      {
+        "architecture": "amd64",
+        "package": "libmd0:amd64",
+        "version": "1.0.4-2"
+      },
+      {
+        "architecture": "amd64",
+        "package": "libmount-dev:amd64",
+        "version": "2.38.1-5+deb12u3"
+      },
+      {
+        "architecture": "amd64",
+        "package": "libmount1:amd64",
+        "version": "2.38.1-5+deb12u3"
+      },
+      {
+        "architecture": "amd64",
+        "package": "libmpc3:amd64",
+        "version": "1.3.1-1"
+      },
+      {
+        "architecture": "amd64",
+        "package": "libmpfr6:amd64",
+        "version": "4.2.0-1"
+      },
+      {
+        "architecture": "amd64",
+        "package": "libncursesw6:amd64",
+        "version": "6.4-4"
+      },
+      {
+        "architecture": "amd64",
+        "package": "libnettle8:amd64",
+        "version": "3.8.1-2"
+      },
+      {
+        "architecture": "amd64",
+        "package": "libnsl-dev:amd64",
+        "version": "1.3.0-2"
+      },
+      {
+        "architecture": "amd64",
+        "package": "libnsl2:amd64",
+        "version": "1.3.0-2"
+      },
+      {
+        "architecture": "amd64",
+        "package": "libp11-kit0:amd64",
+        "version": "0.24.1-2"
+      },
+      {
+        "architecture": "amd64",
+        "package": "libpam-modules-bin",
+        "version": "1.5.2-6+deb12u2"
+      },
+      {
+        "architecture": "amd64",
+        "package": "libpam-modules:amd64",
+        "version": "1.5.2-6+deb12u2"
+      },
+      {
+        "architecture": "all",
+        "package": "libpam-runtime",
+        "version": "1.5.2-6+deb12u2"
+      },
+      {
+        "architecture": "amd64",
+        "package": "libpam0g:amd64",
+        "version": "1.5.2-6+deb12u2"
+      },
+      {
+        "architecture": "amd64",
+        "package": "libpcre2-16-0:amd64",
+        "version": "10.42-1+deb12u1"
+      },
+      {
+        "architecture": "amd64",
+        "package": "libpcre2-32-0:amd64",
+        "version": "10.42-1+deb12u1"
+      },
+      {
+        "architecture": "amd64",
+        "package": "libpcre2-8-0:amd64",
+        "version": "10.42-1+deb12u1"
+      },
+      {
+        "architecture": "amd64",
+        "package": "libpcre2-dev:amd64",
+        "version": "10.42-1+deb12u1"
+      },
+      {
+        "architecture": "amd64",
+        "package": "libpcre2-posix3:amd64",
+        "version": "10.42-1+deb12u1"
+      },
+      {
+        "architecture": "amd64",
+        "package": "libperl5.36:amd64",
+        "version": "5.36.0-7+deb12u3"
+      },
+      {
+        "architecture": "amd64",
+        "package": "libpkgconf3:amd64",
+        "version": "1.8.1-1"
+      },
+      {
+        "architecture": "amd64",
+        "package": "libpython3-stdlib:amd64",
+        "version": "3.11.2-1+b1"
+      },
+      {
+        "architecture": "amd64",
+        "package": "libpython3.11-minimal:amd64",
+        "version": "3.11.2-6+deb12u8"
+      },
+      {
+        "architecture": "amd64",
+        "package": "libpython3.11-stdlib:amd64",
+        "version": "3.11.2-6+deb12u8"
+      },
+      {
+        "architecture": "amd64",
+        "package": "libquadmath0:amd64",
+        "version": "12.2.0-14+deb12u1"
+      },
+      {
+        "architecture": "amd64",
+        "package": "libreadline8:amd64",
+        "version": "8.2-1.3"
+      },
+      {
+        "architecture": "amd64",
+        "package": "libseccomp2:amd64",
+        "version": "2.5.4-1+deb12u1"
+      },
+      {
+        "architecture": "amd64",
+        "package": "libselinux1-dev:amd64",
+        "version": "3.4-1+b6"
+      },
+      {
+        "architecture": "amd64",
+        "package": "libselinux1:amd64",
+        "version": "3.4-1+b6"
+      },
+      {
+        "architecture": "all",
+        "package": "libsemanage-common",
+        "version": "3.4-1"
+      },
+      {
+        "architecture": "amd64",
+        "package": "libsemanage2:amd64",
+        "version": "3.4-1+b5"
+      },
+      {
+        "architecture": "amd64",
+        "package": "libsepol-dev:amd64",
+        "version": "3.4-2.1"
+      },
+      {
+        "architecture": "amd64",
+        "package": "libsepol2:amd64",
+        "version": "3.4-2.1"
+      },
+      {
+        "architecture": "amd64",
+        "package": "libsmartcols1:amd64",
+        "version": "2.38.1-5+deb12u3"
+      },
+      {
+        "architecture": "amd64",
+        "package": "libsqlite3-0:amd64",
+        "version": "3.40.1-2+deb12u2"
+      },
+      {
+        "architecture": "amd64",
+        "package": "libss2:amd64",
+        "version": "1.47.0-2+b2"
+      },
+      {
+        "architecture": "amd64",
+        "package": "libssl3:amd64",
+        "version": "3.0.20-1~deb12u2"
+      },
+      {
+        "architecture": "amd64",
+        "package": "libstdc++-12-dev:amd64",
+        "version": "12.2.0-14+deb12u1"
+      },
+      {
+        "architecture": "amd64",
+        "package": "libstdc++6:amd64",
+        "version": "12.2.0-14+deb12u1"
+      },
+      {
+        "architecture": "amd64",
+        "package": "libsystemd0:amd64",
+        "version": "252.39-1~deb12u2"
+      },
+      {
+        "architecture": "amd64",
+        "package": "libtasn1-6:amd64",
+        "version": "4.19.0-2+deb12u1"
+      },
+      {
+        "architecture": "amd64",
+        "package": "libtinfo6:amd64",
+        "version": "6.4-4"
+      },
+      {
+        "architecture": "all",
+        "package": "libtirpc-common",
+        "version": "1.3.3+ds-1"
+      },
+      {
+        "architecture": "amd64",
+        "package": "libtirpc-dev:amd64",
+        "version": "1.3.3+ds-1"
+      },
+      {
+        "architecture": "amd64",
+        "package": "libtirpc3:amd64",
+        "version": "1.3.3+ds-1"
+      },
+      {
+        "architecture": "amd64",
+        "package": "libtsan2:amd64",
+        "version": "12.2.0-14+deb12u1"
+      },
+      {
+        "architecture": "amd64",
+        "package": "libubsan1:amd64",
+        "version": "12.2.0-14+deb12u1"
+      },
+      {
+        "architecture": "amd64",
+        "package": "libudev1:amd64",
+        "version": "252.39-1~deb12u2"
+      },
+      {
+        "architecture": "amd64",
+        "package": "libunistring2:amd64",
+        "version": "1.0-2"
+      },
+      {
+        "architecture": "amd64",
+        "package": "libuuid1:amd64",
+        "version": "2.38.1-5+deb12u3"
+      },
+      {
+        "architecture": "amd64",
+        "package": "libxxhash0:amd64",
+        "version": "0.8.1-1"
+      },
+      {
+        "architecture": "amd64",
+        "package": "libzstd1:amd64",
+        "version": "1.5.4+dfsg2-5"
+      },
+      {
+        "architecture": "all",
+        "package": "linux-libc-dev-mipsel-cross",
+        "version": "6.1.8-1cross2"
+      },
+      {
+        "architecture": "amd64",
+        "package": "linux-libc-dev:amd64",
+        "version": "6.1.187-1"
+      },
+      {
+        "architecture": "amd64",
+        "package": "login",
+        "version": "1:4.13+dfsg1-1+deb12u2"
+      },
+      {
+        "architecture": "amd64",
+        "package": "logsave",
+        "version": "1.47.0-2+b2"
+      },
+      {
+        "architecture": "amd64",
+        "package": "make",
+        "version": "4.3-4.1"
+      },
+      {
+        "architecture": "amd64",
+        "package": "mawk",
+        "version": "1.3.4.20200120-3.1"
+      },
+      {
+        "architecture": "all",
+        "package": "media-types",
+        "version": "10.0.0"
+      },
+      {
+        "architecture": "all",
+        "package": "meson",
+        "version": "1.0.1-5"
+      },
+      {
+        "architecture": "amd64",
+        "package": "mount",
+        "version": "2.38.1-5+deb12u3"
+      },
+      {
+        "architecture": "all",
+        "package": "ncurses-base",
+        "version": "6.4-4"
+      },
+      {
+        "architecture": "amd64",
+        "package": "ncurses-bin",
+        "version": "6.4-4"
+      },
+      {
+        "architecture": "amd64",
+        "package": "ninja-build",
+        "version": "1.11.1-2~deb12u1"
+      },
+      {
+        "architecture": "amd64",
+        "package": "passwd",
+        "version": "1:4.13+dfsg1-1+deb12u2"
+      },
+      {
+        "architecture": "amd64",
+        "package": "patch",
+        "version": "2.7.6-7"
+      },
+      {
+        "architecture": "amd64",
+        "package": "perl",
+        "version": "5.36.0-7+deb12u3"
+      },
+      {
+        "architecture": "amd64",
+        "package": "perl-base",
+        "version": "5.36.0-7+deb12u3"
+      },
+      {
+        "architecture": "all",
+        "package": "perl-modules-5.36",
+        "version": "5.36.0-7+deb12u3"
+      },
+      {
+        "architecture": "amd64",
+        "package": "pkg-config:amd64",
+        "version": "1.8.1-1"
+      },
+      {
+        "architecture": "amd64",
+        "package": "pkgconf-bin",
+        "version": "1.8.1-1"
+      },
+      {
+        "architecture": "amd64",
+        "package": "pkgconf:amd64",
+        "version": "1.8.1-1"
+      },
+      {
+        "architecture": "amd64",
+        "package": "python3",
+        "version": "3.11.2-1+b1"
+      },
+      {
+        "architecture": "all",
+        "package": "python3-distutils",
+        "version": "3.11.2-3"
+      },
+      {
+        "architecture": "all",
+        "package": "python3-lib2to3",
+        "version": "3.11.2-3"
+      },
+      {
+        "architecture": "amd64",
+        "package": "python3-minimal",
+        "version": "3.11.2-1+b1"
+      },
+      {
+        "architecture": "all",
+        "package": "python3-pkg-resources",
+        "version": "66.1.1-1+deb12u2"
+      },
+      {
+        "architecture": "all",
+        "package": "python3-setuptools",
+        "version": "66.1.1-1+deb12u2"
+      },
+      {
+        "architecture": "amd64",
+        "package": "python3.11",
+        "version": "3.11.2-6+deb12u8"
+      },
+      {
+        "architecture": "amd64",
+        "package": "python3.11-minimal",
+        "version": "3.11.2-6+deb12u8"
+      },
+      {
+        "architecture": "all",
+        "package": "readline-common",
+        "version": "8.2-1.3"
+      },
+      {
+        "architecture": "amd64",
+        "package": "rpcsvc-proto",
+        "version": "1.4.3-1"
+      },
+      {
+        "architecture": "amd64",
+        "package": "sed",
+        "version": "4.9-1+deb12u1"
+      },
+      {
+        "architecture": "amd64",
+        "package": "sysvinit-utils",
+        "version": "3.06-4"
+      },
+      {
+        "architecture": "amd64",
+        "package": "tar",
+        "version": "1.34+dfsg-1.2+deb12u1"
+      },
+      {
+        "architecture": "all",
+        "package": "tzdata",
+        "version": "2026b-0+deb12u1"
+      },
+      {
+        "architecture": "all",
+        "package": "usr-is-merged",
+        "version": "37~deb12u1"
+      },
+      {
+        "architecture": "amd64",
+        "package": "util-linux",
+        "version": "2.38.1-5+deb12u3"
+      },
+      {
+        "architecture": "amd64",
+        "package": "util-linux-extra",
+        "version": "2.38.1-5+deb12u3"
+      },
+      {
+        "architecture": "amd64",
+        "package": "uuid-dev:amd64",
+        "version": "2.38.1-5+deb12u3"
+      },
+      {
+        "architecture": "amd64",
+        "package": "xz-utils",
+        "version": "5.4.1-1+deb12u1"
+      },
+      {
+        "architecture": "amd64",
+        "package": "zlib1g-dev:amd64",
+        "version": "1:1.2.13.dfsg-1"
+      },
+      {
+        "architecture": "amd64",
+        "package": "zlib1g:amd64",
+        "version": "1:1.2.13.dfsg-1"
+      }
+    ],
+    "qemu_archives": {
+      "qemu_7.2+dfsg-7+deb12u18.debian.tar.xz": {
+        "bytes": 405636,
+        "sha256": "28a1c86310ee53b6bf1854cffe6f6be6ed29a08db7d05759f8ac57b8d6a6cb2f",
+        "verified": true
+      },
+      "qemu_7.2+dfsg.orig.tar.xz": {
+        "bytes": 23523172,
+        "sha256": "91aca71520040edc40b8d437aa3004dae614f58e286cf653ee8996c07af2962f",
+        "verified": true
+      }
+    },
+    "qemu_configure_flags": [
+      "--static",
+      "--disable-system",
+      "--disable-tools",
+      "--disable-guest-agent",
+      "--disable-docs",
+      "--disable-werror",
+      "--target-list=mipsel-linux-user",
+      "--with-pkgversion=Debian 1:7.2+dfsg-7+deb12u18, snowsky-disc-devices"
+    ],
+    "qemu_descriptor_sha256": "6b6bd27b947ec89e40a1d6b26d9c9f3c698ca691da13163e0483f6061bbb20b3",
+    "qemu_patch_sha256": "f3cfebb2eac8170f724b5d5ca900e857fbdfd8905fd1fb4aedc6bcdf41cf3895",
+    "qemu_version": "1:7.2+dfsg-7+deb12u18",
+    "repeated_clean_build_comparison": {
+      "reason": "PR #13 already recorded a matching second clean build for unchanged pinned QEMU, Debian, shim, patch, and toolchain inputs; this task adds only the first-party guest build and isolated execution",
+      "status": "not-run"
+    },
+    "shim_recipe_sha256": "81672b21c54e8757a4ca95e0abedeeef17d4dda2300995b3f62a0fe17d24a838",
+    "shim_source_sha256": {
+      "asndshim.c": "3c40915af5c55f20f261923dd48f93aee14a4dfdc3c117c7673ede1daefb8d2f",
+      "asound.cards": "a9543fb9955047fb92d926531f3334403d4ffa995d3c7307d7ffa8b9d2d0e099",
+      "capture.h": "bcbf9357e73ce1022cbd03af4da4d064a82adf3278bcbc51dee416798f8ba740",
+      "fbshim.c": "363c84afa84f3aac9738df1d8f232ca5e2ee5b2ae530acf35fe0e6b132cc64a8",
+      "mqshim.c": "41ea965dd0bb06ae6dfdedeb7a30af267df7393aaa6770bb0aa19ea4bbdb1bb5",
+      "tinyshim.c": "ff290becc5d431f8594da8d401cf424f18abcf652020211014b9a06573c93cc1"
+    },
+    "temporary_container_cleanup": "verified",
+    "toolchain": {
+      "executable_sha256": {
+        "gcc": {
+          "path": "/usr/bin/gcc",
+          "sha256": "75e997ec62297a6484f491bae28ab0ccb489daba23e398fd10fe68e9e6f0def8"
+        },
+        "ld": {
+          "path": "/usr/bin/ld",
+          "sha256": "f6d71a1bcd45764550a42dfaa179bc43b63ee879ec6f875bfd39fca013515da7"
+        },
+        "meson": {
+          "path": "/usr/bin/meson",
+          "sha256": "86ce39b460ec729602cd68281c44fce77779aaf7fe0bca39a840d73fe63033e0"
+        },
+        "mipsel-linux-gnu-gcc": {
+          "path": "/usr/bin/mipsel-linux-gnu-gcc",
+          "sha256": "969be6f5cc7972444daf60546dffb4f0fa4aa4dc8fd57cf54a96c210c621e48c"
+        },
+        "mipsel-linux-gnu-ld": {
+          "path": "/usr/bin/mipsel-linux-gnu-ld",
+          "sha256": "2fd4eb2992ca34671e6169fcff0766776d018d3d3f5d7256940da5ae9d8ffedc"
+        },
+        "mipsel-linux-gnu-readelf": {
+          "path": "/usr/bin/mipsel-linux-gnu-readelf",
+          "sha256": "0c58b31419147b9cb6d2bf2dc3239ef9a01aaf6cd7982f35a22a07f069201c38"
+        },
+        "ninja": {
+          "path": "/usr/bin/ninja",
+          "sha256": "cb1f22b33e58fc69c47728e751b6ff6f5a1d78d60f46d734c02076dc90a78b19"
+        }
+      },
+      "mipsel": {
+        "compiler": "mipsel-linux-gnu-gcc",
+        "compiler_packages": [
+          {
+            "architecture": "amd64",
+            "package": "binutils-mipsel-linux-gnu",
+            "version": "2.40-2cross2"
+          },
+          {
+            "architecture": "amd64",
+            "package": "gcc-mipsel-linux-gnu",
+            "version": "4:12.2.0-4"
+          },
+          {
+            "architecture": "all",
+            "package": "libc6-dev-mipsel-cross",
+            "version": "2.36-8cross2"
+          }
+        ],
+        "compiler_version": "mipsel-linux-gnu-gcc (Debian 12.2.0-14) 12.2.0",
+        "reported_sysroot": "/",
+        "sysroot_entry_count": 1557,
+        "sysroot_file_count": 1467,
+        "sysroot_sha256": "96cd2b889c0fb0b4e8507944aa3bce80a0d5088e1606e1a8a5d6d8198954047f",
+        "sysroot_tree": "/usr/mipsel-linux-gnu",
+        "target": "mipsel-linux-gnu",
+        "version": "12.2.0"
+      },
+      "native": {
+        "binutils_version": "GNU ld (GNU Binutils for Debian) 2.40",
+        "gcc_version": "12.2.0",
+        "meson_version": "1.0.1",
+        "ninja_version": "1.11.1",
+        "python_version": "Python 3.11.2"
+      }
+    }
+  },
+  "elapsed_seconds": 123.9,
+  "host_resources_before_build": {
+    "architecture": "x86_64",
+    "capacity_failures": [],
+    "capacity_status": "sufficient",
+    "cpus_available": 4,
+    "docker_buildx_version": "github.com/docker/buildx v0.38.0 0dbe87f36ed472fe36b6796c3f70b4210a731fc5",
+    "docker_error": null,
+    "docker_free_bytes": 92121960448,
+    "docker_server_version": "28.0.4",
+    "estimated_requirements": {
+      "basis": "Estimate for the pinned QEMU source build and cross-toolchain packages with temporary build storage and 2 GiB disk headroom; no runtime image.",
+      "minimum_available_memory_bytes": 8589934592,
+      "minimum_cpus": 2,
+      "minimum_docker_free_bytes": 10737418240,
+      "minimum_temporary_storage_free_bytes": 1073741824
+    },
+    "memory_available_bytes": 15160352768,
+    "memory_total_bytes": 16766410752,
+    "runner": "ubuntu-24.04",
+    "temporary_storage_free_bytes": 92121948160,
+    "workspace_free_bytes": 92121948160
+  },
+  "host_resources_before_optional_repeat": null,
+  "license_review": {
+    "debian_qemu_copyright": {
+      "inventory": {
+        "empty_license_field_count": 0,
+        "full_text_license_block_count": 1,
+        "full_text_license_block_sha256": [
+          "6525bb854fb2fda7b38d1c79a93b8ef88d7bccd79462eea9fb8ede049ea1dd5a"
+        ],
+        "license_expressions": [],
+        "license_field_count": 1
+      },
+      "sha256": "0bdb9dd77149a6283f99fca200c49296349738fa9c5ad48e7f92c0816aeda8fc"
+    },
+    "distribution_clearance": false,
+    "note": "QEMU source, Debian packaging, patch, and transitive build dependency provenance has not received a redistribution clearance decision. This build is ephemeral and outputs are not published.",
+    "status": "evidence-collected-review-required",
+    "upstream_repository_license": {
+      "declared": "MIT",
+      "scope": "pinned upstream repository LICENSE only",
+      "sha256": "8cbb19ad3535601695a5c40583497c5e1bcbb8fddaf0e177be07a54cf15e8762"
+    }
+  },
+  "network_boundary": "Dependency fetches used the pinned GitHub source files, the dated Debian snapshot in debian.sources, and the exact Debian base image registry digest. GitHub-hosted runner networking is not network-level egress isolation.",
+  "primary_build_status": "passed",
+  "qemu_source_review": {
+    "debian_archive_keyring_sha256": "506b815cbb32d9b6066b4a2aa524071e071761e7e7f68c3ac74f3061ba852017",
+    "debian_copyright_license_inventory": {
+      "empty_license_field_count": 0,
+      "full_text_license_block_count": 1,
+      "full_text_license_block_sha256": [
+        "6525bb854fb2fda7b38d1c79a93b8ef88d7bccd79462eea9fb8ede049ea1dd5a"
+      ],
+      "license_expressions": [],
+      "license_field_count": 1
+    },
+    "debian_copyright_sha256": "0bdb9dd77149a6283f99fca200c49296349738fa9c5ad48e7f92c0816aeda8fc",
+    "debian_snapshot_inrelease": [
+      {
+        "codename": "bookworm-security",
+        "file": "snapshot.debian.org_archive_debian-security_20260910T000000Z_dists_bookworm-security_InRelease",
+        "sha256": "b4ccc0044b05dae9e00bdad71c337da7230575627350f0d0ae75646af890b5a0",
+        "valid_signature_fingerprint": "ED541312A33F1128F10B1C6C54404762BBB6E853",
+        "verified": true
+      },
+      {
+        "codename": "bookworm-updates",
+        "file": "snapshot.debian.org_archive_debian_20260910T000000Z_dists_bookworm-updates_InRelease",
+        "sha256": "b9557f62f7e7c9a94406bbf955625eb0aff04afdb7f35cdd975b6b15b74a73f5",
+        "valid_signature_fingerprint": "4CB50190207B4758A3F73A796ED0E7B82643E131",
+        "verified": true
+      },
+      {
+        "codename": "bookworm",
+        "file": "snapshot.debian.org_archive_debian_20260910T000000Z_dists_bookworm_InRelease",
+        "sha256": "77737fa4b34f2693e982cc9ee35736816c35a7778fc2d326cc1bbf5b301fe1aa",
+        "valid_signature_fingerprint": "4CB50190207B4758A3F73A796ED0E7B82643E131",
+        "verified": true
+      }
+    ],
+    "qemu_dsc_openpgp_signature": "not independently checked; descriptor hash is authenticated by the signed Debian Sources index",
+    "qemu_dsc_sha256": "6b6bd27b947ec89e40a1d6b26d9c9f3c698ca691da13163e0483f6061bbb20b3",
+    "source_archives": {
+      "qemu_7.2+dfsg-7+deb12u18.debian.tar.xz": {
+        "bytes": 405636,
+        "sha256": "28a1c86310ee53b6bf1854cffe6f6be6ed29a08db7d05759f8ac57b8d6a6cb2f",
+        "verified": true
+      },
+      "qemu_7.2+dfsg.orig.tar.xz": {
+        "bytes": 23523172,
+        "sha256": "91aca71520040edc40b8d437aa3004dae614f58e286cf653ee8996c07af2962f",
+        "verified": true
+      }
+    },
+    "source_extraction": "dpkg-source extraction only; no upstream configure, build, or maintainer script executed",
+    "top_level_copying_file_hashes": [
+      "6f04ae8364d0079a192b14635f4b1da294ce18724c034c39a6a41d1b09df6100  /audit/unpacked/COPYING",
+      "dc626520dcd53a22f727af3ee42c770e56c97a64fe3adb063799d8ab032fe551  /audit/unpacked/COPYING.LIB"
+    ]
+  },
+  "repeat_build_status": "not-run",
+  "runtime_and_device_boundaries": {
+    "binfmt_registered": false,
+    "compatibility_claimed": false,
+    "compiled_binary_published": false,
+    "container_image_published": false,
+    "firmware_processed": false,
+    "guest_booted": false,
+    "qemu_executable_invoked": true,
+    "runtime_image_built": false,
+    "synthetic_guest_executed": true,
+    "usb_or_hardware_accessed": false
+  },
+  "schema_version": "firmware-free-qemu-runtime-build/v1",
+  "source_identity": {
+    "build_input_manifest_sha256": "8b46e82b19c634b8baac9423db391554447d750e03460c39e92a6eb08ae4b0f1",
+    "commit": "85ab00deb08ac112066377fd8083cc8727ed859a",
+    "firmware_tree_fetched": false,
+    "projection_digest": "ef1f0b45f86d4724a7359694b2c3bc4c",
+    "repository": "https://github.com/eudj1n/snowsky-disc-qemu.git",
+    "reviewed_file_bytes": {
+      "LICENSE": 1063,
+      "emulator/docker/Dockerfile": 4610,
+      "emulator/docker/debian.sources": 418,
+      "emulator/docker/qemu/snowsky-disc-devices.patch": 22091,
+      "emulator/shims/asndshim.c": 7183,
+      "emulator/shims/asound.cards": 64,
+      "emulator/shims/build_shims.sh": 927,
+      "emulator/shims/capture.h": 887,
+      "emulator/shims/fbshim.c": 11284,
+      "emulator/shims/mqshim.c": 1959,
+      "emulator/shims/tinyshim.c": 11767
+    },
+    "reviewed_file_sha256": {
+      "LICENSE": "8cbb19ad3535601695a5c40583497c5e1bcbb8fddaf0e177be07a54cf15e8762",
+      "emulator/docker/Dockerfile": "1de02256f4c2afdb68f854a63293ed651d4aec28c979d2e4ab154a41ed1591b0",
+      "emulator/docker/debian.sources": "296362819b78fc90449f2e020f89986c3d3edd2e53fc1d427e572d5209fd595a",
+      "emulator/docker/qemu/snowsky-disc-devices.patch": "f3cfebb2eac8170f724b5d5ca900e857fbdfd8905fd1fb4aedc6bcdf41cf3895",
+      "emulator/shims/asndshim.c": "3c40915af5c55f20f261923dd48f93aee14a4dfdc3c117c7673ede1daefb8d2f",
+      "emulator/shims/asound.cards": "a9543fb9955047fb92d926531f3334403d4ffa995d3c7307d7ffa8b9d2d0e099",
+      "emulator/shims/build_shims.sh": "81672b21c54e8757a4ca95e0abedeeef17d4dda2300995b3f62a0fe17d24a838",
+      "emulator/shims/capture.h": "bcbf9357e73ce1022cbd03af4da4d064a82adf3278bcbc51dee416798f8ba740",
+      "emulator/shims/fbshim.c": "363c84afa84f3aac9738df1d8f232ca5e2ee5b2ae530acf35fe0e6b132cc64a8",
+      "emulator/shims/mqshim.c": "41ea965dd0bb06ae6dfdedeb7a30af267df7393aaa6770bb0aa19ea4bbdb1bb5",
+      "emulator/shims/tinyshim.c": "ff290becc5d431f8594da8d401cf424f18abcf652020211014b9a06573c93cc1"
+    },
+    "source_lock_changed": false
+  },
+  "status": "firmware-free-build-passed-repeat-not-run",
+  "synthetic_execution_smoke": {
+    "execution": {
+      "command": [
+        "timeout --signal=TERM --kill-after=1s 5s /inputs/qemu-mipsel --version",
+        "timeout --signal=TERM --kill-after=1s 5s /inputs/qemu-mipsel /inputs/mips32le-execution-smoke.elf",
+        "timeout --signal=TERM --kill-after=1s 5s /inputs/qemu-mipsel /inputs/mips32le-execution-smoke.elf --fail",
+        "timeout --signal=TERM --kill-after=1s 2s /inputs/qemu-mipsel /inputs/mips32le-execution-smoke.elf --timeout"
+      ],
+      "container_exit_status": 0,
+      "duration_seconds": 2.146,
+      "expected_failure": {
+        "exit_status": 23,
+        "expected_exit_status": 23,
+        "reported": true
+      },
+      "isolation": {
+        "capabilities": "all dropped",
+        "cpu_limit": 1,
+        "devices": "no host device or USB passthrough",
+        "host_device_passthrough": false,
+        "input_mount": "read-only",
+        "memory_bytes": 268435456,
+        "memory_swap_bytes": 268435456,
+        "network_mode": "none",
+        "no_new_privileges": true,
+        "pid_limit": 16,
+        "privileged": false,
+        "published_ports": "none",
+        "read_only_root_filesystem": true,
+        "temporary_mount": "32 MiB noexec tmpfs",
+        "user": "65534:65534"
+      },
+      "process_terminated_cleanly": true,
+      "qemu_version_output": "qemu-mipsel version 7.2.22 (Debian 1:7.2+dfsg-7+deb12u18, snowsky-disc-devices)",
+      "success": {
+        "exit_status": 0,
+        "stdout_bytes": 30,
+        "stdout_matches_expected": true,
+        "stdout_sha256": "ab4c89543891c9c937f508c32a62ff4179cfe99ffced1c056041cf0f420ef159"
+      },
+      "timeout": {
+        "deadline_seconds": 2,
+        "exit_status": 124,
+        "expected_exit_status": 124,
+        "kill_after_seconds": 1,
+        "reported": true
+      }
+    },
+    "guest": {
+      "elf": {
+        "abi": "o32",
+        "architecture": "MIPS32 little-endian",
+        "bytes": 667392,
+        "elf_class": "ELF32",
+        "elf_data": "little endian",
+        "elf_type": "EXEC",
+        "flags": "0x70001007, noreorder, pic, cpic, o32, mips32r2",
+        "has_interpreter": false,
+        "isa": "mips32r2",
+        "machine": "MIPS R3000",
+        "sha256": "c03d59d5f42ab3eb8e4afb388a1fe249d7f141a7897aac9f6de9d38b7598a423"
+      },
+      "schema_version": "firmware-free-mips32le-synthetic-guest/v1",
+      "source": {
+        "bytes": 3108,
+        "path": "scripts/ci/fixtures/mips32le_execution_smoke.c",
+        "sha256": "d00aee44bbcf9a38cbf1a710fa5187501666dd280db4a7fe62ee1c91a1b18661"
+      },
+      "status": "synthetic-static-guest-built"
+    },
+    "host_runner": {
+      "architecture": "X64",
+      "image_os": "ubuntu24",
+      "image_version": "20261012.334.1",
+      "os": "Linux",
+      "resources": {
+        "architecture": "x86_64",
+        "capacity_failures": [],
+        "capacity_status": "sufficient",
+        "cpus_available": 4,
+        "docker_buildx_version": "github.com/docker/buildx v0.38.0 0dbe87f36ed472fe36b6796c3f70b4210a731fc5",
+        "docker_error": null,
+        "docker_free_bytes": 92121960448,
+        "docker_server_version": "28.0.4",
+        "estimated_requirements": {
+          "basis": "Estimate for the pinned QEMU source build and cross-toolchain packages with temporary build storage and 2 GiB disk headroom; no runtime image.",
+          "minimum_available_memory_bytes": 8589934592,
+          "minimum_cpus": 2,
+          "minimum_docker_free_bytes": 10737418240,
+          "minimum_temporary_storage_free_bytes": 1073741824
+        },
+        "memory_available_bytes": 15160352768,
+        "memory_total_bytes": 16766410752,
+        "runner": "ubuntu-24.04",
+        "temporary_storage_free_bytes": 92121948160,
+        "workspace_free_bytes": 92121948160
+      },
+      "runs_on": "ubuntu-24.04"
+    },
+    "runtime_boundaries": {
+      "binfmt_registered": false,
+      "compatibility_claimed": false,
+      "compiled_binaries_published": false,
+      "docker_socket_mounted": false,
+      "firmware_processed": false,
+      "host_devices_mounted": false,
+      "network_during_guest_execution": false,
+      "privileged_container": false,
+      "qemu_guest_booted": false,
+      "stock_binary_executed": false,
+      "temporary_execution_inputs_removed": true
+    },
+    "schema_version": "firmware-free-mips32le-execution-smoke/v1",
+    "status": "synthetic-execution-passed",
+    "toolchain": {
+      "base_image": "docker.io/library/debian:12@sha256:6ebd97fa83deb272194a2cf015b3d26a4d538e9ad3a7a79d544c8af5b0a01443",
+      "base_image_amd64_manifest": "sha256:2f65600e1252c5649d2213e1d1ea4d74253d26514dc6530102a875e429245929",
+      "base_image_index_sha256": "sha256:6ebd97fa83deb272194a2cf015b3d26a4d538e9ad3a7a79d544c8af5b0a01443",
+      "build_input_manifest_sha256": "8b46e82b19c634b8baac9423db391554447d750e03460c39e92a6eb08ae4b0f1",
+      "device_patch_sha256": "f3cfebb2eac8170f724b5d5ca900e857fbdfd8905fd1fb4aedc6bcdf41cf3895",
+      "mipsel_cross_toolchain": {
+        "compiler": "mipsel-linux-gnu-gcc",
+        "compiler_packages": [
+          {
+            "architecture": "amd64",
+            "package": "binutils-mipsel-linux-gnu",
+            "version": "2.40-2cross2"
+          },
+          {
+            "architecture": "amd64",
+            "package": "gcc-mipsel-linux-gnu",
+            "version": "4:12.2.0-4"
+          },
+          {
+            "architecture": "all",
+            "package": "libc6-dev-mipsel-cross",
+            "version": "2.36-8cross2"
+          }
+        ],
+        "compiler_version": "mipsel-linux-gnu-gcc (Debian 12.2.0-14) 12.2.0",
+        "reported_sysroot": "/",
+        "sysroot_entry_count": 1557,
+        "sysroot_file_count": 1467,
+        "sysroot_sha256": "96cd2b889c0fb0b4e8507944aa3bce80a0d5088e1606e1a8a5d6d8198954047f",
+        "sysroot_tree": "/usr/mipsel-linux-gnu",
+        "target": "mipsel-linux-gnu",
+        "version": "12.2.0"
+      },
+      "prior_reproducible_build": {
+        "head": "36864ecbe6ab1dfd5b6fd672c680c48d0708c422",
+        "match_scope": "QEMU and shim binaries, package BOM, MIPS sysroot, toolchain identities, and pinned sources; this run adds guest compilation after those builds",
+        "result": "matching second clean build",
+        "reused": true,
+        "workflow_run": 39442532057
+      },
+      "qemu_binary": {
+        "bytes": 17252176,
+        "sha256": "2a58998c25a7836b910f255641a95e9d828967c75ed6b0de2e5490cb82038ddb"
+      },
+      "qemu_package_version": "1:7.2+dfsg-7+deb12u18",
+      "qemu_source_archives": {
+        "qemu_7.2+dfsg-7+deb12u18.debian.tar.xz": {
+          "bytes": 405636,
+          "sha256": "28a1c86310ee53b6bf1854cffe6f6be6ed29a08db7d05759f8ac57b8d6a6cb2f",
+          "verified": true
+        },
+        "qemu_7.2+dfsg.orig.tar.xz": {
+          "bytes": 23523172,
+          "sha256": "91aca71520040edc40b8d437aa3004dae614f58e286cf653ee8996c07af2962f",
+          "verified": true
+        }
+      },
+      "qemu_source_descriptor_sha256": "6b6bd27b947ec89e40a1d6b26d9c9f3c698ca691da13163e0483f6061bbb20b3",
+      "upstream_commit": "85ab00deb08ac112066377fd8083cc8727ed859a",
+      "upstream_projection_digest": "ef1f0b45f86d4724a7359694b2c3bc4c"
+    },
+    "unverified_capabilities": [
+      "stock V2.57 firmware compatibility or boot",
+      "vendor firmware authenticity",
+      "dynamic vendor loader or rootfs behavior",
+      "framebuffer, UI, audio, player, or device behavior",
+      "hardware or USB compatibility"
+    ],
+    "verified_capabilities": [
+      "pinned qemu-mipsel --version output",
+      "static MIPS32 little-endian O32 guest process execution",
+      "getpid and write syscall behavior under QEMU user mode",
+      "deterministic guest stdout and zero exit status",
+      "expected guest exit status reporting",
+      "bounded guest timeout and process termination"
+    ]
+  },
+  "synthetic_runtime": {
+    "guest_source_sha256": "d00aee44bbcf9a38cbf1a710fa5187501666dd280db4a7fe62ee1c91a1b18661",
+    "host_refusals": [
+      "existing session ID",
+      "unsafe traversal",
+      "symlink ancestor"
+    ],
+    "identities": {
+      "mips32le-execution-smoke.elf": "c03d59d5f42ab3eb8e4afb388a1fe249d7f141a7897aac9f6de9d38b7598a423",
+      "mips32le-posix-ipc-handoff.elf": "c6bdbacc416a296707a53ee746a5ce49aa795090e3389a026d7c0b2c8f5c18e1",
+      "mips32le-posix-ipc-supervision.elf": "a01a23b68c9c042c5c25807949ea374fe31237d509d6f39a55f439b123111854",
+      "mips32le-posix-mqueue.elf": "fc0c25cc07b072851f9ed20e1e1af6d084193a05a07776d4e6d15ecad2a824e5",
+      "qemu-mipsel": "2a58998c25a7836b910f255641a95e9d828967c75ed6b0de2e5490cb82038ddb"
+    },
+    "isolation": {
+      "all_capabilities_dropped": true,
+      "diagnostic_file_limit_bytes": 65536,
+      "docker_socket": false,
+      "guest_deadline_seconds": 5,
+      "host_devices": false,
+      "host_home": false,
+      "kernel_boundary": "Docker-managed kernel interfaces; QEMU user mode shares host kernel",
+      "mounts": [
+        {
+          "read_only": true,
+          "source": "<verified-execution-inputs>",
+          "target": "/inputs"
+        },
+        {
+          "read_only": true,
+          "source": "<owned-synthetic-input>",
+          "target": "/synthetic-rootfs"
+        }
+      ],
+      "no_new_privileges": true,
+      "outer_deadline_seconds": 15,
+      "private_writable_tmpfs": {
+        "/session-data": "rw,nosuid,nodev,noexec,size=1m,mode=0700,uid=65534,gid=65534",
+        "/session-diagnostics": "rw,nosuid,nodev,noexec,size=1m,mode=0700,uid=65534,gid=65534",
+        "/session-tmp": "rw,nosuid,nodev,noexec,size=1m,mode=0700,uid=65534,gid=65534"
+      },
+      "shared_source_cache": false,
+      "stdout_limit_bytes": 1024,
+      "term_to_kill_grace_seconds": 1,
+      "timeout_probe_seconds": 2,
+      "uid_gid": "65534:65534",
+      "verified_host_config": {
+        "CapDrop": [
+          "ALL"
+        ],
+        "IpcMode": "none",
+        "Memory": 268435456,
+        "MemorySwap": 268435456,
+        "NanoCpus": 1000000000,
+        "NetworkMode": "none",
+        "PidsLimit": 16,
+        "Privileged": false,
+        "ReadonlyRootfs": true,
+        "Tmpfs": {
+          "/session-data": "rw,nosuid,nodev,noexec,size=1m,mode=0700,uid=65534,gid=65534",
+          "/session-diagnostics": "rw,nosuid,nodev,noexec,size=1m,mode=0700,uid=65534,gid=65534",
+          "/session-tmp": "rw,nosuid,nodev,noexec,size=1m,mode=0700,uid=65534,gid=65534"
+        }
+      }
+    },
+    "posix_mqueue": {
+      "cleanup": {
+        "first_container_removed": true,
+        "first_private_tmpfs_released": true,
+        "persistent_shared_queue": false,
+        "second_container_removed": true,
+        "second_private_tmpfs_released": true
+      },
+      "identities": {
+        "qemu_mipsel_sha256": "2a58998c25a7836b910f255641a95e9d828967c75ed6b0de2e5490cb82038ddb",
+        "queue_guest_elf_sha256": "fc0c25cc07b072851f9ed20e1e1af6d084193a05a07776d4e6d15ecad2a824e5",
+        "queue_guest_source_sha256": "459656e8b14e24c2ab1f2ab97d2219c978b290203168d20e6c8a8554c0ae6795"
+      },
+      "isolation": {
+        "container_profiles": [
+          {
+            "all_capabilities_dropped": true,
+            "diagnostic_file_limit_bytes": 65536,
+            "docker_socket": false,
+            "guest_deadline_seconds": 5,
+            "host_devices": false,
+            "host_home": false,
+            "kernel_boundary": "Docker-managed kernel interfaces; QEMU user mode shares host kernel",
+            "mounts": [
+              {
+                "read_only": true,
+                "source": "<verified-execution-inputs>",
+                "target": "/inputs"
+              },
+              {
+                "read_only": true,
+                "source": "<owned-synthetic-input>",
+                "target": "/synthetic-rootfs"
+              }
+            ],
+            "no_new_privileges": true,
+            "outer_deadline_seconds": 15,
+            "private_writable_tmpfs": {
+              "/session-data": "rw,nosuid,nodev,noexec,size=1m,mode=0700,uid=65534,gid=65534",
+              "/session-diagnostics": "rw,nosuid,nodev,noexec,size=1m,mode=0700,uid=65534,gid=65534",
+              "/session-tmp": "rw,nosuid,nodev,noexec,size=1m,mode=0700,uid=65534,gid=65534"
+            },
+            "shared_source_cache": false,
+            "stdout_limit_bytes": 1024,
+            "term_to_kill_grace_seconds": 1,
+            "timeout_probe_seconds": 2,
+            "uid_gid": "65534:65534",
+            "verified_host_config": {
+              "CapDrop": [
+                "ALL"
+              ],
+              "IpcMode": "none",
+              "Memory": 268435456,
+              "MemorySwap": 268435456,
+              "NanoCpus": 1000000000,
+              "NetworkMode": "none",
+              "PidsLimit": 16,
+              "Privileged": false,
+              "ReadonlyRootfs": true,
+              "Tmpfs": {
+                "/session-data": "rw,nosuid,nodev,noexec,size=1m,mode=0700,uid=65534,gid=65534",
+                "/session-diagnostics": "rw,nosuid,nodev,noexec,size=1m,mode=0700,uid=65534,gid=65534",
+                "/session-tmp": "rw,nosuid,nodev,noexec,size=1m,mode=0700,uid=65534,gid=65534"
+              }
+            }
+          },
+          {
+            "all_capabilities_dropped": true,
+            "diagnostic_file_limit_bytes": 65536,
+            "docker_socket": false,
+            "guest_deadline_seconds": 5,
+            "host_devices": false,
+            "host_home": false,
+            "kernel_boundary": "Docker-managed kernel interfaces; QEMU user mode shares host kernel",
+            "mounts": [
+              {
+                "read_only": true,
+                "source": "<verified-execution-inputs>",
+                "target": "/inputs"
+              },
+              {
+                "read_only": true,
+                "source": "<owned-synthetic-input>",
+                "target": "/synthetic-rootfs"
+              }
+            ],
+            "no_new_privileges": true,
+            "outer_deadline_seconds": 15,
+            "private_writable_tmpfs": {
+              "/session-data": "rw,nosuid,nodev,noexec,size=1m,mode=0700,uid=65534,gid=65534",
+              "/session-diagnostics": "rw,nosuid,nodev,noexec,size=1m,mode=0700,uid=65534,gid=65534",
+              "/session-tmp": "rw,nosuid,nodev,noexec,size=1m,mode=0700,uid=65534,gid=65534"
+            },
+            "shared_source_cache": false,
+            "stdout_limit_bytes": 1024,
+            "term_to_kill_grace_seconds": 1,
+            "timeout_probe_seconds": 2,
+            "uid_gid": "65534:65534",
+            "verified_host_config": {
+              "CapDrop": [
+                "ALL"
+              ],
+              "IpcMode": "none",
+              "Memory": 268435456,
+              "MemorySwap": 268435456,
+              "NanoCpus": 1000000000,
+              "NetworkMode": "none",
+              "PidsLimit": 16,
+              "Privileged": false,
+              "ReadonlyRootfs": true,
+              "Tmpfs": {
+                "/session-data": "rw,nosuid,nodev,noexec,size=1m,mode=0700,uid=65534,gid=65534",
+                "/session-diagnostics": "rw,nosuid,nodev,noexec,size=1m,mode=0700,uid=65534,gid=65534",
+                "/session-tmp": "rw,nosuid,nodev,noexec,size=1m,mode=0700,uid=65534,gid=65534"
+              }
+            }
+          }
+        ],
+        "mqueue_filesystem_mount_added": false
+      },
+      "observed_syscalls": {
+        "first_session": {
+          "fstat_mode": "0600",
+          "mq_close": "success",
+          "mq_getattr": {
+            "current_messages": 0,
+            "max_message_bytes": 64,
+            "max_messages": 2,
+            "nonblocking": true
+          },
+          "mq_open_after_unlink": {
+            "errno": "ENOENT",
+            "errno_number": 2,
+            "result": -1
+          },
+          "mq_open_duplicate_exclusive": {
+            "errno": "EEXIST",
+            "errno_number": 17,
+            "result": -1
+          },
+          "mq_open_exclusive_create": "success",
+          "mq_open_recreate": "success",
+          "mq_timedreceive": {
+            "payload_bytes": 28,
+            "payload_matches": true,
+            "payload_sha256": "b8e0b0e98d2906e4b1d5cdaf72e10f44468760938a4c004c85fcbb7a4160e206",
+            "priority": 7,
+            "result": "success"
+          },
+          "mq_timedreceive_empty_queue": {
+            "errno": "EAGAIN",
+            "errno_number": 11,
+            "result": -1
+          },
+          "mq_timedsend": "success",
+          "mq_unlink": "success",
+          "qemu_strace_syscalls": [
+            "mq_open",
+            "mq_getsetattr",
+            "mq_timedsend",
+            "mq_timedreceive",
+            "mq_unlink",
+            "close"
+          ],
+          "retained_queue_empty_receive": {
+            "errno": "EAGAIN",
+            "errno_number": 11,
+            "result": -1
+          },
+          "retained_queue_linked_until_exit": true
+        },
+        "second_session": {
+          "fstat_mode": "0600",
+          "mq_close": "success",
+          "mq_getattr": {
+            "current_messages": 0,
+            "max_message_bytes": 64,
+            "max_messages": 2,
+            "nonblocking": true
+          },
+          "mq_open_after_unlink": {
+            "errno": "ENOENT",
+            "errno_number": 2,
+            "result": -1
+          },
+          "mq_open_exclusive_create": "success",
+          "mq_timedreceive_empty_queue": {
+            "errno": "EAGAIN",
+            "errno_number": 11,
+            "result": -1
+          },
+          "mq_unlink": "success",
+          "qemu_strace_syscalls": [
+            "mq_open",
+            "mq_getsetattr",
+            "mq_timedreceive",
+            "mq_unlink",
+            "close"
+          ]
+        }
+      },
+      "outputs": [
+        {
+          "bytes": 665,
+          "duration_seconds": 0.137,
+          "session_identity": "00000000000000000000000000000031",
+          "sha256": "751fac8b9274fe4fbfb122593ed30f1201060922984dfdea9f0e35ab81f7c1ca"
+        },
+        {
+          "bytes": 306,
+          "duration_seconds": 0.165,
+          "session_identity": "00000000000000000000000000000032",
+          "sha256": "12c726a783b476e04a54dee9e955e9a9ae0c3dd1247cb1a93e06f5a34e200cea"
+        }
+      ],
+      "queue": {
+        "attributes": {
+          "current_messages": 0,
+          "max_message_bytes": 64,
+          "max_messages": 2,
+          "mode": "0600",
+          "open_flags": [
+            "O_CREAT",
+            "O_EXCL",
+            "O_NONBLOCK",
+            "O_RDWR"
+          ]
+        },
+        "name": "/snowsky_disc_lab_mqueue_probe_v1",
+        "payload_bytes": 28,
+        "payload_sha256": "b8e0b0e98d2906e4b1d5cdaf72e10f44468760938a4c004c85fcbb7a4160e206",
+        "priority": 7
+      },
+      "schema_version": "firmware-free-mips32le-posix-mqueue-acceptance/v1",
+      "scope": "first-party synthetic POSIX message queue syscall acceptance",
+      "session_separation": {
+        "distinct_session_identities": true,
+        "first_container_removed_before_second_create": true,
+        "second_session_same_name_o_excl_create": "success"
+      },
+      "sessions": [
+        {
+          "case": "mqueue-first",
+          "cleanup": {
+            "container_removed": true,
+            "container_stop_command": "not-needed",
+            "container_stopped": true,
+            "host_metadata": "retained; no recursive cleanup",
+            "ownership_verified_before_removal": true,
+            "private_tmpfs_released": true
+          },
+          "execution": {
+            "duration_seconds": 0.137,
+            "exit_code": 0,
+            "queue_syscall_error": null,
+            "stdout_bytes": 665,
+            "stdout_sha256": "751fac8b9274fe4fbfb122593ed30f1201060922984dfdea9f0e35ab81f7c1ca",
+            "terminated": true,
+            "timed_out": false
+          },
+          "isolation": {
+            "all_capabilities_dropped": true,
+            "diagnostic_file_limit_bytes": 65536,
+            "docker_socket": false,
+            "guest_deadline_seconds": 5,
+            "host_devices": false,
+            "host_home": false,
+            "kernel_boundary": "Docker-managed kernel interfaces; QEMU user mode shares host kernel",
+            "mounts": [
+              {
+                "read_only": true,
+                "source": "<verified-execution-inputs>",
+                "target": "/inputs"
+              },
+              {
+                "read_only": true,
+                "source": "<owned-synthetic-input>",
+                "target": "/synthetic-rootfs"
+              }
+            ],
+            "no_new_privileges": true,
+            "outer_deadline_seconds": 15,
+            "private_writable_tmpfs": {
+              "/session-data": "rw,nosuid,nodev,noexec,size=1m,mode=0700,uid=65534,gid=65534",
+              "/session-diagnostics": "rw,nosuid,nodev,noexec,size=1m,mode=0700,uid=65534,gid=65534",
+              "/session-tmp": "rw,nosuid,nodev,noexec,size=1m,mode=0700,uid=65534,gid=65534"
+            },
+            "shared_source_cache": false,
+            "stdout_limit_bytes": 1024,
+            "term_to_kill_grace_seconds": 1,
+            "timeout_probe_seconds": 2,
+            "uid_gid": "65534:65534",
+            "verified_host_config": {
+              "CapDrop": [
+                "ALL"
+              ],
+              "IpcMode": "none",
+              "Memory": 268435456,
+              "MemorySwap": 268435456,
+              "NanoCpus": 1000000000,
+              "NetworkMode": "none",
+              "PidsLimit": 16,
+              "Privileged": false,
+              "ReadonlyRootfs": true,
+              "Tmpfs": {
+                "/session-data": "rw,nosuid,nodev,noexec,size=1m,mode=0700,uid=65534,gid=65534",
+                "/session-diagnostics": "rw,nosuid,nodev,noexec,size=1m,mode=0700,uid=65534,gid=65534",
+                "/session-tmp": "rw,nosuid,nodev,noexec,size=1m,mode=0700,uid=65534,gid=65534"
+              }
+            }
+          },
+          "lifecycle": [
+            "reserved",
+            "created",
+            "validated",
+            "start-requested",
+            "exited",
+            "removed"
+          ],
+          "session_id": "mqueue-first",
+          "session_identity": "00000000000000000000000000000031",
+          "status": "passed"
+        },
+        {
+          "case": "mqueue-second",
+          "cleanup": {
+            "container_removed": true,
+            "container_stop_command": "not-needed",
+            "container_stopped": true,
+            "host_metadata": "retained; no recursive cleanup",
+            "ownership_verified_before_removal": true,
+            "private_tmpfs_released": true
+          },
+          "execution": {
+            "duration_seconds": 0.165,
+            "exit_code": 0,
+            "queue_syscall_error": null,
+            "stdout_bytes": 306,
+            "stdout_sha256": "12c726a783b476e04a54dee9e955e9a9ae0c3dd1247cb1a93e06f5a34e200cea",
+            "terminated": true,
+            "timed_out": false
+          },
+          "isolation": {
+            "all_capabilities_dropped": true,
+            "diagnostic_file_limit_bytes": 65536,
+            "docker_socket": false,
+            "guest_deadline_seconds": 5,
+            "host_devices": false,
+            "host_home": false,
+            "kernel_boundary": "Docker-managed kernel interfaces; QEMU user mode shares host kernel",
+            "mounts": [
+              {
+                "read_only": true,
+                "source": "<verified-execution-inputs>",
+                "target": "/inputs"
+              },
+              {
+                "read_only": true,
+                "source": "<owned-synthetic-input>",
+                "target": "/synthetic-rootfs"
+              }
+            ],
+            "no_new_privileges": true,
+            "outer_deadline_seconds": 15,
+            "private_writable_tmpfs": {
+              "/session-data": "rw,nosuid,nodev,noexec,size=1m,mode=0700,uid=65534,gid=65534",
+              "/session-diagnostics": "rw,nosuid,nodev,noexec,size=1m,mode=0700,uid=65534,gid=65534",
+              "/session-tmp": "rw,nosuid,nodev,noexec,size=1m,mode=0700,uid=65534,gid=65534"
+            },
+            "shared_source_cache": false,
+            "stdout_limit_bytes": 1024,
+            "term_to_kill_grace_seconds": 1,
+            "timeout_probe_seconds": 2,
+            "uid_gid": "65534:65534",
+            "verified_host_config": {
+              "CapDrop": [
+                "ALL"
+              ],
+              "IpcMode": "none",
+              "Memory": 268435456,
+              "MemorySwap": 268435456,
+              "NanoCpus": 1000000000,
+              "NetworkMode": "none",
+              "PidsLimit": 16,
+              "Privileged": false,
+              "ReadonlyRootfs": true,
+              "Tmpfs": {
+                "/session-data": "rw,nosuid,nodev,noexec,size=1m,mode=0700,uid=65534,gid=65534",
+                "/session-diagnostics": "rw,nosuid,nodev,noexec,size=1m,mode=0700,uid=65534,gid=65534",
+                "/session-tmp": "rw,nosuid,nodev,noexec,size=1m,mode=0700,uid=65534,gid=65534"
+              }
+            }
+          },
+          "lifecycle": [
+            "reserved",
+            "created",
+            "validated",
+            "start-requested",
+            "exited",
+            "removed"
+          ],
+          "session_id": "mqueue-second",
+          "session_identity": "00000000000000000000000000000032",
+          "status": "passed"
+        }
+      ],
+      "status": "passed",
+      "stock_compatibility": {
+        "m1_04_stock_boot": "NOT RUN",
+        "stock_ipc_compatibility": "UNVERIFIED",
+        "stock_v257_queue_attributes": "DOCUMENTED_ONLY_UNVERIFIED"
+      }
+    },
+    "schema_version": "firmware-free-synthetic-runtime-acceptance/v1",
+    "session_isolation": "independent inspected containers and tmpfs; both O_EXCL probes passed",
+    "sessions": [
+      {
+        "case": "filesystem",
+        "cleanup": {
+          "container_removed": true,
+          "container_stop_command": "not-needed",
+          "container_stopped": true,
+          "host_metadata": "retained; no recursive cleanup",
+          "ownership_verified_before_removal": true,
+          "private_tmpfs_released": true
+        },
+        "execution": {
+          "duration_seconds": 0.127,
+          "exit_code": 0,
+          "observations": {
+            "fresh_session": "ok",
+            "host_path_errno": 2,
+            "input_read": "ok",
+            "outside_write_errno": 30,
+            "private_create_read": "ok",
+            "readonly_write_errno": 30,
+            "temporary_create_read": "ok"
+          },
+          "stdout_bytes": 144,
+          "stdout_sha256": "5bdeaf4a327c6b9fddc9eb6148924cd78796b570accafe4131dda2c71ccd480b",
+          "terminated": true,
+          "timed_out": false
+        },
+        "lifecycle": [
+          "reserved",
+          "created",
+          "validated",
+          "start-requested",
+          "exited",
+          "removed"
+        ],
+        "session_id": "first",
+        "session_identity": "00000000000000000000000000000001",
+        "status": "passed"
+      },
+      {
+        "case": "filesystem",
+        "cleanup": {
+          "container_removed": true,
+          "container_stop_command": "not-needed",
+          "container_stopped": true,
+          "host_metadata": "retained; no recursive cleanup",
+          "ownership_verified_before_removal": true,
+          "private_tmpfs_released": true
+        },
+        "execution": {
+          "duration_seconds": 0.137,
+          "exit_code": 0,
+          "observations": {
+            "fresh_session": "ok",
+            "host_path_errno": 2,
+            "input_read": "ok",
+            "outside_write_errno": 30,
+            "private_create_read": "ok",
+            "readonly_write_errno": 30,
+            "temporary_create_read": "ok"
+          },
+          "stdout_bytes": 144,
+          "stdout_sha256": "5bdeaf4a327c6b9fddc9eb6148924cd78796b570accafe4131dda2c71ccd480b",
+          "terminated": true,
+          "timed_out": false
+        },
+        "lifecycle": [
+          "reserved",
+          "created",
+          "validated",
+          "start-requested",
+          "exited",
+          "removed"
+        ],
+        "session_id": "second",
+        "session_identity": "00000000000000000000000000000002",
+        "status": "passed"
+      },
+      {
+        "case": "failure",
+        "cleanup": {
+          "container_removed": true,
+          "container_stop_command": "not-needed",
+          "container_stopped": true,
+          "host_metadata": "retained; no recursive cleanup",
+          "ownership_verified_before_removal": true,
+          "private_tmpfs_released": true
+        },
+        "execution": {
+          "duration_seconds": 0.137,
+          "exit_code": 23,
+          "observations": {},
+          "stdout_bytes": 34,
+          "stdout_sha256": "333cde14530318cbfb116c6c4294776b9ac130c33612b57e94ae764b21c03fff",
+          "terminated": true,
+          "timed_out": false
+        },
+        "lifecycle": [
+          "reserved",
+          "created",
+          "validated",
+          "start-requested",
+          "exited",
+          "removed"
+        ],
+        "session_id": "failure",
+        "session_identity": "00000000000000000000000000000003",
+        "status": "passed"
+      },
+      {
+        "case": "timeout",
+        "cleanup": {
+          "container_removed": true,
+          "container_stop_command": "not-needed",
+          "container_stopped": true,
+          "host_metadata": "retained; no recursive cleanup",
+          "ownership_verified_before_removal": true,
+          "private_tmpfs_released": true
+        },
+        "execution": {
+          "duration_seconds": 2.122,
+          "exit_code": 124,
+          "observations": {},
+          "stdout_bytes": 0,
+          "stdout_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+          "terminated": true,
+          "timed_out": true
+        },
+        "lifecycle": [
+          "reserved",
+          "created",
+          "validated",
+          "start-requested",
+          "exited",
+          "removed"
+        ],
+        "session_id": "timeout",
+        "session_identity": "00000000000000000000000000000004",
+        "status": "passed"
+      }
+    ],
+    "status": "passed",
+    "synthetic_input_sha256": "5bf231e73abc205059ca3a9e98a0a0699e0c7b7b59a68c2338d2ce4ddf11d33e",
+    "synthetic_ipc_handoff": {
+      "cleanup": {
+        "all_containers_removed": true,
+        "all_private_tmpfs_released": true,
+        "persistent_shared_queue": false
+      },
+      "container_security": {
+        "limits_or_sysctls_changed": false,
+        "mqueue_mount_added": false,
+        "profiles": [
+          {
+            "all_capabilities_dropped": true,
+            "diagnostic_file_limit_bytes": 65536,
+            "docker_socket": false,
+            "guest_deadline_seconds": 5,
+            "host_devices": false,
+            "host_home": false,
+            "kernel_boundary": "Docker-managed kernel interfaces; QEMU user mode shares host kernel",
+            "mounts": [
+              {
+                "read_only": true,
+                "source": "<verified-execution-inputs>",
+                "target": "/inputs"
+              },
+              {
+                "read_only": true,
+                "source": "<owned-synthetic-input>",
+                "target": "/synthetic-rootfs"
+              }
+            ],
+            "no_new_privileges": true,
+            "outer_deadline_seconds": 15,
+            "private_writable_tmpfs": {
+              "/session-data": "rw,nosuid,nodev,noexec,size=1m,mode=0700,uid=65534,gid=65534",
+              "/session-diagnostics": "rw,nosuid,nodev,noexec,size=1m,mode=0700,uid=65534,gid=65534",
+              "/session-tmp": "rw,nosuid,nodev,noexec,size=1m,mode=0700,uid=65534,gid=65534"
+            },
+            "shared_source_cache": false,
+            "stdout_limit_bytes": 1024,
+            "term_to_kill_grace_seconds": 1,
+            "timeout_probe_seconds": 2,
+            "uid_gid": "65534:65534",
+            "verified_host_config": {
+              "CapDrop": [
+                "ALL"
+              ],
+              "IpcMode": "none",
+              "Memory": 268435456,
+              "MemorySwap": 268435456,
+              "NanoCpus": 1000000000,
+              "NetworkMode": "none",
+              "PidsLimit": 16,
+              "Privileged": false,
+              "ReadonlyRootfs": true,
+              "Tmpfs": {
+                "/session-data": "rw,nosuid,nodev,noexec,size=1m,mode=0700,uid=65534,gid=65534",
+                "/session-diagnostics": "rw,nosuid,nodev,noexec,size=1m,mode=0700,uid=65534,gid=65534",
+                "/session-tmp": "rw,nosuid,nodev,noexec,size=1m,mode=0700,uid=65534,gid=65534"
+              }
+            }
+          },
+          {
+            "all_capabilities_dropped": true,
+            "diagnostic_file_limit_bytes": 65536,
+            "docker_socket": false,
+            "guest_deadline_seconds": 5,
+            "host_devices": false,
+            "host_home": false,
+            "kernel_boundary": "Docker-managed kernel interfaces; QEMU user mode shares host kernel",
+            "mounts": [
+              {
+                "read_only": true,
+                "source": "<verified-execution-inputs>",
+                "target": "/inputs"
+              },
+              {
+                "read_only": true,
+                "source": "<owned-synthetic-input>",
+                "target": "/synthetic-rootfs"
+              }
+            ],
+            "no_new_privileges": true,
+            "outer_deadline_seconds": 15,
+            "private_writable_tmpfs": {
+              "/session-data": "rw,nosuid,nodev,noexec,size=1m,mode=0700,uid=65534,gid=65534",
+              "/session-diagnostics": "rw,nosuid,nodev,noexec,size=1m,mode=0700,uid=65534,gid=65534",
+              "/session-tmp": "rw,nosuid,nodev,noexec,size=1m,mode=0700,uid=65534,gid=65534"
+            },
+            "shared_source_cache": false,
+            "stdout_limit_bytes": 1024,
+            "term_to_kill_grace_seconds": 1,
+            "timeout_probe_seconds": 2,
+            "uid_gid": "65534:65534",
+            "verified_host_config": {
+              "CapDrop": [
+                "ALL"
+              ],
+              "IpcMode": "none",
+              "Memory": 268435456,
+              "MemorySwap": 268435456,
+              "NanoCpus": 1000000000,
+              "NetworkMode": "none",
+              "PidsLimit": 16,
+              "Privileged": false,
+              "ReadonlyRootfs": true,
+              "Tmpfs": {
+                "/session-data": "rw,nosuid,nodev,noexec,size=1m,mode=0700,uid=65534,gid=65534",
+                "/session-diagnostics": "rw,nosuid,nodev,noexec,size=1m,mode=0700,uid=65534,gid=65534",
+                "/session-tmp": "rw,nosuid,nodev,noexec,size=1m,mode=0700,uid=65534,gid=65534"
+              }
+            }
+          }
+        ]
+      },
+      "fresh_session_isolation": {
+        "distinct_session_identities": true,
+        "first_container_removed_before_second": true,
+        "same_protocol_succeeded": true
+      },
+      "identities": {
+        "guest_elf_sha256": "c6bdbacc416a296707a53ee746a5ce49aa795090e3389a026d7c0b2c8f5c18e1",
+        "guest_source_sha256": "f03c5fdd638038dfc96ee9684fe6a044cba2a16accbf219c31a3d81c042ed6aa",
+        "qemu_mipsel_sha256": "2a58998c25a7836b910f255641a95e9d828967c75ed6b0de2e5490cb82038ddb"
+      },
+      "processes": {
+        "distinct_qemu_processes": true,
+        "ipc_mode": "none",
+        "overlap_proven_by_request_ack_round_trip": true,
+        "roles": [
+          "consumer",
+          "producer"
+        ],
+        "shared_container_per_session": true,
+        "shared_private_ipc_namespace": true
+      },
+      "protocol": {
+        "acknowledgment": {
+          "payload_bytes": 22,
+          "payload_sha256": "35cc983cb77d4d7b5f3f2b489a92d3f5324d131328f354f23fb0a352545dfa7c",
+          "priority": 3
+        },
+        "acknowledgment_queue": "/snowsky_disc_lab_handoff_ack_v1",
+        "queue_attributes": {
+          "max_message_bytes": 64,
+          "max_messages": 2,
+          "permissions": "0600"
+        },
+        "request": {
+          "payload_bytes": 26,
+          "payload_sha256": "a27944201ce35b61283b9b24f246c935070e81d7f2fc241170c8a47bb9b12354",
+          "priority": 7
+        },
+        "request_queue": "/snowsky_disc_lab_handoff_req_v1"
+      },
+      "schema_version": "firmware-free-mips32le-synthetic-ipc-handoff/v1",
+      "scope": "first-party synthetic two-process POSIX queue handoff",
+      "sessions": [
+        {
+          "case": "ipc-handoff",
+          "cleanup": {
+            "container_removed": true,
+            "container_stop_command": "not-needed",
+            "container_stopped": true,
+            "host_metadata": "retained; no recursive cleanup",
+            "ownership_verified_before_removal": true,
+            "private_tmpfs_released": true
+          },
+          "execution": {
+            "duration_seconds": 0.153,
+            "exit_code": 0,
+            "guest_exit_codes": {
+              "consumer": 0,
+              "producer": 0
+            },
+            "stdout_bytes": 931,
+            "stdout_sha256": "7f378afe75abd839e64e86984b92cf14fb8dbcbce492fe5156548cdf943c016e",
+            "timed_out": false
+          },
+          "isolation": {
+            "all_capabilities_dropped": true,
+            "diagnostic_file_limit_bytes": 65536,
+            "docker_socket": false,
+            "guest_deadline_seconds": 5,
+            "host_devices": false,
+            "host_home": false,
+            "kernel_boundary": "Docker-managed kernel interfaces; QEMU user mode shares host kernel",
+            "mounts": [
+              {
+                "read_only": true,
+                "source": "<verified-execution-inputs>",
+                "target": "/inputs"
+              },
+              {
+                "read_only": true,
+                "source": "<owned-synthetic-input>",
+                "target": "/synthetic-rootfs"
+              }
+            ],
+            "no_new_privileges": true,
+            "outer_deadline_seconds": 15,
+            "private_writable_tmpfs": {
+              "/session-data": "rw,nosuid,nodev,noexec,size=1m,mode=0700,uid=65534,gid=65534",
+              "/session-diagnostics": "rw,nosuid,nodev,noexec,size=1m,mode=0700,uid=65534,gid=65534",
+              "/session-tmp": "rw,nosuid,nodev,noexec,size=1m,mode=0700,uid=65534,gid=65534"
+            },
+            "shared_source_cache": false,
+            "stdout_limit_bytes": 1024,
+            "term_to_kill_grace_seconds": 1,
+            "timeout_probe_seconds": 2,
+            "uid_gid": "65534:65534",
+            "verified_host_config": {
+              "CapDrop": [
+                "ALL"
+              ],
+              "IpcMode": "none",
+              "Memory": 268435456,
+              "MemorySwap": 268435456,
+              "NanoCpus": 1000000000,
+              "NetworkMode": "none",
+              "PidsLimit": 16,
+              "Privileged": false,
+              "ReadonlyRootfs": true,
+              "Tmpfs": {
+                "/session-data": "rw,nosuid,nodev,noexec,size=1m,mode=0700,uid=65534,gid=65534",
+                "/session-diagnostics": "rw,nosuid,nodev,noexec,size=1m,mode=0700,uid=65534,gid=65534",
+                "/session-tmp": "rw,nosuid,nodev,noexec,size=1m,mode=0700,uid=65534,gid=65534"
+              }
+            }
+          },
+          "lifecycle": [
+            "reserved",
+            "created",
+            "validated",
+            "start-requested",
+            "exited",
+            "removed"
+          ],
+          "observations": {
+            "guest_exit_codes": {
+              "consumer": 0,
+              "producer": 0
+            },
+            "messages": {
+              "acknowledgment": {
+                "bytes": 22,
+                "priority": 3,
+                "sha256": "35cc983cb77d4d7b5f3f2b489a92d3f5324d131328f354f23fb0a352545dfa7c",
+                "verified": true
+              },
+              "request": {
+                "bytes": 26,
+                "priority": 7,
+                "sha256": "a27944201ce35b61283b9b24f246c935070e81d7f2fc241170c8a47bb9b12354",
+                "verified": true
+              }
+            },
+            "operations": [
+              "consumer_created_request_queue",
+              "consumer_created_acknowledgment_queue",
+              "producer_opened_request_queue",
+              "producer_opened_acknowledgment_queue",
+              "producer_sent_request",
+              "consumer_received_request",
+              "consumer_sent_acknowledgment",
+              "producer_received_acknowledgment",
+              "closed_request_queue",
+              "closed_acknowledgment_queue",
+              "consumer_unlinked_request_queue",
+              "consumer_unlinked_acknowledgment_queue"
+            ],
+            "processes": {
+              "count": 2,
+              "distinct_qemu_processes": true,
+              "overlap_proven_by_request_ack_round_trip": true,
+              "roles": [
+                "consumer",
+                "producer"
+              ],
+              "shared_container": true,
+              "shared_private_ipc_namespace": true
+            },
+            "qemu_strace_syscalls": {
+              "consumer": [
+                "mq_open",
+                "mq_getsetattr",
+                "mq_timedsend",
+                "mq_timedreceive",
+                "mq_unlink",
+                "close"
+              ],
+              "producer": [
+                "mq_open",
+                "mq_getsetattr",
+                "mq_timedsend",
+                "mq_timedreceive",
+                "close"
+              ]
+            },
+            "queue_attributes": {
+              "acknowledgment": {
+                "current_messages": 0,
+                "max_message_bytes": 64,
+                "max_messages": 2,
+                "permissions": "0600"
+              },
+              "request": {
+                "current_messages": 0,
+                "max_message_bytes": 64,
+                "max_messages": 2,
+                "permissions": "0600"
+              }
+            },
+            "queue_cleanup": {
+              "consumer_closed_both": true,
+              "consumer_unlinked_both": true,
+              "linked_at_exit": false
+            },
+            "role_outputs": {
+              "consumer": {
+                "bytes": 425,
+                "sha256": "d093763953c4dfa3eda1c03b1fcda977ef41de090a6f64ebccb7d9d3c385cafd"
+              },
+              "producer": {
+                "bytes": 239,
+                "sha256": "ce265f3a0ee5c44e8aef6b9a89a31f848b3883618b361cafbbeca5f960aaff49"
+              }
+            },
+            "status": "passed"
+          },
+          "session_id": "ipc-handoff-first",
+          "session_identity": "00000000000000000000000000000011",
+          "status": "passed"
+        },
+        {
+          "case": "ipc-handoff",
+          "cleanup": {
+            "container_removed": true,
+            "container_stop_command": "not-needed",
+            "container_stopped": true,
+            "host_metadata": "retained; no recursive cleanup",
+            "ownership_verified_before_removal": true,
+            "private_tmpfs_released": true
+          },
+          "execution": {
+            "duration_seconds": 0.155,
+            "exit_code": 0,
+            "guest_exit_codes": {
+              "consumer": 0,
+              "producer": 0
+            },
+            "stdout_bytes": 931,
+            "stdout_sha256": "7f378afe75abd839e64e86984b92cf14fb8dbcbce492fe5156548cdf943c016e",
+            "timed_out": false
+          },
+          "isolation": {
+            "all_capabilities_dropped": true,
+            "diagnostic_file_limit_bytes": 65536,
+            "docker_socket": false,
+            "guest_deadline_seconds": 5,
+            "host_devices": false,
+            "host_home": false,
+            "kernel_boundary": "Docker-managed kernel interfaces; QEMU user mode shares host kernel",
+            "mounts": [
+              {
+                "read_only": true,
+                "source": "<verified-execution-inputs>",
+                "target": "/inputs"
+              },
+              {
+                "read_only": true,
+                "source": "<owned-synthetic-input>",
+                "target": "/synthetic-rootfs"
+              }
+            ],
+            "no_new_privileges": true,
+            "outer_deadline_seconds": 15,
+            "private_writable_tmpfs": {
+              "/session-data": "rw,nosuid,nodev,noexec,size=1m,mode=0700,uid=65534,gid=65534",
+              "/session-diagnostics": "rw,nosuid,nodev,noexec,size=1m,mode=0700,uid=65534,gid=65534",
+              "/session-tmp": "rw,nosuid,nodev,noexec,size=1m,mode=0700,uid=65534,gid=65534"
+            },
+            "shared_source_cache": false,
+            "stdout_limit_bytes": 1024,
+            "term_to_kill_grace_seconds": 1,
+            "timeout_probe_seconds": 2,
+            "uid_gid": "65534:65534",
+            "verified_host_config": {
+              "CapDrop": [
+                "ALL"
+              ],
+              "IpcMode": "none",
+              "Memory": 268435456,
+              "MemorySwap": 268435456,
+              "NanoCpus": 1000000000,
+              "NetworkMode": "none",
+              "PidsLimit": 16,
+              "Privileged": false,
+              "ReadonlyRootfs": true,
+              "Tmpfs": {
+                "/session-data": "rw,nosuid,nodev,noexec,size=1m,mode=0700,uid=65534,gid=65534",
+                "/session-diagnostics": "rw,nosuid,nodev,noexec,size=1m,mode=0700,uid=65534,gid=65534",
+                "/session-tmp": "rw,nosuid,nodev,noexec,size=1m,mode=0700,uid=65534,gid=65534"
+              }
+            }
+          },
+          "lifecycle": [
+            "reserved",
+            "created",
+            "validated",
+            "start-requested",
+            "exited",
+            "removed"
+          ],
+          "observations": {
+            "guest_exit_codes": {
+              "consumer": 0,
+              "producer": 0
+            },
+            "messages": {
+              "acknowledgment": {
+                "bytes": 22,
+                "priority": 3,
+                "sha256": "35cc983cb77d4d7b5f3f2b489a92d3f5324d131328f354f23fb0a352545dfa7c",
+                "verified": true
+              },
+              "request": {
+                "bytes": 26,
+                "priority": 7,
+                "sha256": "a27944201ce35b61283b9b24f246c935070e81d7f2fc241170c8a47bb9b12354",
+                "verified": true
+              }
+            },
+            "operations": [
+              "consumer_created_request_queue",
+              "consumer_created_acknowledgment_queue",
+              "producer_opened_request_queue",
+              "producer_opened_acknowledgment_queue",
+              "producer_sent_request",
+              "consumer_received_request",
+              "consumer_sent_acknowledgment",
+              "producer_received_acknowledgment",
+              "closed_request_queue",
+              "closed_acknowledgment_queue",
+              "consumer_unlinked_request_queue",
+              "consumer_unlinked_acknowledgment_queue"
+            ],
+            "processes": {
+              "count": 2,
+              "distinct_qemu_processes": true,
+              "overlap_proven_by_request_ack_round_trip": true,
+              "roles": [
+                "consumer",
+                "producer"
+              ],
+              "shared_container": true,
+              "shared_private_ipc_namespace": true
+            },
+            "qemu_strace_syscalls": {
+              "consumer": [
+                "mq_open",
+                "mq_getsetattr",
+                "mq_timedsend",
+                "mq_timedreceive",
+                "mq_unlink",
+                "close"
+              ],
+              "producer": [
+                "mq_open",
+                "mq_getsetattr",
+                "mq_timedsend",
+                "mq_timedreceive",
+                "close"
+              ]
+            },
+            "queue_attributes": {
+              "acknowledgment": {
+                "current_messages": 0,
+                "max_message_bytes": 64,
+                "max_messages": 2,
+                "permissions": "0600"
+              },
+              "request": {
+                "current_messages": 0,
+                "max_message_bytes": 64,
+                "max_messages": 2,
+                "permissions": "0600"
+              }
+            },
+            "queue_cleanup": {
+              "consumer_closed_both": true,
+              "consumer_unlinked_both": true,
+              "linked_at_exit": false
+            },
+            "role_outputs": {
+              "consumer": {
+                "bytes": 425,
+                "sha256": "d093763953c4dfa3eda1c03b1fcda977ef41de090a6f64ebccb7d9d3c385cafd"
+              },
+              "producer": {
+                "bytes": 239,
+                "sha256": "ce265f3a0ee5c44e8aef6b9a89a31f848b3883618b361cafbbeca5f960aaff49"
+              }
+            },
+            "status": "passed"
+          },
+          "session_id": "ipc-handoff-second",
+          "session_identity": "00000000000000000000000000000012",
+          "status": "passed"
+        }
+      ],
+      "status": "passed",
+      "stock_compatibility": {
+        "m1_04_stock_boot": "NOT RUN",
+        "stock_ipc_compatibility": "UNVERIFIED"
+      }
+    },
+    "synthetic_ipc_supervision": {
+      "container_cleanup": {
+        "all_containers_stopped_and_removed": true,
+        "all_private_tmpfs_released": true,
+        "ownership_verified_before_removal": true,
+        "queue_state_persists_after_container_removal": false
+      },
+      "container_isolation": {
+        "ipc_mode": "none",
+        "network_mode": "none",
+        "new_mounts_or_sysctls": false,
+        "profiles": [
+          {
+            "all_capabilities_dropped": true,
+            "diagnostic_file_limit_bytes": 65536,
+            "docker_socket": false,
+            "guest_deadline_seconds": 5,
+            "host_devices": false,
+            "host_home": false,
+            "kernel_boundary": "Docker-managed kernel interfaces; QEMU user mode shares host kernel",
+            "mounts": [
+              {
+                "read_only": true,
+                "source": "<verified-execution-inputs>",
+                "target": "/inputs"
+              },
+              {
+                "read_only": true,
+                "source": "<owned-synthetic-input>",
+                "target": "/synthetic-rootfs"
+              }
+            ],
+            "no_new_privileges": true,
+            "outer_deadline_seconds": 15,
+            "private_writable_tmpfs": {
+              "/session-data": "rw,nosuid,nodev,noexec,size=1m,mode=0700,uid=65534,gid=65534",
+              "/session-diagnostics": "rw,nosuid,nodev,noexec,size=1m,mode=0700,uid=65534,gid=65534",
+              "/session-tmp": "rw,nosuid,nodev,noexec,size=1m,mode=0700,uid=65534,gid=65534"
+            },
+            "shared_source_cache": false,
+            "stdout_limit_bytes": 1024,
+            "term_to_kill_grace_seconds": 1,
+            "timeout_probe_seconds": 2,
+            "uid_gid": "65534:65534",
+            "verified_host_config": {
+              "CapDrop": [
+                "ALL"
+              ],
+              "IpcMode": "none",
+              "Memory": 268435456,
+              "MemorySwap": 268435456,
+              "NanoCpus": 1000000000,
+              "NetworkMode": "none",
+              "PidsLimit": 16,
+              "Privileged": false,
+              "ReadonlyRootfs": true,
+              "Tmpfs": {
+                "/session-data": "rw,nosuid,nodev,noexec,size=1m,mode=0700,uid=65534,gid=65534",
+                "/session-diagnostics": "rw,nosuid,nodev,noexec,size=1m,mode=0700,uid=65534,gid=65534",
+                "/session-tmp": "rw,nosuid,nodev,noexec,size=1m,mode=0700,uid=65534,gid=65534"
+              }
+            }
+          },
+          {
+            "all_capabilities_dropped": true,
+            "diagnostic_file_limit_bytes": 65536,
+            "docker_socket": false,
+            "guest_deadline_seconds": 5,
+            "host_devices": false,
+            "host_home": false,
+            "kernel_boundary": "Docker-managed kernel interfaces; QEMU user mode shares host kernel",
+            "mounts": [
+              {
+                "read_only": true,
+                "source": "<verified-execution-inputs>",
+                "target": "/inputs"
+              },
+              {
+                "read_only": true,
+                "source": "<owned-synthetic-input>",
+                "target": "/synthetic-rootfs"
+              }
+            ],
+            "no_new_privileges": true,
+            "outer_deadline_seconds": 15,
+            "private_writable_tmpfs": {
+              "/session-data": "rw,nosuid,nodev,noexec,size=1m,mode=0700,uid=65534,gid=65534",
+              "/session-diagnostics": "rw,nosuid,nodev,noexec,size=1m,mode=0700,uid=65534,gid=65534",
+              "/session-tmp": "rw,nosuid,nodev,noexec,size=1m,mode=0700,uid=65534,gid=65534"
+            },
+            "shared_source_cache": false,
+            "stdout_limit_bytes": 1024,
+            "term_to_kill_grace_seconds": 1,
+            "timeout_probe_seconds": 2,
+            "uid_gid": "65534:65534",
+            "verified_host_config": {
+              "CapDrop": [
+                "ALL"
+              ],
+              "IpcMode": "none",
+              "Memory": 268435456,
+              "MemorySwap": 268435456,
+              "NanoCpus": 1000000000,
+              "NetworkMode": "none",
+              "PidsLimit": 16,
+              "Privileged": false,
+              "ReadonlyRootfs": true,
+              "Tmpfs": {
+                "/session-data": "rw,nosuid,nodev,noexec,size=1m,mode=0700,uid=65534,gid=65534",
+                "/session-diagnostics": "rw,nosuid,nodev,noexec,size=1m,mode=0700,uid=65534,gid=65534",
+                "/session-tmp": "rw,nosuid,nodev,noexec,size=1m,mode=0700,uid=65534,gid=65534"
+              }
+            }
+          }
+        ]
+      },
+      "fresh_container_repeat": {
+        "distinct_session_identities": true,
+        "first_container_removed_before_second": true,
+        "no_child_processes_left": true,
+        "same_fixed_queue_names_recreated": true
+      },
+      "identities": {
+        "guest_elf_sha256": "a01a23b68c9c042c5c25807949ea374fe31237d509d6f39a55f439b123111854",
+        "guest_source_sha256": "1d151ccbe7fb4c0965ad6d9bf290de8e6caaed0ca0a2dc7067aba91749c52e9f",
+        "qemu_mipsel_sha256": "2a58998c25a7836b910f255641a95e9d828967c75ed6b0de2e5490cb82038ddb"
+      },
+      "m1_04_stock_boot": "NOT RUN",
+      "observations_are_actual_qemu": true,
+      "roles": {
+        "consumer": "fixed request reader and acknowledgment sender",
+        "process_identity": "container-local QEMU PID recorded independently per role",
+        "producer": "fixed request sender and acknowledgment observer"
+      },
+      "scenarios": [
+        {
+          "acknowledgment_state": "consumed",
+          "actual_qemu_processes": true,
+          "children": {
+            "consumer": {
+              "exit_reason": "exit:0",
+              "pid": 8,
+              "reaped": true,
+              "status": 0,
+              "stdout_sha256": "d093763953c4dfa3eda1c03b1fcda977ef41de090a6f64ebccb7d9d3c385cafd"
+            },
+            "producer": {
+              "exit_reason": "exit:0",
+              "pid": 9,
+              "reaped": true,
+              "status": 0,
+              "stdout_sha256": "ce265f3a0ee5c44e8aef6b9a89a31f848b3883618b361cafbbeca5f960aaff49"
+            }
+          },
+          "deadline": {
+            "expired": false,
+            "kill_sent": [],
+            "seconds": 5,
+            "term_sent": []
+          },
+          "failure": null,
+          "kill_sent": [],
+          "protocol": "request-ack-verified",
+          "queue_creation_observed": true,
+          "queue_names": {
+            "acknowledgment": "/snowsky_disc_lab_handoff_ack_v1",
+            "request": "/snowsky_disc_lab_handoff_req_v1"
+          },
+          "scenario": "normal",
+          "sibling_reaped": false,
+          "status": "passed",
+          "term_sent": []
+        },
+        {
+          "acknowledgment_state": "not-sent",
+          "actual_qemu_processes": true,
+          "children": {
+            "consumer": {
+              "exit_reason": "exit:42",
+              "pid": 40,
+              "reaped": true,
+              "status": 42,
+              "stdout_sha256": "6401cb6e5792066a4fe429e1c71ac9ee207475a11e1378d081a5a824728fffe7"
+            },
+            "producer": {
+              "exit_reason": "signal:TERM",
+              "pid": 35,
+              "reaped": true,
+              "status": 143,
+              "stdout_sha256": "b3f90efbdd4d24751304f65d8c0a1aa3fbc33ea23ebdf3ca628200413a388b46"
+            }
+          },
+          "deadline": {
+            "expired": false,
+            "kill_sent": [],
+            "seconds": 5,
+            "term_sent": [
+              "producer"
+            ]
+          },
+          "failure": {
+            "kind": "guest-exit",
+            "reason": "exit:42",
+            "role": "consumer"
+          },
+          "kill_sent": [],
+          "protocol": "consumer-exit-before-request",
+          "queue_creation_observed": true,
+          "queue_names": {
+            "acknowledgment": "/snowsky_disc_lab_supervision_consumer_exit_ack_v1",
+            "request": "/snowsky_disc_lab_supervision_consumer_exit_req_v1"
+          },
+          "scenario": "consumer-exits-before-request",
+          "sibling_reaped": true,
+          "status": "passed",
+          "term_sent": [
+            "producer"
+          ]
+        },
+        {
+          "acknowledgment_state": "queued-unconsumed",
+          "actual_qemu_processes": true,
+          "children": {
+            "consumer": {
+              "exit_reason": "signal:TERM",
+              "pid": 66,
+              "reaped": true,
+              "status": 143,
+              "stdout_sha256": "c6783bf9a27c62c8219a991cc0cd69833ebb0ef8d05a3ebd39bcb5a5e523af82"
+            },
+            "producer": {
+              "exit_reason": "exit:43",
+              "pid": 67,
+              "reaped": true,
+              "status": 43,
+              "stdout_sha256": "7bec62279d63d589f2e7a468df162beacaf0d28ceaa1672eac72dca5203c2bd5"
+            }
+          },
+          "deadline": {
+            "expired": false,
+            "kill_sent": [],
+            "seconds": 5,
+            "term_sent": [
+              "consumer"
+            ]
+          },
+          "failure": {
+            "kind": "guest-exit",
+            "reason": "exit:43",
+            "role": "producer"
+          },
+          "kill_sent": [],
+          "protocol": "producer-exit-before-ack",
+          "queue_creation_observed": true,
+          "queue_names": {
+            "acknowledgment": "/snowsky_disc_lab_supervision_producer_exit_ack_v1",
+            "request": "/snowsky_disc_lab_supervision_producer_exit_req_v1"
+          },
+          "scenario": "producer-exits-before-ack",
+          "sibling_reaped": true,
+          "status": "passed",
+          "term_sent": [
+            "consumer"
+          ]
+        },
+        {
+          "acknowledgment_state": "queued-unconsumed",
+          "actual_qemu_processes": true,
+          "children": {
+            "consumer": {
+              "exit_reason": "signal:TERM",
+              "pid": 94,
+              "reaped": true,
+              "status": 143,
+              "stdout_sha256": "c6783bf9a27c62c8219a991cc0cd69833ebb0ef8d05a3ebd39bcb5a5e523af82"
+            },
+            "producer": {
+              "exit_reason": "signal:TERM",
+              "pid": 95,
+              "reaped": true,
+              "status": 143,
+              "stdout_sha256": "fa6a9d569be3e0904d59946b529d4eb1f86282b87dc186da6a234c1a5564b39c"
+            }
+          },
+          "deadline": {
+            "expired": true,
+            "kill_sent": [],
+            "seconds": 2,
+            "term_sent": [
+              "consumer",
+              "producer"
+            ]
+          },
+          "failure": {
+            "kind": "deadline",
+            "reason": "deadline",
+            "role": "producer"
+          },
+          "kill_sent": [],
+          "protocol": "producer-deadline-exceeded",
+          "queue_creation_observed": true,
+          "queue_names": {
+            "acknowledgment": "/snowsky_disc_lab_supervision_deadline_ack_v1",
+            "request": "/snowsky_disc_lab_supervision_deadline_req_v1"
+          },
+          "scenario": "producer-exceeds-deadline",
+          "sibling_reaped": true,
+          "status": "passed",
+          "term_sent": [
+            "consumer",
+            "producer"
+          ]
+        },
+        {
+          "acknowledgment_state": "not-created",
+          "actual_qemu_processes": true,
+          "children": {
+            "consumer": {
+              "exit_reason": "signal:TERM",
+              "pid": 126,
+              "reaped": true,
+              "status": 143,
+              "stdout_sha256": "23739fc116c4ec77cf310c3aaa37bf72d8f8043d86e3cbcc3e8a92222b882378"
+            },
+            "producer": {
+              "exit_reason": "exit:44",
+              "pid": 131,
+              "reaped": true,
+              "status": 44,
+              "stdout_sha256": "11985b97bf703badbb637e8d30324a06feecb2cff90657766474f6dce99548c3"
+            }
+          },
+          "deadline": {
+            "expired": false,
+            "kill_sent": [],
+            "seconds": 5,
+            "term_sent": [
+              "consumer"
+            ]
+          },
+          "failure": {
+            "kind": "guest-exit",
+            "reason": "exit:44",
+            "role": "producer"
+          },
+          "kill_sent": [],
+          "protocol": "producer-failure-cancelled-consumer",
+          "queue_creation_observed": false,
+          "queue_names": {
+            "acknowledgment": "/snowsky_disc_lab_supervision_sibling_ack_v1",
+            "request": "/snowsky_disc_lab_supervision_sibling_req_v1"
+          },
+          "scenario": "producer-failure-cancels-sibling",
+          "sibling_reaped": true,
+          "status": "passed",
+          "term_sent": [
+            "consumer"
+          ]
+        }
+      ],
+      "schema_version": "firmware-free-mips32le-synthetic-ipc-supervision/v1",
+      "scope": "fixed first-party MIPS32LE two-process failure supervision",
+      "sessions": [
+        {
+          "case": "ipc-supervision",
+          "cleanup": {
+            "container_removed": true,
+            "container_stop_command": "not-needed",
+            "container_stopped": true,
+            "host_metadata": "retained; no recursive cleanup",
+            "ownership_verified_before_removal": true,
+            "private_tmpfs_released": true
+          },
+          "execution": {
+            "duration_seconds": 11.297,
+            "exit_code": 0,
+            "stdout_bytes": 4188,
+            "stdout_sha256": "5144c55d854a34d8f3a506b313bcc71cdf6944b162bc8a1f3bdf124db7dad050",
+            "terminated": true,
+            "timed_out": false
+          },
+          "isolation": {
+            "all_capabilities_dropped": true,
+            "diagnostic_file_limit_bytes": 65536,
+            "docker_socket": false,
+            "guest_deadline_seconds": 5,
+            "host_devices": false,
+            "host_home": false,
+            "kernel_boundary": "Docker-managed kernel interfaces; QEMU user mode shares host kernel",
+            "mounts": [
+              {
+                "read_only": true,
+                "source": "<verified-execution-inputs>",
+                "target": "/inputs"
+              },
+              {
+                "read_only": true,
+                "source": "<owned-synthetic-input>",
+                "target": "/synthetic-rootfs"
+              }
+            ],
+            "no_new_privileges": true,
+            "outer_deadline_seconds": 15,
+            "private_writable_tmpfs": {
+              "/session-data": "rw,nosuid,nodev,noexec,size=1m,mode=0700,uid=65534,gid=65534",
+              "/session-diagnostics": "rw,nosuid,nodev,noexec,size=1m,mode=0700,uid=65534,gid=65534",
+              "/session-tmp": "rw,nosuid,nodev,noexec,size=1m,mode=0700,uid=65534,gid=65534"
+            },
+            "shared_source_cache": false,
+            "stdout_limit_bytes": 1024,
+            "term_to_kill_grace_seconds": 1,
+            "timeout_probe_seconds": 2,
+            "uid_gid": "65534:65534",
+            "verified_host_config": {
+              "CapDrop": [
+                "ALL"
+              ],
+              "IpcMode": "none",
+              "Memory": 268435456,
+              "MemorySwap": 268435456,
+              "NanoCpus": 1000000000,
+              "NetworkMode": "none",
+              "PidsLimit": 16,
+              "Privileged": false,
+              "ReadonlyRootfs": true,
+              "Tmpfs": {
+                "/session-data": "rw,nosuid,nodev,noexec,size=1m,mode=0700,uid=65534,gid=65534",
+                "/session-diagnostics": "rw,nosuid,nodev,noexec,size=1m,mode=0700,uid=65534,gid=65534",
+                "/session-tmp": "rw,nosuid,nodev,noexec,size=1m,mode=0700,uid=65534,gid=65534"
+              }
+            }
+          },
+          "lifecycle": [
+            "reserved",
+            "created",
+            "validated",
+            "start-requested",
+            "exited",
+            "removed"
+          ],
+          "observations": {
+            "actual_vs_simulated": {
+              "container_lifecycle": "actual owned Docker inspection and cleanup in hosted acceptance",
+              "deadline_and_signals": "actual bounded supervisor timer and child PID signals",
+              "guest_process_status": "actual fixed QEMU child wait statuses",
+              "raw_guest_diagnostics_exported": false,
+              "unit_test_fixtures": "simulated; not counted as acceptance evidence"
+            },
+            "scenario_count": 5,
+            "scenarios": [
+              {
+                "acknowledgment_state": "consumed",
+                "actual_qemu_processes": true,
+                "children": {
+                  "consumer": {
+                    "exit_reason": "exit:0",
+                    "pid": 8,
+                    "reaped": true,
+                    "status": 0,
+                    "stdout_sha256": "d093763953c4dfa3eda1c03b1fcda977ef41de090a6f64ebccb7d9d3c385cafd"
+                  },
+                  "producer": {
+                    "exit_reason": "exit:0",
+                    "pid": 9,
+                    "reaped": true,
+                    "status": 0,
+                    "stdout_sha256": "ce265f3a0ee5c44e8aef6b9a89a31f848b3883618b361cafbbeca5f960aaff49"
+                  }
+                },
+                "deadline": {
+                  "expired": false,
+                  "kill_sent": [],
+                  "seconds": 5,
+                  "term_sent": []
+                },
+                "failure": null,
+                "kill_sent": [],
+                "protocol": "request-ack-verified",
+                "queue_creation_observed": true,
+                "queue_names": {
+                  "acknowledgment": "/snowsky_disc_lab_handoff_ack_v1",
+                  "request": "/snowsky_disc_lab_handoff_req_v1"
+                },
+                "scenario": "normal",
+                "sibling_reaped": false,
+                "status": "passed",
+                "term_sent": []
+              },
+              {
+                "acknowledgment_state": "not-sent",
+                "actual_qemu_processes": true,
+                "children": {
+                  "consumer": {
+                    "exit_reason": "exit:42",
+                    "pid": 40,
+                    "reaped": true,
+                    "status": 42,
+                    "stdout_sha256": "6401cb6e5792066a4fe429e1c71ac9ee207475a11e1378d081a5a824728fffe7"
+                  },
+                  "producer": {
+                    "exit_reason": "signal:TERM",
+                    "pid": 35,
+                    "reaped": true,
+                    "status": 143,
+                    "stdout_sha256": "b3f90efbdd4d24751304f65d8c0a1aa3fbc33ea23ebdf3ca628200413a388b46"
+                  }
+                },
+                "deadline": {
+                  "expired": false,
+                  "kill_sent": [],
+                  "seconds": 5,
+                  "term_sent": [
+                    "producer"
+                  ]
+                },
+                "failure": {
+                  "kind": "guest-exit",
+                  "reason": "exit:42",
+                  "role": "consumer"
+                },
+                "kill_sent": [],
+                "protocol": "consumer-exit-before-request",
+                "queue_creation_observed": true,
+                "queue_names": {
+                  "acknowledgment": "/snowsky_disc_lab_supervision_consumer_exit_ack_v1",
+                  "request": "/snowsky_disc_lab_supervision_consumer_exit_req_v1"
+                },
+                "scenario": "consumer-exits-before-request",
+                "sibling_reaped": true,
+                "status": "passed",
+                "term_sent": [
+                  "producer"
+                ]
+              },
+              {
+                "acknowledgment_state": "queued-unconsumed",
+                "actual_qemu_processes": true,
+                "children": {
+                  "consumer": {
+                    "exit_reason": "signal:TERM",
+                    "pid": 66,
+                    "reaped": true,
+                    "status": 143,
+                    "stdout_sha256": "c6783bf9a27c62c8219a991cc0cd69833ebb0ef8d05a3ebd39bcb5a5e523af82"
+                  },
+                  "producer": {
+                    "exit_reason": "exit:43",
+                    "pid": 67,
+                    "reaped": true,
+                    "status": 43,
+                    "stdout_sha256": "7bec62279d63d589f2e7a468df162beacaf0d28ceaa1672eac72dca5203c2bd5"
+                  }
+                },
+                "deadline": {
+                  "expired": false,
+                  "kill_sent": [],
+                  "seconds": 5,
+                  "term_sent": [
+                    "consumer"
+                  ]
+                },
+                "failure": {
+                  "kind": "guest-exit",
+                  "reason": "exit:43",
+                  "role": "producer"
+                },
+                "kill_sent": [],
+                "protocol": "producer-exit-before-ack",
+                "queue_creation_observed": true,
+                "queue_names": {
+                  "acknowledgment": "/snowsky_disc_lab_supervision_producer_exit_ack_v1",
+                  "request": "/snowsky_disc_lab_supervision_producer_exit_req_v1"
+                },
+                "scenario": "producer-exits-before-ack",
+                "sibling_reaped": true,
+                "status": "passed",
+                "term_sent": [
+                  "consumer"
+                ]
+              },
+              {
+                "acknowledgment_state": "queued-unconsumed",
+                "actual_qemu_processes": true,
+                "children": {
+                  "consumer": {
+                    "exit_reason": "signal:TERM",
+                    "pid": 94,
+                    "reaped": true,
+                    "status": 143,
+                    "stdout_sha256": "c6783bf9a27c62c8219a991cc0cd69833ebb0ef8d05a3ebd39bcb5a5e523af82"
+                  },
+                  "producer": {
+                    "exit_reason": "signal:TERM",
+                    "pid": 95,
+                    "reaped": true,
+                    "status": 143,
+                    "stdout_sha256": "fa6a9d569be3e0904d59946b529d4eb1f86282b87dc186da6a234c1a5564b39c"
+                  }
+                },
+                "deadline": {
+                  "expired": true,
+                  "kill_sent": [],
+                  "seconds": 2,
+                  "term_sent": [
+                    "consumer",
+                    "producer"
+                  ]
+                },
+                "failure": {
+                  "kind": "deadline",
+                  "reason": "deadline",
+                  "role": "producer"
+                },
+                "kill_sent": [],
+                "protocol": "producer-deadline-exceeded",
+                "queue_creation_observed": true,
+                "queue_names": {
+                  "acknowledgment": "/snowsky_disc_lab_supervision_deadline_ack_v1",
+                  "request": "/snowsky_disc_lab_supervision_deadline_req_v1"
+                },
+                "scenario": "producer-exceeds-deadline",
+                "sibling_reaped": true,
+                "status": "passed",
+                "term_sent": [
+                  "consumer",
+                  "producer"
+                ]
+              },
+              {
+                "acknowledgment_state": "not-created",
+                "actual_qemu_processes": true,
+                "children": {
+                  "consumer": {
+                    "exit_reason": "signal:TERM",
+                    "pid": 126,
+                    "reaped": true,
+                    "status": 143,
+                    "stdout_sha256": "23739fc116c4ec77cf310c3aaa37bf72d8f8043d86e3cbcc3e8a92222b882378"
+                  },
+                  "producer": {
+                    "exit_reason": "exit:44",
+                    "pid": 131,
+                    "reaped": true,
+                    "status": 44,
+                    "stdout_sha256": "11985b97bf703badbb637e8d30324a06feecb2cff90657766474f6dce99548c3"
+                  }
+                },
+                "deadline": {
+                  "expired": false,
+                  "kill_sent": [],
+                  "seconds": 5,
+                  "term_sent": [
+                    "consumer"
+                  ]
+                },
+                "failure": {
+                  "kind": "guest-exit",
+                  "reason": "exit:44",
+                  "role": "producer"
+                },
+                "kill_sent": [],
+                "protocol": "producer-failure-cancelled-consumer",
+                "queue_creation_observed": false,
+                "queue_names": {
+                  "acknowledgment": "/snowsky_disc_lab_supervision_sibling_ack_v1",
+                  "request": "/snowsky_disc_lab_supervision_sibling_req_v1"
+                },
+                "scenario": "producer-failure-cancels-sibling",
+                "sibling_reaped": true,
+                "status": "passed",
+                "term_sent": [
+                  "consumer"
+                ]
+              }
+            ],
+            "status": "passed"
+          },
+          "session_id": "ipc-supervision-first",
+          "session_identity": "00000000000000000000000000000021",
+          "status": "passed"
+        },
+        {
+          "case": "ipc-supervision",
+          "cleanup": {
+            "container_removed": true,
+            "container_stop_command": "not-needed",
+            "container_stopped": true,
+            "host_metadata": "retained; no recursive cleanup",
+            "ownership_verified_before_removal": true,
+            "private_tmpfs_released": true
+          },
+          "execution": {
+            "duration_seconds": 6.312,
+            "exit_code": 0,
+            "stdout_bytes": 4188,
+            "stdout_sha256": "231e765855d0a2469db31e793e05bfc3a4e9fcdd49e400dce1e52022c9ab1f58",
+            "terminated": true,
+            "timed_out": false
+          },
+          "isolation": {
+            "all_capabilities_dropped": true,
+            "diagnostic_file_limit_bytes": 65536,
+            "docker_socket": false,
+            "guest_deadline_seconds": 5,
+            "host_devices": false,
+            "host_home": false,
+            "kernel_boundary": "Docker-managed kernel interfaces; QEMU user mode shares host kernel",
+            "mounts": [
+              {
+                "read_only": true,
+                "source": "<verified-execution-inputs>",
+                "target": "/inputs"
+              },
+              {
+                "read_only": true,
+                "source": "<owned-synthetic-input>",
+                "target": "/synthetic-rootfs"
+              }
+            ],
+            "no_new_privileges": true,
+            "outer_deadline_seconds": 15,
+            "private_writable_tmpfs": {
+              "/session-data": "rw,nosuid,nodev,noexec,size=1m,mode=0700,uid=65534,gid=65534",
+              "/session-diagnostics": "rw,nosuid,nodev,noexec,size=1m,mode=0700,uid=65534,gid=65534",
+              "/session-tmp": "rw,nosuid,nodev,noexec,size=1m,mode=0700,uid=65534,gid=65534"
+            },
+            "shared_source_cache": false,
+            "stdout_limit_bytes": 1024,
+            "term_to_kill_grace_seconds": 1,
+            "timeout_probe_seconds": 2,
+            "uid_gid": "65534:65534",
+            "verified_host_config": {
+              "CapDrop": [
+                "ALL"
+              ],
+              "IpcMode": "none",
+              "Memory": 268435456,
+              "MemorySwap": 268435456,
+              "NanoCpus": 1000000000,
+              "NetworkMode": "none",
+              "PidsLimit": 16,
+              "Privileged": false,
+              "ReadonlyRootfs": true,
+              "Tmpfs": {
+                "/session-data": "rw,nosuid,nodev,noexec,size=1m,mode=0700,uid=65534,gid=65534",
+                "/session-diagnostics": "rw,nosuid,nodev,noexec,size=1m,mode=0700,uid=65534,gid=65534",
+                "/session-tmp": "rw,nosuid,nodev,noexec,size=1m,mode=0700,uid=65534,gid=65534"
+              }
+            }
+          },
+          "lifecycle": [
+            "reserved",
+            "created",
+            "validated",
+            "start-requested",
+            "exited",
+            "removed"
+          ],
+          "observations": {
+            "actual_vs_simulated": {
+              "container_lifecycle": "actual owned Docker inspection and cleanup in hosted acceptance",
+              "deadline_and_signals": "actual bounded supervisor timer and child PID signals",
+              "guest_process_status": "actual fixed QEMU child wait statuses",
+              "raw_guest_diagnostics_exported": false,
+              "unit_test_fixtures": "simulated; not counted as acceptance evidence"
+            },
+            "scenario_count": 5,
+            "scenarios": [
+              {
+                "acknowledgment_state": "consumed",
+                "actual_qemu_processes": true,
+                "children": {
+                  "consumer": {
+                    "exit_reason": "exit:0",
+                    "pid": 8,
+                    "reaped": true,
+                    "status": 0,
+                    "stdout_sha256": "d093763953c4dfa3eda1c03b1fcda977ef41de090a6f64ebccb7d9d3c385cafd"
+                  },
+                  "producer": {
+                    "exit_reason": "exit:0",
+                    "pid": 9,
+                    "reaped": true,
+                    "status": 0,
+                    "stdout_sha256": "ce265f3a0ee5c44e8aef6b9a89a31f848b3883618b361cafbbeca5f960aaff49"
+                  }
+                },
+                "deadline": {
+                  "expired": false,
+                  "kill_sent": [],
+                  "seconds": 5,
+                  "term_sent": []
+                },
+                "failure": null,
+                "kill_sent": [],
+                "protocol": "request-ack-verified",
+                "queue_creation_observed": true,
+                "queue_names": {
+                  "acknowledgment": "/snowsky_disc_lab_handoff_ack_v1",
+                  "request": "/snowsky_disc_lab_handoff_req_v1"
+                },
+                "scenario": "normal",
+                "sibling_reaped": false,
+                "status": "passed",
+                "term_sent": []
+              },
+              {
+                "acknowledgment_state": "not-sent",
+                "actual_qemu_processes": true,
+                "children": {
+                  "consumer": {
+                    "exit_reason": "exit:42",
+                    "pid": 38,
+                    "reaped": true,
+                    "status": 42,
+                    "stdout_sha256": "6401cb6e5792066a4fe429e1c71ac9ee207475a11e1378d081a5a824728fffe7"
+                  },
+                  "producer": {
+                    "exit_reason": "signal:TERM",
+                    "pid": 33,
+                    "reaped": true,
+                    "status": 143,
+                    "stdout_sha256": "b3f90efbdd4d24751304f65d8c0a1aa3fbc33ea23ebdf3ca628200413a388b46"
+                  }
+                },
+                "deadline": {
+                  "expired": false,
+                  "kill_sent": [],
+                  "seconds": 5,
+                  "term_sent": [
+                    "producer"
+                  ]
+                },
+                "failure": {
+                  "kind": "guest-exit",
+                  "reason": "exit:42",
+                  "role": "consumer"
+                },
+                "kill_sent": [],
+                "protocol": "consumer-exit-before-request",
+                "queue_creation_observed": true,
+                "queue_names": {
+                  "acknowledgment": "/snowsky_disc_lab_supervision_consumer_exit_ack_v1",
+                  "request": "/snowsky_disc_lab_supervision_consumer_exit_req_v1"
+                },
+                "scenario": "consumer-exits-before-request",
+                "sibling_reaped": true,
+                "status": "passed",
+                "term_sent": [
+                  "producer"
+                ]
+              },
+              {
+                "acknowledgment_state": "queued-unconsumed",
+                "actual_qemu_processes": true,
+                "children": {
+                  "consumer": {
+                    "exit_reason": "signal:TERM",
+                    "pid": 64,
+                    "reaped": true,
+                    "status": 143,
+                    "stdout_sha256": "c6783bf9a27c62c8219a991cc0cd69833ebb0ef8d05a3ebd39bcb5a5e523af82"
+                  },
+                  "producer": {
+                    "exit_reason": "exit:43",
+                    "pid": 65,
+                    "reaped": true,
+                    "status": 43,
+                    "stdout_sha256": "7bec62279d63d589f2e7a468df162beacaf0d28ceaa1672eac72dca5203c2bd5"
+                  }
+                },
+                "deadline": {
+                  "expired": false,
+                  "kill_sent": [],
+                  "seconds": 5,
+                  "term_sent": [
+                    "consumer"
+                  ]
+                },
+                "failure": {
+                  "kind": "guest-exit",
+                  "reason": "exit:43",
+                  "role": "producer"
+                },
+                "kill_sent": [],
+                "protocol": "producer-exit-before-ack",
+                "queue_creation_observed": true,
+                "queue_names": {
+                  "acknowledgment": "/snowsky_disc_lab_supervision_producer_exit_ack_v1",
+                  "request": "/snowsky_disc_lab_supervision_producer_exit_req_v1"
+                },
+                "scenario": "producer-exits-before-ack",
+                "sibling_reaped": true,
+                "status": "passed",
+                "term_sent": [
+                  "consumer"
+                ]
+              },
+              {
+                "acknowledgment_state": "queued-unconsumed",
+                "actual_qemu_processes": true,
+                "children": {
+                  "consumer": {
+                    "exit_reason": "signal:TERM",
+                    "pid": 92,
+                    "reaped": true,
+                    "status": 143,
+                    "stdout_sha256": "c6783bf9a27c62c8219a991cc0cd69833ebb0ef8d05a3ebd39bcb5a5e523af82"
+                  },
+                  "producer": {
+                    "exit_reason": "signal:TERM",
+                    "pid": 93,
+                    "reaped": true,
+                    "status": 143,
+                    "stdout_sha256": "fa6a9d569be3e0904d59946b529d4eb1f86282b87dc186da6a234c1a5564b39c"
+                  }
+                },
+                "deadline": {
+                  "expired": true,
+                  "kill_sent": [],
+                  "seconds": 2,
+                  "term_sent": [
+                    "consumer",
+                    "producer"
+                  ]
+                },
+                "failure": {
+                  "kind": "deadline",
+                  "reason": "deadline",
+                  "role": "producer"
+                },
+                "kill_sent": [],
+                "protocol": "producer-deadline-exceeded",
+                "queue_creation_observed": true,
+                "queue_names": {
+                  "acknowledgment": "/snowsky_disc_lab_supervision_deadline_ack_v1",
+                  "request": "/snowsky_disc_lab_supervision_deadline_req_v1"
+                },
+                "scenario": "producer-exceeds-deadline",
+                "sibling_reaped": true,
+                "status": "passed",
+                "term_sent": [
+                  "consumer",
+                  "producer"
+                ]
+              },
+              {
+                "acknowledgment_state": "not-created",
+                "actual_qemu_processes": true,
+                "children": {
+                  "consumer": {
+                    "exit_reason": "signal:TERM",
+                    "pid": 124,
+                    "reaped": true,
+                    "status": 143,
+                    "stdout_sha256": "23739fc116c4ec77cf310c3aaa37bf72d8f8043d86e3cbcc3e8a92222b882378"
+                  },
+                  "producer": {
+                    "exit_reason": "exit:44",
+                    "pid": 129,
+                    "reaped": true,
+                    "status": 44,
+                    "stdout_sha256": "11985b97bf703badbb637e8d30324a06feecb2cff90657766474f6dce99548c3"
+                  }
+                },
+                "deadline": {
+                  "expired": false,
+                  "kill_sent": [],
+                  "seconds": 5,
+                  "term_sent": [
+                    "consumer"
+                  ]
+                },
+                "failure": {
+                  "kind": "guest-exit",
+                  "reason": "exit:44",
+                  "role": "producer"
+                },
+                "kill_sent": [],
+                "protocol": "producer-failure-cancelled-consumer",
+                "queue_creation_observed": false,
+                "queue_names": {
+                  "acknowledgment": "/snowsky_disc_lab_supervision_sibling_ack_v1",
+                  "request": "/snowsky_disc_lab_supervision_sibling_req_v1"
+                },
+                "scenario": "producer-failure-cancels-sibling",
+                "sibling_reaped": true,
+                "status": "passed",
+                "term_sent": [
+                  "consumer"
+                ]
+              }
+            ],
+            "status": "passed"
+          },
+          "session_id": "ipc-supervision-fresh",
+          "session_identity": "00000000000000000000000000000022",
+          "status": "passed"
+        }
+      ],
+      "status": "passed",
+      "stock_compatibility": "UNVERIFIED"
+    },
+    "toolchain": {
+      "base_image": "docker.io/library/debian:12@sha256:6ebd97fa83deb272194a2cf015b3d26a4d538e9ad3a7a79d544c8af5b0a01443",
+      "base_image_amd64_manifest": "sha256:2f65600e1252c5649d2213e1d1ea4d74253d26514dc6530102a875e429245929",
+      "base_image_index_sha256": "sha256:6ebd97fa83deb272194a2cf015b3d26a4d538e9ad3a7a79d544c8af5b0a01443",
+      "build_input_manifest_sha256": "8b46e82b19c634b8baac9423db391554447d750e03460c39e92a6eb08ae4b0f1",
+      "device_patch_sha256": "f3cfebb2eac8170f724b5d5ca900e857fbdfd8905fd1fb4aedc6bcdf41cf3895",
+      "mipsel_cross_toolchain": {
+        "compiler": "mipsel-linux-gnu-gcc",
+        "compiler_packages": [
+          {
+            "architecture": "amd64",
+            "package": "binutils-mipsel-linux-gnu",
+            "version": "2.40-2cross2"
+          },
+          {
+            "architecture": "amd64",
+            "package": "gcc-mipsel-linux-gnu",
+            "version": "4:12.2.0-4"
+          },
+          {
+            "architecture": "all",
+            "package": "libc6-dev-mipsel-cross",
+            "version": "2.36-8cross2"
+          }
+        ],
+        "compiler_version": "mipsel-linux-gnu-gcc (Debian 12.2.0-14) 12.2.0",
+        "reported_sysroot": "/",
+        "sysroot_entry_count": 1557,
+        "sysroot_file_count": 1467,
+        "sysroot_sha256": "96cd2b889c0fb0b4e8507944aa3bce80a0d5088e1606e1a8a5d6d8198954047f",
+        "sysroot_tree": "/usr/mipsel-linux-gnu",
+        "target": "mipsel-linux-gnu",
+        "version": "12.2.0"
+      },
+      "prior_reproducible_build": {
+        "head": "36864ecbe6ab1dfd5b6fd672c680c48d0708c422",
+        "match_scope": "QEMU and shim binaries, package BOM, MIPS sysroot, toolchain identities, and pinned sources; this run adds guest compilation after those builds",
+        "result": "matching second clean build",
+        "reused": true,
+        "workflow_run": 39442532057
+      },
+      "qemu_binary": {
+        "bytes": 17252176,
+        "sha256": "2a58998c25a7836b910f255641a95e9d828967c75ed6b0de2e5490cb82038ddb"
+      },
+      "qemu_package_version": "1:7.2+dfsg-7+deb12u18",
+      "qemu_source_archives": {
+        "qemu_7.2+dfsg-7+deb12u18.debian.tar.xz": {
+          "bytes": 405636,
+          "sha256": "28a1c86310ee53b6bf1854cffe6f6be6ed29a08db7d05759f8ac57b8d6a6cb2f",
+          "verified": true
+        },
+        "qemu_7.2+dfsg.orig.tar.xz": {
+          "bytes": 23523172,
+          "sha256": "91aca71520040edc40b8d437aa3004dae614f58e286cf653ee8996c07af2962f",
+          "verified": true
+        }
+      },
+      "qemu_source_descriptor_sha256": "6b6bd27b947ec89e40a1d6b26d9c9f3c698ca691da13163e0483f6061bbb20b3",
+      "upstream_commit": "85ab00deb08ac112066377fd8083cc8727ed859a",
+      "upstream_projection_digest": "ef1f0b45f86d4724a7359694b2c3bc4c"
+    },
+    "unsupported_or_unverified": [
+      "M1-04 stock V2.57 boot",
+      "firmware authenticity or compatibility",
+      "dynamic vendor loader",
+      "persistent stock userdata",
+      "emulated proc/sys/devices",
+      "guest kernel or full guest mount namespace",
+      "audio/framebuffer/UI/hardware",
+      "Windows/WSL2 runtime acceptance",
+      "arbitrary binary isolation"
+    ]
+  }
+}
