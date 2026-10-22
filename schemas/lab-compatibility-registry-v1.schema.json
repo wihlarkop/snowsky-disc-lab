@@ -1,0 +1,496 @@
+{
+  "$defs": {
+    "CandidateIdentity": {
+      "additionalProperties": false,
+      "properties": {
+        "adapter_revision": {
+          "anyOf": [
+            {
+              "minLength": 1,
+              "pattern": "^(?:[0-9a-f]{40}|[0-9a-f]{64})$",
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Adapter Revision"
+        },
+        "device_model": {
+          "anyOf": [
+            {
+              "minLength": 1,
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Device Model"
+        },
+        "firmware_main": {
+          "anyOf": [
+            {
+              "minLength": 1,
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Firmware Main"
+        },
+        "firmware_recovery": {
+          "anyOf": [
+            {
+              "minLength": 1,
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Firmware Recovery"
+        },
+        "hardware_revision": {
+          "anyOf": [
+            {
+              "minLength": 1,
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Hardware Revision"
+        },
+        "host_runtime": {
+          "$ref": "#/$defs/HostRuntime"
+        },
+        "original_firmware_sha256": {
+          "anyOf": [
+            {
+              "minLength": 1,
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Original Firmware Sha256"
+        },
+        "product_id": {
+          "anyOf": [
+            {
+              "minLength": 1,
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Product Id"
+        },
+        "rootfs_sha256": {
+          "anyOf": [
+            {
+              "minLength": 1,
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Rootfs Sha256"
+        },
+        "runner_id": {
+          "anyOf": [
+            {
+              "minLength": 1,
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Runner Id"
+        },
+        "runner_revision": {
+          "anyOf": [
+            {
+              "minLength": 1,
+              "pattern": "^(?:[0-9a-f]{40}|[0-9a-f]{64})$",
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Runner Revision"
+        },
+        "scenario_id": {
+          "minLength": 1,
+          "title": "Scenario Id",
+          "type": "string"
+        },
+        "scenario_revision": {
+          "anyOf": [
+            {
+              "minLength": 1,
+              "pattern": "^(?:[0-9a-f]{40}|[0-9a-f]{64})$",
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Scenario Revision"
+        },
+        "shim_revision": {
+          "anyOf": [
+            {
+              "minLength": 1,
+              "pattern": "^(?:[0-9a-f]{40}|[0-9a-f]{64})$",
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Shim Revision"
+        },
+        "stock_mq_player_sha256": {
+          "anyOf": [
+            {
+              "minLength": 1,
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Stock Mq Player Sha256"
+        },
+        "ui_binary_sha256": {
+          "anyOf": [
+            {
+              "minLength": 1,
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Ui Binary Sha256"
+        },
+        "ui_source_revision": {
+          "anyOf": [
+            {
+              "minLength": 1,
+              "pattern": "^(?:[0-9a-f]{40}|[0-9a-f]{64})$",
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Ui Source Revision"
+        }
+      },
+      "required": [
+        "product_id",
+        "device_model",
+        "hardware_revision",
+        "firmware_main",
+        "firmware_recovery",
+        "original_firmware_sha256",
+        "rootfs_sha256",
+        "stock_mq_player_sha256",
+        "runner_id",
+        "runner_revision",
+        "shim_revision",
+        "ui_binary_sha256",
+        "ui_source_revision",
+        "adapter_revision",
+        "scenario_id",
+        "scenario_revision",
+        "host_runtime"
+      ],
+      "title": "CandidateIdentity",
+      "type": "object"
+    },
+    "ClaimOrObservation": {
+      "additionalProperties": false,
+      "properties": {
+        "evidence_reference_id": {
+          "minLength": 1,
+          "title": "Evidence Reference Id",
+          "type": "string"
+        },
+        "field": {
+          "minLength": 1,
+          "title": "Field",
+          "type": "string"
+        },
+        "provenance": {
+          "$ref": "#/$defs/Provenance"
+        },
+        "value": {
+          "minLength": 1,
+          "title": "Value",
+          "type": "string"
+        }
+      },
+      "required": [
+        "field",
+        "value",
+        "provenance",
+        "evidence_reference_id"
+      ],
+      "title": "ClaimOrObservation",
+      "type": "object"
+    },
+    "CompatibilityRecord": {
+      "additionalProperties": false,
+      "properties": {
+        "claims_and_observations": {
+          "items": {
+            "$ref": "#/$defs/ClaimOrObservation"
+          },
+          "title": "Claims And Observations",
+          "type": "array"
+        },
+        "evidence": {
+          "items": {
+            "$ref": "#/$defs/EvidenceReference"
+          },
+          "title": "Evidence",
+          "type": "array"
+        },
+        "execution_authority": {
+          "default": false,
+          "title": "Execution Authority",
+          "type": "boolean"
+        },
+        "identity": {
+          "$ref": "#/$defs/CandidateIdentity"
+        },
+        "limitations": {
+          "items": {
+            "minLength": 1,
+            "type": "string"
+          },
+          "title": "Limitations",
+          "type": "array"
+        },
+        "record_id": {
+          "minLength": 1,
+          "title": "Record Id",
+          "type": "string"
+        },
+        "scenario_outcome": {
+          "$ref": "#/$defs/ScenarioOutcome"
+        },
+        "schema_version": {
+          "const": "lab-compatibility-registry/v1",
+          "title": "Schema Version",
+          "type": "string"
+        },
+        "support_state": {
+          "$ref": "#/$defs/SupportState"
+        }
+      },
+      "required": [
+        "record_id",
+        "schema_version",
+        "identity",
+        "support_state",
+        "scenario_outcome",
+        "evidence",
+        "claims_and_observations",
+        "limitations"
+      ],
+      "title": "CompatibilityRecord",
+      "type": "object"
+    },
+    "EvidenceReference": {
+      "additionalProperties": false,
+      "properties": {
+        "kind": {
+          "minLength": 1,
+          "title": "Kind",
+          "type": "string"
+        },
+        "provenance": {
+          "$ref": "#/$defs/Provenance"
+        },
+        "reference_id": {
+          "minLength": 1,
+          "title": "Reference Id",
+          "type": "string"
+        },
+        "sha256": {
+          "anyOf": [
+            {
+              "minLength": 1,
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Sha256"
+        },
+        "uri": {
+          "anyOf": [
+            {
+              "minLength": 1,
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Uri"
+        }
+      },
+      "required": [
+        "reference_id",
+        "provenance",
+        "kind",
+        "uri",
+        "sha256"
+      ],
+      "title": "EvidenceReference",
+      "type": "object"
+    },
+    "HostRuntime": {
+      "additionalProperties": false,
+      "properties": {
+        "architecture": {
+          "anyOf": [
+            {
+              "minLength": 1,
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Architecture"
+        },
+        "os_name": {
+          "anyOf": [
+            {
+              "minLength": 1,
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Os Name"
+        },
+        "os_version": {
+          "anyOf": [
+            {
+              "minLength": 1,
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Os Version"
+        },
+        "runtime_name": {
+          "anyOf": [
+            {
+              "minLength": 1,
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Runtime Name"
+        },
+        "runtime_version": {
+          "anyOf": [
+            {
+              "minLength": 1,
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Runtime Version"
+        }
+      },
+      "required": [
+        "os_name",
+        "os_version",
+        "architecture",
+        "runtime_name",
+        "runtime_version"
+      ],
+      "title": "HostRuntime",
+      "type": "object"
+    },
+    "Provenance": {
+      "enum": [
+        "upstream",
+        "lab-run"
+      ],
+      "title": "Provenance",
+      "type": "string"
+    },
+    "ScenarioOutcome": {
+      "enum": [
+        "PASS",
+        "FAIL",
+        "NOT RUN",
+        "BLOCKED",
+        "UNSUPPORTED"
+      ],
+      "title": "ScenarioOutcome",
+      "type": "string"
+    },
+    "SupportState": {
+      "enum": [
+        "unknown",
+        "inventoried",
+        "static-compatible",
+        "partial",
+        "verified-emulator",
+        "verified-device",
+        "rejected",
+        "stale"
+      ],
+      "title": "SupportState",
+      "type": "string"
+    }
+  },
+  "additionalProperties": false,
+  "properties": {
+    "records": {
+      "items": {
+        "$ref": "#/$defs/CompatibilityRecord"
+      },
+      "title": "Records",
+      "type": "array"
+    },
+    "schema_version": {
+      "const": "lab-compatibility-registry/v1",
+      "title": "Schema Version",
+      "type": "string"
+    }
+  },
+  "required": [
+    "schema_version",
+    "records"
+  ],
+  "title": "CompatibilityRegistry",
+  "type": "object"
+}
