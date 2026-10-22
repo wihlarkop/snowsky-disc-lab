@@ -801,18 +801,7 @@ def validate_container(
     item: dict[str, Any], inputs: Path, rootfs: Path, token: str, args: list[str]
 ) -> dict[str, Any]:
     host, config = item.get("HostConfig", {}), item.get("Config", {})
-    required = {
-        "NetworkMode": "none",
-        "CapDrop": ["ALL"],
-        "ReadonlyRootfs": True,
-        "Privileged": False,
-        "Memory": 256 * 1024**2,
-        "MemorySwap": 256 * 1024**2,
-        "NanoCpus": 1_000_000_000,
-        "PidsLimit": 16,
-        "IpcMode": "none",
-        "Tmpfs": TMPFS,
-    }
+    required = _isolation_profile()["verified_host_config"]
     if (
         not _owned(item, token)
         or any(host.get(key) != value for key, value in required.items())
@@ -870,6 +859,23 @@ def validate_container(
             raise RuntimeRefused("unexpected runtime mount")
     if not set(expected) <= seen:
         raise RuntimeRefused("required runtime mount missing")
+    return _isolation_profile()
+
+
+def _isolation_profile() -> dict[str, Any]:
+    """Canonical inspected metadata; portable receipts must match all fields."""
+    required = {
+        "NetworkMode": "none",
+        "CapDrop": ["ALL"],
+        "ReadonlyRootfs": True,
+        "Privileged": False,
+        "Memory": 256 * 1024**2,
+        "MemorySwap": 256 * 1024**2,
+        "NanoCpus": 1_000_000_000,
+        "PidsLimit": 16,
+        "IpcMode": "none",
+        "Tmpfs": TMPFS,
+    }
     return {
         "mounts": [
             {"source": "<verified-execution-inputs>", "target": "/inputs", "read_only": True},

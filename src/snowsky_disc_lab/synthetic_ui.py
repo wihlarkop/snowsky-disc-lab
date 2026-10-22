@@ -182,37 +182,14 @@ def validate_receipt(receipt: Any) -> None:
         expected = parse_execution_output(sample_output(case, token), case, token)
         if json.dumps(observation, sort_keys=True) != json.dumps(expected, sort_keys=True):
             raise ValueError("contradictory frame observation")
-        from .synthetic_runtime import TMPFS
+        from .synthetic_runtime import _isolation_profile
 
-        isolation = session["isolation"]
-        if (
-            not isinstance(isolation, dict)
-            or json.dumps(isolation.get("verified_host_config"), sort_keys=True)
-            != json.dumps(
-                {
-                    "NetworkMode": "none",
-                    "CapDrop": ["ALL"],
-                    "ReadonlyRootfs": True,
-                    "Privileged": False,
-                    "Memory": 256 * 1024**2,
-                    "MemorySwap": 256 * 1024**2,
-                    "NanoCpus": 1_000_000_000,
-                    "PidsLimit": 16,
-                    "IpcMode": "none",
-                    "Tmpfs": TMPFS,
-                },
-                sort_keys=True,
-            )
-            or isolation.get("stdout_limit_bytes") != 3072
-            or isolation.get("uid_gid") != "65534:65534"
-            or isolation.get("no_new_privileges") is not True
+        expected_isolation = _isolation_profile()
+        expected_isolation["stdout_limit_bytes"] = 3072
+        if json.dumps(session["isolation"], sort_keys=True) != json.dumps(
+            expected_isolation, sort_keys=True
         ):
-            raise ValueError("unsafe synthetic UI isolation")
-        if any(
-            isolation.get(key) is not False
-            for key in ("host_devices", "docker_socket", "host_home", "shared_source_cache")
-        ):
-            raise ValueError("unsafe synthetic UI mount evidence")
+            raise ValueError("unsafe or contradictory synthetic UI isolation")
         cleanup = session["cleanup"]
         if (
             not isinstance(cleanup, dict)
