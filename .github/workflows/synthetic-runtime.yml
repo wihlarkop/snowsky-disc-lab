@@ -10,10 +10,13 @@ on:
       - scripts/ci/fixtures/mips32le_execution_smoke.c
       - scripts/ci/fixtures/mips32le_posix_mqueue.c
       - scripts/ci/fixtures/mips32le_posix_ipc_handoff.c
+      - scripts/ci/fixtures/mips32le_posix_ipc_supervision.c
       - src/snowsky_disc_lab/synthetic_runtime.py
       - src/snowsky_disc_lab/synthetic_ipc_handoff.py
+      - src/snowsky_disc_lab/synthetic_ipc_supervision.py
       - tests/test_synthetic_runtime.py
       - tests/test_synthetic_ipc_handoff.py
+      - tests/test_synthetic_ipc_supervision.py
       - docs/synthetic-runtime.md
       - docs/v257-runtime-capability-map.md
       - docs/m1-01-runtime-preparation.json
@@ -27,7 +30,7 @@ jobs:
       (github.event_name == 'pull_request' &&
        github.repository == 'wihlarkop/snowsky-disc-lab' &&
        github.event.pull_request.head.repo.full_name == 'wihlarkop/snowsky-disc-lab' &&
-       github.event.pull_request.head.ref == 'codex/mips32le-ipc-handoff') ||
+       github.event.pull_request.head.ref == 'codex/m1-bounded-supervision') ||
       (github.event_name == 'workflow_dispatch' &&
        github.repository == 'wihlarkop/snowsky-disc-lab' &&
        github.ref == 'refs/heads/main')
@@ -38,5 +41,5 @@ jobs:
         with:
           ref: ${{ github.event_name == 'pull_request' && github.event.pull_request.head.sha || github.sha }}
           persist-credentials: false
-      - name: Build pinned QEMU once and execute synthetic filesystem, queue and process handoff acceptance
+      - name: Build pinned QEMU once and execute filesystem, queue handoff and supervision acceptance
         run: python3 scripts/ci/qemu_runtime_build.py session

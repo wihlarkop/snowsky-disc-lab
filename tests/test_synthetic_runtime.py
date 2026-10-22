@@ -11,6 +11,7 @@ from typing import Any
 import pytest
 
 from snowsky_disc_lab import synthetic_ipc_handoff as handoff
+from snowsky_disc_lab import synthetic_ipc_supervision as supervision
 from snowsky_disc_lab import synthetic_runtime as runtime
 
 
@@ -23,6 +24,7 @@ def inputs(tmp_path, monkeypatch):
         "mips32le-execution-smoke.elf",
         "mips32le-posix-mqueue.elf",
         handoff.GUEST_ELF,
+        supervision.GUEST_ELF,
     ):
         (directory / name).write_bytes(name.encode())
         (directory / name).chmod(0o555)
@@ -42,6 +44,10 @@ def inputs(tmp_path, monkeypatch):
             "source": {"sha256": handoff.GUEST_SOURCE_SHA256},
             "elf": {"sha256": hashlib.sha256(handoff.GUEST_ELF.encode()).hexdigest()},
         },
+        "synthetic_ipc_supervision_guest": {
+            "source": {"sha256": supervision.GUEST_SOURCE_SHA256},
+            "elf": {"sha256": hashlib.sha256(supervision.GUEST_ELF.encode()).hexdigest()},
+        },
     }
     return directory, evidence
 
@@ -52,6 +58,7 @@ class Docker:
         self.inspection: list[dict[str, Any]] = []
         self.mode = "filesystem"
         self.timeout = False
+        self.stop_failure = False
         self.extra_mount = False
         self.foreign_owner = False
         self.cleanup_failure = False
@@ -126,6 +133,7 @@ class Docker:
             return subprocess.CompletedProcess(args, 0, json.dumps(self.inspection))
         if args[1] == "start":
             if self.timeout:
+                self.inspection[0]["State"]["Running"] = True
                 raise subprocess.TimeoutExpired(args, kwargs["timeout"])
             output = {
                 "filesystem": runtime.EXPECTED_OUTPUT,
@@ -134,6 +142,7 @@ class Docker:
                 "mqueue-first": runtime.MQUEUE_FIRST_OUTPUT,
                 "mqueue-second": runtime.MQUEUE_SECOND_OUTPUT,
                 "ipc-handoff": handoff.EXPECTED_CONTAINER_OUTPUT,
+                "ipc-supervision": supervision.EXPECTED_CONTAINER_OUTPUT,
             }[self.mode]
             code = {
                 "filesystem": 0,
@@ -142,6 +151,7 @@ class Docker:
                 "mqueue-first": 0,
                 "mqueue-second": 0,
                 "ipc-handoff": 0,
+                "ipc-supervision": 0,
             }[self.mode]
             if self.mqueue_failure and self.mode == "mqueue-first":
                 output = (
@@ -166,7 +176,14 @@ class Docker:
                 code = 40
             self.inspection[0]["State"]["ExitCode"] = code
             return subprocess.CompletedProcess(args, code, output)
+        if args[1] == "stop":
+            if self.stop_failure:
+                return subprocess.CompletedProcess(args, 1, "")
+            self.inspection[0]["State"]["Running"] = False
+            return subprocess.CompletedProcess(args, 0, "")
         if args[1] == "rm":
+            if not self.cleanup_failure:
+                self.inspection[0]["State"]["Running"] = False
             return subprocess.CompletedProcess(args, int(self.cleanup_failure), "")
         raise AssertionError(args)
 
@@ -227,6 +244,22 @@ def test_ipc_handoff_command_starts_two_fixed_roles_concurrently():
     )
     assert "/dev/mqueue" not in command
     assert "docker exec" not in command
+
+
+def test_ipc_supervision_command_uses_fixed_child_pids_and_bounded_signals():
+    command = runtime.COMMAND
+
+    assert 'if [ "$1" = "ipc-supervision" ]' in command
+    assert "/inputs/mips32le-posix-ipc-supervision.elf consumer" in command
+    assert "/inputs/mips32le-posix-ipc-supervision.elf producer" in command
+    assert "wait -n -p event_pid" in command
+    assert 'kill -TERM "$consumer_pid"' in command
+    assert 'kill -TERM "$producer_pid"' in command
+    assert 'kill -KILL "$consumer_pid"' in command
+    assert 'kill -KILL "$producer_pid"' in command
+    assert "run_supervised_case producer-exceeds-deadline 2" in command
+    assert "docker exec" not in command
+    assert "pkill" not in command and "killall" not in command
 
 
 def test_ipc_handoff_launch_reuses_one_inspected_isolated_container(inputs, tmp_path, monkeypatch):
@@ -300,6 +333,31 @@ def test_ipc_handoff_refuses_shared_ipc_drift_before_guest_execution(inputs, tmp
     assert not any(call[1] == "start" for call in docker.calls)
 
 
+def test_ipc_supervision_launch_records_actual_matrix_and_owned_cleanup(
+    inputs, tmp_path, monkeypatch
+):
+    docker = Docker()
+    monkeypatch.setattr(runtime, "_docker", docker)
+
+    receipt = runtime.launch(
+        *inputs, tmp_path / "sessions", session_id="supervision-one", _case="ipc-supervision"
+    )
+
+    assert receipt["status"] == "passed"
+    assert receipt["execution"]["supervision"]["status"] == "passed"
+    assert receipt["execution"]["supervision"]["scenario_count"] == 5
+    assert receipt["isolation"]["verified_host_config"]["IpcMode"] == "none"
+    assert receipt["isolation"]["verified_host_config"]["NetworkMode"] == "none"
+    assert receipt["cleanup"] == {
+        "container_removed": True,
+        "container_stopped": True,
+        "ownership_verified_before_removal": True,
+        "container_stop_command": "not-needed",
+        "private_tmpfs_released": True,
+        "host_metadata": "retained; no recursive cleanup",
+    }
+
+
 @pytest.mark.parametrize("state", ["extra_mount", "foreign_owner"])
 def test_inspect_refuses_before_start(inputs, tmp_path, monkeypatch, state):
     docker = Docker()
@@ -321,6 +379,25 @@ def test_outer_timeout_quarantines_and_removes_only_owned_container(inputs, tmp_
     receipt = json.loads((tmp_path / "sessions/timeout/receipt.json").read_text())
     assert receipt["status"] == "quarantined"
     assert receipt["cleanup"]["container_removed"]
+    assert docker.calls[-1] == ["docker", "rm", "--force", "a" * 64]
+
+
+def test_stop_failure_still_removes_exact_owned_container(inputs, tmp_path, monkeypatch):
+    docker = Docker()
+    docker.timeout = True
+    docker.stop_failure = True
+    monkeypatch.setattr(runtime, "_docker", docker)
+
+    with pytest.raises(runtime.RuntimeRefused, match="deadline"):
+        runtime.launch(*inputs, tmp_path / "sessions", session_id="stop-failed")
+
+    receipt = json.loads((tmp_path / "sessions/stop-failed/receipt.json").read_text())
+    assert receipt["status"] == "quarantined"
+    assert receipt["cleanup"]["container_removed"] is True
+    assert receipt["cleanup"]["container_stopped"] is True
+    assert receipt["cleanup"]["ownership_verified_before_removal"] is True
+    assert receipt["cleanup"]["container_stop_command"] == "failed"
+    assert ["docker", "stop", "--time", "1", "a" * 64] in docker.calls
     assert docker.calls[-1] == ["docker", "rm", "--force", "a" * 64]
 
 
@@ -647,7 +724,7 @@ def test_workflow_manual_dispatch_and_pr_guards_are_narrow():
         "(github.event_name == 'pull_request' &&\n"
         " github.repository == 'wihlarkop/snowsky-disc-lab' &&\n"
         " github.event.pull_request.head.repo.full_name == 'wihlarkop/snowsky-disc-lab' &&\n"
-        " github.event.pull_request.head.ref == 'codex/mips32le-ipc-handoff') ||\n"
+        " github.event.pull_request.head.ref == 'codex/m1-bounded-supervision') ||\n"
         "(github.event_name == 'workflow_dispatch' &&\n"
         " github.repository == 'wihlarkop/snowsky-disc-lab' &&\n"
         " github.ref == 'refs/heads/main')"
@@ -677,4 +754,22 @@ def test_workflow_manual_dispatch_and_pr_guards_are_narrow():
         "src/snowsky_disc_lab/synthetic_ipc_handoff.py" in workflow["on"]["pull_request"]["paths"]
     )
     assert "tests/test_synthetic_ipc_handoff.py" in workflow["on"]["pull_request"]["paths"]
+    assert (
+        "scripts/ci/fixtures/mips32le_posix_ipc_supervision.c"
+        in workflow["on"]["pull_request"]["paths"]
+    )
+    assert (
+        "src/snowsky_disc_lab/synthetic_ipc_supervision.py"
+        in workflow["on"]["pull_request"]["paths"]
+    )
+    assert "tests/test_synthetic_ipc_supervision.py" in workflow["on"]["pull_request"]["paths"]
+
+    m0_path = Path(__file__).resolve().parents[1] / ".github/workflows/firmware-free.yml"
+    m0 = yaml.load(m0_path.read_text(encoding="utf-8"), Loader=yaml.BaseLoader)
+    m0_steps = m0["jobs"]["contracts"]["steps"]
+    assert "github.event.pull_request.head.repo.full_name" in m0_steps[0]["with"]["repository"]
+    assert "github.event.pull_request.head.sha" in m0_steps[0]["with"]["ref"]
+    assert m0_steps[1]["name"] == "Verify exact pull request head"
+    assert "EXPECTED_HEAD_SHA" in m0_steps[1]["env"]
+    assert "git', 'rev-parse', 'HEAD" in m0_steps[1]["run"]
     assert "docs/synthetic-runtime.md" in workflow["on"]["pull_request"]["paths"]

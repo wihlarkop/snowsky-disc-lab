@@ -158,6 +158,60 @@ The complete hosted acceptance passed on implementation head
 
 Under unchanged `--ipc none` and without a `/dev/mqueue` mount, the first session verified mode 0600, maxmsg 2, msgsize 64, empty count, empty-receive `EAGAIN`, duplicate `EEXIST`, exact 28-byte payload and priority 7, close/unlink, and `ENOENT` after unlink. It recreated the queue and left it linked until its container was removed. A second, distinct container identity then exclusively created the same queue name and verified its attributes, `EAGAIN`, close/unlink and `ENOENT`. Both containers and private tmpfs instances were removed; the receipt records output digests and durations. Existing filesystem, expected-failure and timeout acceptance also passed. No stock queue behavior is inferred, documented stock attributes remain unverified, and M1-04 stock boot remains **NOT RUN**. Raw guest output is never retained.
 
+## Bounded two-process supervision and recovery
+
+The `session` acceptance compiles one versioned companion guest beside the
+existing, unchanged filesystem, queue and successful handoff guests. Its fixed
+matrix runs once in each of two separately created containers:
+
+1. The existing consumer/producer request and acknowledgment completes normally.
+2. The consumer exits with status 42 before a request; the waiting producer is
+   signaled and reaped.
+3. The producer exits with status 43 after seeing the consumer's unread
+   acknowledgment queued. It exits without consuming the acknowledgment; the
+   consumer's send path completes, then the waiting child is signaled and
+   reaped.
+4. The producer enters a fixed busy loop; the two-second watchdog sends TERM to
+   both children and reaps them, with a one-second KILL fallback for a child
+   that does not exit during grace.
+5. The producer exits with status 44 before creating a queue; the already
+   observed waiting consumer is signaled and reaped.
+
+The wrapper starts only the measured fixed QEMU executable with one of the two
+first-party guest ELFs and fixed role/scenario arguments. Each QEMU PID is tracked
+and waited independently. Signal delivery targets only those recorded child
+PIDs; timer and grace PIDs are also tracked and reaped. Per-role exit status,
+exit reason, PID, bounded output digest, TERM/KILL outcome and reaping are
+validated separately. Raw stdout and syscall diagnostics stay in the private
+diagnostic tmpfs; the receipt keeps fixed fields and hashes. A shell-wrapper
+failure is recorded separately from a guest observation mismatch and from
+container ownership or cleanup failure.
+
+The companion guest uses fixed, scenario-specific POSIX queue names and
+`O_CREAT | O_EXCL`. The first container is stopped and removed after the matrix.
+The second container then repeats the same names. Successful exclusive creates
+in the second matrix, distinct session identities and reaped children establish
+that no queue name or process survives the first container. The existing
+successful handoff still closes and unlinks its queues. Container inspection
+verifies the owner label before removal and confirms stopped state; removal
+releases the private tmpfs instances.
+
+The receipt schema is
+`firmware-free-mips32le-synthetic-ipc-supervision/v1`. It records both guest
+source/ELF identities, pinned QEMU identity, roles and process identities, all
+five outcomes, deadline and signal behavior, queue recreation, observed
+container ownership and isolation, cleanup, and actual-versus-simulated evidence.
+The two-process cases run through actual QEMU processes on the shared
+container/host kernel. Docker isolation and cleanup policy unit tests remain
+simulated; hosted acceptance records the real owned-container lifecycle.
+`--ipc none`, `--network none`, UID/GID 65534, dropped capabilities,
+no-new-privileges, read-only root and inputs, private fixed tmpfs, and existing
+CPU, memory, PID and outer-deadline limits remain unchanged. No new mounts,
+sysctls, host PID operations or global process-name signals are used.
+
+The fixture is synthetic. Compatibility with stock firmware, binaries, queues,
+or device behavior remains **UNVERIFIED**. M1-04 stock boot remains **NOT RUN**.
+
 ## Lifecycle, retention and receipts
 
 Each session reserves a fresh directory without replacement and a fresh labelled
@@ -205,7 +259,7 @@ unreviewed guest diagnostics, binaries, images or firmware are exported.
 The [V2.57 capability map](v257-runtime-capability-map.md) separates these verified
 observations from upstream path, syscall and privilege requirements. Its
 [test-only boundary contract](v257-runtime-boundary-contract.json) checks existing
-container refusals; it adds no runtime inputs or execution authority. The proposed
-smallest follow-up is a bounded two-process first-party queue handoff under the
-same unchanged isolation profile. Lawful firmware identity/authenticity, rights
-review and explicit firmware-backed runtime authorization remain separate gates.
+container refusals; it adds no runtime inputs or execution authority. The
+two-process supervision acceptance is synthetic and does not authorize firmware
+execution. Lawful firmware identity/authenticity, rights review and explicit
+firmware-backed runtime authorization remain separate gates.
