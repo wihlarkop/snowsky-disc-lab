@@ -133,6 +133,35 @@ def test_invalid_declarations_have_sanitized_codes(change: dict[str, object], co
     CapabilityRefusal.model_validate(refusal)
 
 
+@pytest.mark.parametrize("unknown", ["name", "outcome", "reason", 1])
+def test_unknown_top_level_fields_serialize_to_versioned_refusal(unknown: str | int) -> None:
+    for parser, fixture in ((parse_declaration, _declaration), (parse_review, _review)):
+        payload: dict[object, object] = {}
+        for key, value in fixture().items():
+            payload[key] = value
+        payload[unknown] = "private-value"
+        with pytest.raises(CapabilityContractError) as error:
+            parser(payload)
+        refusal = error.value.as_dict()
+        assert refusal["field"] == "contract"
+        assert "private-value" not in str(error.value)
+        validate(refusal, CapabilityRefusal.model_json_schema())
+
+
+def test_unknown_nested_observation_field_serializes_without_echoing_key() -> None:
+    review = _review()
+    observations = review["observations"]
+    assert isinstance(observations, list)
+    assert isinstance(observations[0], dict)
+    observations[0]["private-value"] = "secret"
+    with pytest.raises(CapabilityContractError) as error:
+        parse_review(review)
+    refusal = error.value.as_dict()
+    assert refusal["field"] == "observations.0"
+    assert "private-value" not in str(error.value)
+    validate(refusal, CapabilityRefusal.model_json_schema())
+
+
 @pytest.mark.parametrize(
     "observations",
     [

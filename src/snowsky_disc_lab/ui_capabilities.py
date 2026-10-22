@@ -268,33 +268,40 @@ class CapabilityContractError(ValueError):
         ).model_dump()
 
 
+def _safe_field(location: tuple[object, ...]) -> str:
+    """Map validation locations to schema-safe fixed paths, never input keys."""
+    if not location or not isinstance(location[0], str):
+        return "contract"
+    root = location[0]
+    if root in {"apiVersion", "kind"}:
+        return root if len(location) == 1 else "contract"
+    if root in {"declared", "unsupported", "required", "optional"}:
+        if len(location) == 1:
+            return root
+        if len(location) == 2 and isinstance(location[1], int):
+            return f"{root}.{location[1]}"
+        return root
+    if root == "observations":
+        if len(location) == 1:
+            return root
+        if not isinstance(location[1], int):
+            return root
+        indexed = f"observations.{location[1]}"
+        if len(location) == 2:
+            return indexed
+        if len(location) == 3 and location[2] in {"name", "outcome", "reason"}:
+            return f"{indexed}.{location[2]}"
+        return indexed
+    return "contract"
+
+
 def _parse(model: type[CapabilityDeclaration] | type[CapabilityReview], data: object):
     try:
         return model.model_validate(data)
     except ValidationError as error:
         issue = error.errors(include_url=False, include_context=False, include_input=False)[0]
         location = issue["loc"]
-        field = (
-            ".".join(
-                str(part)
-                for part in location
-                if isinstance(part, int)
-                or part
-                in {
-                    "apiVersion",
-                    "kind",
-                    "declared",
-                    "unsupported",
-                    "required",
-                    "optional",
-                    "observations",
-                    "name",
-                    "outcome",
-                    "reason",
-                }
-            )
-            or "contract"
-        )
+        field = _safe_field(tuple(location))
         if location and location[0] == "apiVersion":
             code: ContractRefusalCode = "unsupported-version"
         elif (
