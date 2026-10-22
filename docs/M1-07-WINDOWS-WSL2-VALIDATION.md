@@ -68,3 +68,40 @@ These hosted results establish reproducible firmware-free build evidence and syn
 - M1-01 remains open pending successful exact-head hosted build/repeat evidence and the wider M1 stock runtime acceptance.
 - M1-07 remains open because WSL2 distro state, Docker Engine, Windows host details and the dedicated isolation boundary could not be verified from this CLI.
 - M1-04 stock `mq_ui`/`mq_player`, proprietary firmware, hardware and device execution remain **NOT RUN / UNVERIFIED**.
+
+
+## Bounded recheck on 2026-10-23 (M2-06 session)
+
+Fresh diagnostics distinguish sandbox denial from host availability. The normal
+Codex process ran with a Low Mandatory Level token, Administrators deny-only and
+membership in docker-users. In that sandbox, WSL returned `Wsl/E_ACCESSDENIED`,
+Docker denied access to its Linux Engine pipe, and CIM queries were refused.
+These are permission failures, not proof that Docker Desktop is stopped.
+
+A separately approved read-only diagnostic outside that sandbox reported:
+
+| Observation | Measured result |
+| --- | --- |
+| OS | Windows 11 Home Single Language, 10.0.26200 |
+| WSL | Default Ubuntu, version 2; Ubuntu/docker-desktop listed as stopped at the instant of the WSL listing |
+| Docker context | desktop-linux |
+| Client / server | 29.7.2 / 29.7.2; server replied successfully after the WSL listing |
+| Desktop | 4.87.0 (236836) |
+| Engine platform | linux/amd64; info architecture x86_64 |
+| Engine resources | 8,242,479,104 bytes total memory, 12 CPUs |
+| Engine security metadata | seccomp builtin, cgroupns |
+| Host memory | 16,614,580 KiB visible; 3,053,684 KiB free at observation time |
+
+The daemon was accessible in the approved diagnostic context. It was refused
+inside the sandbox. The WSL stopped snapshot and later responding server are
+separate observations; no stopped-Desktop diagnosis is inferred from them.
+No ACL, daemon security, ownership or WSL configuration was changed.
+
+The existing build requires at least 8 GiB **available** memory. Docker VM total
+memory is already below that threshold, so no local QEMU rebuild was attempted.
+No reusable measured runtime artifacts were imported from another session. Local
+UI/QEMU/filesystem/IPC runtime acceptance is NOT RUN. This is a resource-gated
+execution gap in addition to sandbox restrictions, not a guest test failure.
+Docker Desktop metadata does not establish a dedicated trusted VM boundary for
+stock firmware. M1-07 remains open; M1-04 remains NOT RUN / UNVERIFIED. Hosted
+Linux execution is reported separately in the M2-06 evidence document.

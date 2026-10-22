@@ -161,6 +161,14 @@ AUDIT_LOG_FILES += (
         "/audit/synthetic-ipc-supervision-guest-evidence.log",
         "synthetic-ipc-supervision-guest-evidence.log",
     ),
+    (
+        "/audit/synthetic-ui-guest-build.log",
+        "synthetic-ui-guest-build.log",
+    ),
+    (
+        "/audit/synthetic-ui-guest-evidence.log",
+        "synthetic-ui-guest-evidence.log",
+    ),
     ("/audit/execution-input-staging.log", "execution-input-staging.log"),
 )
 FAKEROOT_BOOTSTRAP_PACKAGES = ("fakeroot", "libfakeroot")
@@ -219,6 +227,12 @@ IPC_SUPERVISION_GUEST_EVIDENCE_FILES = (
         "synthetic-ipc-supervision-guest-evidence.json",
     ),
 )
+UI_GUEST_EVIDENCE_FILES = (
+    (
+        "/audit/synthetic-ui-guest-evidence.json",
+        "synthetic-ui-guest-evidence.json",
+    ),
+)
 BUILD_EVIDENCE_MAX_BYTES = 1024 * 1024
 BUILD_TOOL_NAMES = (
     "gcc",
@@ -266,6 +280,11 @@ IPC_SUPERVISION_GUEST_ELF_PATH = f"/build/smoke/{IPC_SUPERVISION_GUEST_ELF}"
 IPC_SUPERVISION_GUEST_SOURCE_SHA256 = (
     "1d151ccbe7fb4c0965ad6d9bf290de8e6caaed0ca0a2dc7067aba91749c52e9f"
 )
+UI_GUEST_SOURCE = "scripts/ci/fixtures/mips32le_synthetic_ui.c"
+UI_GUEST_SOURCE_PATH = ROOT / UI_GUEST_SOURCE
+UI_GUEST_ELF = "mips32le-synthetic-ui.elf"
+UI_GUEST_ELF_PATH = f"/build/smoke/{UI_GUEST_ELF}"
+UI_GUEST_SOURCE_SHA256 = "360f3d19f54c27a3a805a4be00a78a3d6531267306e88319b97dc0cb55b6e13f"
 SMOKE_GUEST_TIMEOUT_SECONDS = 2
 SMOKE_EXECUTION_OUTER_TIMEOUT_SECONDS = 30
 EXECUTION_DIAGNOSTIC_MAX_CHARS = 768
@@ -294,6 +313,7 @@ AUDIT_FILE_MAX_BYTES = {
     "synthetic-mqueue-guest-evidence.json": 16 * 1024,
     "synthetic-ipc-handoff-guest-evidence.json": 16 * 1024,
     "synthetic-ipc-supervision-guest-evidence.json": 16 * 1024,
+    "synthetic-ui-guest-evidence.json": 16 * 1024,
     **{name: 1024 * 1024 for _, name in AUDIT_LOG_FILES},
 }
 
@@ -951,7 +971,10 @@ def prepare_build_inputs(
     include_mqueue_guest: bool = False,
     include_ipc_handoff_guest: bool = False,
     include_ipc_supervision_guest: bool = False,
+    include_ui_guest: bool = False,
 ) -> str:
+    if include_ui_guest and not include_ipc_supervision_guest:
+        raise StopBuild("synthetic UI requires the existing supervised session build")
     if include_mqueue_guest and not include_smoke_guest:
         raise StopBuild("POSIX queue guest requires the fixed execution smoke build")
     if include_ipc_handoff_guest and not include_mqueue_guest:
@@ -1070,6 +1093,20 @@ def prepare_build_inputs(
         expected_hashes[f"lab/fixtures/{IPC_SUPERVISION_GUEST_SOURCE_PATH.name}"] = (
             IPC_SUPERVISION_GUEST_SOURCE_SHA256
         )
+
+    if include_ui_guest:
+        if (
+            UI_GUEST_SOURCE_PATH.is_symlink()
+            or not UI_GUEST_SOURCE_PATH.is_file()
+            or UI_GUEST_SOURCE_PATH.stat().st_size > 16 * 1024
+            or digest(UI_GUEST_SOURCE_PATH) != UI_GUEST_SOURCE_SHA256
+        ):
+            raise StopBuild("first-party synthetic UI source identity is invalid")
+        ui_source_target = destination / "lab" / "fixtures" / UI_GUEST_SOURCE_PATH.name
+        shutil.copyfile(UI_GUEST_SOURCE_PATH, ui_source_target)
+        if digest(ui_source_target) != UI_GUEST_SOURCE_SHA256:
+            raise StopBuild("copied first-party synthetic UI source changed")
+        expected_hashes[f"lab/fixtures/{UI_GUEST_SOURCE_PATH.name}"] = UI_GUEST_SOURCE_SHA256
 
     helper = ROOT / "scripts" / "ci" / "qemu_runtime_build.py"
     if helper.is_symlink() or not helper.is_file():
@@ -1708,6 +1745,7 @@ def build_container_command(
     include_mqueue_guest: bool = False,
     include_ipc_handoff_guest: bool = False,
     include_ipc_supervision_guest: bool = False,
+    include_ui_guest: bool = False,
 ) -> str:
     inputs = reference["buildInputs"]
     native_packages = tuple(inputs["nativeBuildPackageRequests"])
@@ -1724,6 +1762,9 @@ def build_container_command(
     mqueue_guest_steps = ""
     ipc_handoff_guest_steps = ""
     ipc_supervision_guest_steps = ""
+    ui_guest_steps = ""
+    if include_ui_guest and not include_ipc_supervision_guest:
+        raise StopBuild("synthetic UI requires the existing supervised session build")
     if include_mqueue_guest and not include_smoke_guest:
         raise StopBuild("POSIX queue guest requires the fixed execution smoke build")
     if include_ipc_handoff_guest and not include_mqueue_guest:
@@ -1808,6 +1849,25 @@ python3 /inputs/lab/qemu_runtime_build.py measure-ipc-supervision-guest \
   cmp -s /build/smoke/mips32le-posix-ipc-supervision.elf \
     /audit/execution-inputs/mips32le-posix-ipc-supervision.elf
   test -s /audit/execution-inputs/mips32le-posix-ipc-supervision.elf
+} >>/audit/execution-input-staging.log 2>&1
+"""
+    if include_ui_guest:
+        ui_guest_steps = r"""
+mark_phase synthetic-ui-guest-build /audit/synthetic-ui-guest-build.log
+mipsel-linux-gnu-gcc -static -march=mips32 -mabi=32 -EL -O2 -fno-pie -no-pie \
+  -Wl,--build-id=none -o /build/smoke/mips32le-synthetic-ui.elf \
+  /inputs/lab/fixtures/mips32le_synthetic_ui.c -lrt \
+  >/audit/synthetic-ui-guest-build.log 2>&1
+mark_phase synthetic-ui-guest-evidence \
+  /audit/synthetic-ui-guest-evidence.log
+python3 /inputs/lab/qemu_runtime_build.py measure-ui-guest \
+  >/audit/synthetic-ui-guest-evidence.log 2>&1
+{
+  install -m 0555 /build/smoke/mips32le-synthetic-ui.elf \
+    /audit/execution-inputs/mips32le-synthetic-ui.elf
+  cmp -s /build/smoke/mips32le-synthetic-ui.elf \
+    /audit/execution-inputs/mips32le-synthetic-ui.elf
+  test -s /audit/execution-inputs/mips32le-synthetic-ui.elf
 } >>/audit/execution-input-staging.log 2>&1
 """
     archive_checks = "\n".join(
@@ -1979,6 +2039,7 @@ __SMOKE_GUEST_STEPS__
 __MQUEUE_GUEST_STEPS__
 __IPC_HANDOFF_GUEST_STEPS__
 __IPC_SUPERVISION_GUEST_STEPS__
+__UI_GUEST_STEPS__
 mark_phase build-evidence-collection ""
 python3 /inputs/lab/qemu_runtime_build.py measure
 """
@@ -1992,6 +2053,7 @@ python3 /inputs/lab/qemu_runtime_build.py measure
         .replace("__MQUEUE_GUEST_STEPS__", mqueue_guest_steps)
         .replace("__IPC_HANDOFF_GUEST_STEPS__", ipc_handoff_guest_steps)
         .replace("__IPC_SUPERVISION_GUEST_STEPS__", ipc_supervision_guest_steps)
+        .replace("__UI_GUEST_STEPS__", ui_guest_steps)
     )
 
 
@@ -2418,10 +2480,13 @@ def run_build_container(
     include_mqueue_guest: bool = False,
     include_ipc_handoff_guest: bool = False,
     include_ipc_supervision_guest: bool = False,
+    include_ui_guest: bool = False,
 ) -> dict[str, Any]:
     _require_receipt_digest(expected_input_manifest_sha256, "expected build input manifest")
     if include_mqueue_guest and smoke_inputs_dir is None:
         raise StopBuild("POSIX queue guest requires execution input staging")
+    if include_ui_guest and (not include_ipc_supervision_guest or smoke_inputs_dir is None):
+        raise StopBuild("synthetic UI requires supervised execution input staging")
     if include_ipc_handoff_guest and (not include_mqueue_guest or smoke_inputs_dir is None):
         raise StopBuild("POSIX IPC handoff guest requires queue execution input staging")
     if include_ipc_supervision_guest and (
@@ -2434,6 +2499,7 @@ def run_build_container(
         include_mqueue_guest=include_mqueue_guest,
         include_ipc_handoff_guest=include_ipc_handoff_guest,
         include_ipc_supervision_guest=include_ipc_supervision_guest,
+        include_ui_guest=include_ui_guest,
     )
     container_name = f"qemu-runtime-build-{uuid.uuid4().hex[:16]}"
     create_attempted = False
@@ -2682,6 +2748,47 @@ def run_build_container(
                     executable=True,
                 )
                 evidence["synthetic_ipc_supervision_guest"] = supervision_receipt
+            if include_ui_guest:
+                copy_audit_files(
+                    container_name,
+                    report_path.parent,
+                    UI_GUEST_EVIDENCE_FILES,
+                    required=True,
+                )
+                ui_receipt_path = report_path.parent / "synthetic-ui-guest-evidence.json"
+                try:
+                    ui_receipt = json.loads(ui_receipt_path.read_text(encoding="utf-8"))
+                except (OSError, json.JSONDecodeError) as exc:
+                    raise StopBuild("synthetic UI guest evidence is malformed") from exc
+                if (
+                    not isinstance(ui_receipt, dict)
+                    or ui_receipt.get("schema_version")
+                    != "firmware-free-mips32le-synthetic-ui-guest/v1"
+                    or ui_receipt.get("status") != "synthetic-static-guest-built"
+                    or ui_receipt.get("source", {}).get("sha256") != UI_GUEST_SOURCE_SHA256
+                ):
+                    raise StopBuild("synthetic UI guest build evidence does not match its source")
+                ui_elf = ui_receipt.get("elf", {})
+                if (
+                    not isinstance(ui_elf, dict)
+                    or ui_elf.get("elf_class") != "ELF32"
+                    or ui_elf.get("elf_data") != "little endian"
+                    or not isinstance(ui_elf.get("machine"), str)
+                    or not ui_elf["machine"].startswith("MIPS")
+                    or ui_elf.get("abi") != "o32"
+                    or ui_elf.get("isa") not in {"mips32", "mips32r2"}
+                    or ui_elf.get("has_interpreter") is not False
+                ):
+                    raise StopBuild("synthetic UI guest ELF is not static MIPS32LE O32")
+                copy_execution_binary(
+                    container_name,
+                    f"/audit/execution-inputs/{UI_GUEST_ELF}",
+                    smoke_inputs_dir / UI_GUEST_ELF,
+                    str(ui_elf.get("sha256", "")),
+                    16 * 1024 * 1024,
+                    executable=True,
+                )
+                evidence["synthetic_ui_guest"] = ui_receipt
         return evidence
     finally:
         if create_attempted:
@@ -2910,6 +3017,30 @@ def measure_ipc_supervision_guest() -> None:
         "elf": synthetic_guest_elf_evidence(guest),
     }
     output = Path("/audit/synthetic-ipc-supervision-guest-evidence.json")
+    output.write_text(json.dumps(evidence, sort_keys=True, indent=2) + "\n", encoding="utf-8")
+
+
+def measure_ui_guest() -> None:
+    source = Path(f"/inputs/lab/fixtures/{Path(UI_GUEST_SOURCE).name}")
+    if (
+        source.is_symlink()
+        or not source.is_file()
+        or source.stat().st_size > 16 * 1024
+        or digest(source) != UI_GUEST_SOURCE_SHA256
+    ):
+        raise StopBuild("first-party synthetic UI source is missing or changed")
+    guest = Path(UI_GUEST_ELF_PATH)
+    evidence = {
+        "schema_version": "firmware-free-mips32le-synthetic-ui-guest/v1",
+        "status": "synthetic-static-guest-built",
+        "source": {
+            "path": UI_GUEST_SOURCE,
+            "bytes": source.stat().st_size,
+            "sha256": digest(source),
+        },
+        "elf": synthetic_guest_elf_evidence(guest),
+    }
+    output = Path("/audit/synthetic-ui-guest-evidence.json")
     output.write_text(json.dumps(evidence, sort_keys=True, indent=2) + "\n", encoding="utf-8")
 
 
@@ -3297,6 +3428,7 @@ def build(*, execution_smoke: bool = False, synthetic_session: bool = False) -> 
             include_mqueue_guest=synthetic_session,
             include_ipc_handoff_guest=synthetic_session,
             include_ipc_supervision_guest=synthetic_session,
+            include_ui_guest=synthetic_session,
         )
         build_started = time.monotonic()
         smoke_inputs_dir = workdir / "execution-inputs" if execution_smoke else None
@@ -3311,6 +3443,7 @@ def build(*, execution_smoke: bool = False, synthetic_session: bool = False) -> 
             include_mqueue_guest=synthetic_session,
             include_ipc_handoff_guest=synthetic_session,
             include_ipc_supervision_guest=synthetic_session,
+            include_ui_guest=synthetic_session,
         )
         first_elapsed = round(time.monotonic() - build_started, 1)
         if first.get("debian_archive_keyring_sha256") != debian.get(
@@ -3507,6 +3640,7 @@ def main() -> int:
         "measure-posix-mqueue-guest",
         "measure-ipc-handoff-guest",
         "measure-ipc-supervision-guest",
+        "measure-ui-guest",
     }:
         print(
             "usage: qemu_runtime_build.py "
@@ -3529,6 +3663,8 @@ def main() -> int:
             measure_posix_mqueue_guest()
         elif sys.argv[1] == "measure-ipc-handoff-guest":
             measure_ipc_handoff_guest()
+        elif sys.argv[1] == "measure-ui-guest":
+            measure_ui_guest()
         elif sys.argv[1] == "measure-ipc-supervision-guest":
             measure_ipc_supervision_guest()
         else:

@@ -4,3 +4,5 @@ scripts/ci/fixtures/mips32le_execution_smoke.c text eol=lf
 scripts/ci/fixtures/mips32le_posix_mqueue.c text eol=lf
 scripts/ci/fixtures/mips32le_posix_ipc_handoff.c text eol=lf
 scripts/ci/fixtures/mips32le_posix_ipc_supervision.c text eol=lf
+
+scripts/ci/fixtures/mips32le_synthetic_ui.c text eol=lf

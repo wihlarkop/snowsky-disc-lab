@@ -263,3 +263,47 @@ container refusals; it adds no runtime inputs or execution authority. The
 two-process supervision acceptance is synthetic and does not authorize firmware
 execution. Lawful firmware identity/authenticity, rights review and explicit
 firmware-backed runtime authorization remain separate gates.
+
+
+## M2-06 synthetic UI acceptance
+
+The same `python3 scripts/ci/qemu_runtime_build.py session` path now also builds
+one reviewed first-party static MIPS32LE O32 UI guest with the existing pinned
+compiler. It executes six fresh owned containers: a normal input/frame journey
+twice, wrong input (exit 41), missing input (42), early exit (43), and an existing
+frame exclusive-create refusal (45). No external executable or source is accepted.
+
+The guest draws a 16 by 8, stride-64 RGBA8888 frame into a private regular file.
+A solid cursor starts in column 2. A fresh token-bearing guest handshake follows
+the completed frame write. The wrapper reads the complete frame bytes before
+sending the six-byte `RIGHT\n` event through a private FIFO. The guest reads that
+event and draws a second frame with the cursor at column 3. The wrapper reads the
+second frame only after the guest exits and emits its matching-token completion.
+The UI transcript is bounded to 3072 ASCII bytes (including full frame hex).
+The Python host compares both complete observed byte arrays with an independent
+pixel oracle, then hashes the observed bytes. A log line or declared digest alone
+cannot satisfy this acceptance. No fixed sleep is used for readiness.
+
+All paths, modes, payloads, geometry and commands are fixed. The existing
+network/IPC isolation, unprivileged UID, tmpfs, CPU/memory/PID limits, TERM/KILL and
+outer deadlines, exact artifact rehashes, container ownership and quarantine
+remain in force. Wrapper waits reap its owned child; FIFO/frame unlinking is
+checked before exit. Container removal releases all writable tmpfs including
+private diagnostics. Small host metadata remains intentionally retained.
+Foreign session reuse, deadline, failed child and partial cleanup refusals reuse
+the existing runtime controls; policy regressions simulate Docker. The six UI
+scenarios in the session workflow execute real QEMU.
+
+`firmware-free-mips32le-synthetic-ui/v1` binds source, measured ELF, pinned QEMU,
+fixed input, per-session token, frame geometry/digests, event/guest exit, inspected
+isolation and cleanup. Deterministic fields are separate from random session
+tokens. `synthetic_ui.parse_receipt` bounds JSON and rejects duplicate keys;
+`validate_receipt` rejects incomplete/contradictory observations and cleanup.
+Portable receipts are explicitly unauthenticated. Authenticity requires checking
+the actual run provenance and measured artifacts independently.
+
+This models a private regular-file framebuffer and one logical key, without
+LVGL, fonts, vendor assets, stock drivers/ioctls, touchscreen or hardware claims.
+It completes only the firmware-free M2-06 fixture, subject to exact-head hosted
+acceptance. M2 as a whole remains open; M1-04 is NOT RUN / UNVERIFIED. It grants
+no `verified-emulator` or `verified-device` firmware compatibility status.

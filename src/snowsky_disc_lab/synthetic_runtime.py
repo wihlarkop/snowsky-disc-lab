@@ -21,6 +21,7 @@ from typing import Any
 
 from . import synthetic_ipc_handoff as ipc_handoff
 from . import synthetic_ipc_supervision as ipc_supervision
+from . import synthetic_ui
 
 BASE_IMAGE = (
     "docker.io/library/debian:12@sha256:"
@@ -567,6 +568,12 @@ def _verify_inputs(inputs: Path, evidence: dict[str, Any]) -> dict[str, str]:
     supervision_guest = evidence.get("synthetic_ipc_supervision_guest", {})
     if supervision_guest.get("source", {}).get("sha256") != ipc_supervision.GUEST_SOURCE_SHA256:
         raise RuntimeRefused("POSIX supervision source identity is not the reviewed fixture")
+    ui_guest = evidence.get("synthetic_ui_guest")
+    if (
+        ui_guest is not None
+        and ui_guest.get("source", {}).get("sha256") != synthetic_ui.GUEST_SOURCE_SHA256
+    ):
+        raise RuntimeRefused("synthetic UI source identity is not reviewed")
     qemu = [item for item in evidence.get("artifacts", []) if item.get("name") == "qemu-mipsel"]
     if len(qemu) != 1 or qemu[0].get("sha256") != QEMU_SHA256:
         raise RuntimeRefused("QEMU identity is not the reviewed interpreter")
@@ -577,6 +584,8 @@ def _verify_inputs(inputs: Path, evidence: dict[str, Any]) -> dict[str, str]:
         ipc_handoff.GUEST_ELF: handoff_guest.get("elf", {}).get("sha256", ""),
         ipc_supervision.GUEST_ELF: supervision_guest.get("elf", {}).get("sha256", ""),
     }
+    if ui_guest is not None:
+        expected[synthetic_ui.GUEST_ELF] = ui_guest.get("elf", {}).get("sha256", "")
     if not inputs.is_dir() or {entry.name for entry in inputs.iterdir()} != set(expected):
         raise RuntimeRefused("unexpected runtime inputs")
     for name, sha256 in expected.items():
@@ -779,25 +788,20 @@ def container_args(inputs: Path, rootfs: Path, token: str, case: str) -> list[st
         args += ["--tmpfs", f"{target}:{options}"]
     for source, target in ((inputs, "/inputs"), (rootfs, "/synthetic-rootfs")):
         args += ["--mount", f"type=bind,src={source},dst={target},readonly"]
-    return [*args, BASE_IMAGE, "/bin/bash", "-euc", COMMAND, "--", case]
+    command = COMMAND
+    if case in synthetic_ui.CASES:
+        command = COMMAND.replace(
+            "ulimit -f 64\n",
+            "ulimit -f 64\n" + synthetic_ui.COMMAND.replace("__UI_SESSION_TOKEN__", token),
+        )
+    return [*args, BASE_IMAGE, "/bin/bash", "-euc", command, "--", case]
 
 
 def validate_container(
     item: dict[str, Any], inputs: Path, rootfs: Path, token: str, args: list[str]
 ) -> dict[str, Any]:
     host, config = item.get("HostConfig", {}), item.get("Config", {})
-    required = {
-        "NetworkMode": "none",
-        "CapDrop": ["ALL"],
-        "ReadonlyRootfs": True,
-        "Privileged": False,
-        "Memory": 256 * 1024**2,
-        "MemorySwap": 256 * 1024**2,
-        "NanoCpus": 1_000_000_000,
-        "PidsLimit": 16,
-        "IpcMode": "none",
-        "Tmpfs": TMPFS,
-    }
+    required = _isolation_profile()["verified_host_config"]
     if (
         not _owned(item, token)
         or any(host.get(key) != value for key, value in required.items())
@@ -855,6 +859,23 @@ def validate_container(
             raise RuntimeRefused("unexpected runtime mount")
     if not set(expected) <= seen:
         raise RuntimeRefused("required runtime mount missing")
+    return _isolation_profile()
+
+
+def _isolation_profile() -> dict[str, Any]:
+    """Canonical inspected metadata; portable receipts must match all fields."""
+    required = {
+        "NetworkMode": "none",
+        "CapDrop": ["ALL"],
+        "ReadonlyRootfs": True,
+        "Privileged": False,
+        "Memory": 256 * 1024**2,
+        "MemorySwap": 256 * 1024**2,
+        "NanoCpus": 1_000_000_000,
+        "PidsLimit": 16,
+        "IpcMode": "none",
+        "Tmpfs": TMPFS,
+    }
     return {
         "mounts": [
             {"source": "<verified-execution-inputs>", "target": "/inputs", "read_only": True},
@@ -903,8 +924,11 @@ def launch(
         "mqueue-second",
         "ipc-handoff",
         "ipc-supervision",
+        *synthetic_ui.CASES,
     }:
         raise RuntimeRefused("unknown first-party synthetic case")
+    if _case in synthetic_ui.CASES and "synthetic_ui_guest" not in build_evidence:
+        raise RuntimeRefused("synthetic UI guest build evidence is required")
     identities = _verify_inputs(inputs, build_evidence)
     inputs, store = _safe_path(inputs), _safe_path(store)
     store.mkdir(mode=0o700, parents=True, exist_ok=True)
@@ -965,6 +989,9 @@ def launch(
         receipt["isolation"] = validate_container(
             _inspect(container_id), inputs, rootfs, token, args
         )
+        if _case in synthetic_ui.CASES:
+            # Complete frame bytes are exported as bounded hex for host verification.
+            receipt["isolation"]["stdout_limit_bytes"] = 3072
         # Recheck immutable artifacts immediately before start.
         _verify_inputs(inputs, build_evidence)
         _verify_layout(rootfs)
@@ -986,6 +1013,7 @@ def launch(
             "mqueue-second": 0,
             "ipc-handoff": 0,
             "ipc-supervision": 0,
+            **dict.fromkeys(synthetic_ui.CASES, 0),
         }[_case]
         expected_output = {
             "filesystem": EXPECTED_OUTPUT,
@@ -995,7 +1023,19 @@ def launch(
             "mqueue-second": MQUEUE_SECOND_OUTPUT,
             "ipc-handoff": ipc_handoff.EXPECTED_CONTAINER_OUTPUT,
             "ipc-supervision": None,
+            **dict.fromkeys(synthetic_ui.CASES),
         }[_case]
+        if _case in synthetic_ui.CASES:
+            observations = synthetic_ui.parse_execution_output(result.stdout, _case, token)
+            receipt["execution"] = {
+                "exit_code": result.returncode,
+                "duration_seconds": elapsed,
+                "stdout_sha256": hashlib.sha256(result.stdout.encode()).hexdigest(),
+                "stdout_bytes": len(result.stdout.encode()),
+                "timed_out": False,
+                "terminated": state.get("Running") is False,
+                "ui": observations,
+            }
         if _case == "ipc-handoff":
             handoff_observations = ipc_handoff.parse_execution_output(result.stdout)
             receipt["execution"] = {
@@ -1062,10 +1102,17 @@ def launch(
             or state.get("OOMKilled") is not False
             or state.get("ExitCode") != expected_code
             or result.returncode != expected_code
-            or (_case != "ipc-supervision" and result.stdout != expected_output)
+            or (
+                _case not in {"ipc-supervision", *synthetic_ui.CASES}
+                and result.stdout != expected_output
+            )
         ):
             raise RuntimeRefused("guest output, exit or termination differs from the fixed case")
-        if not _case.startswith("mqueue-") and _case not in {"ipc-handoff", "ipc-supervision"}:
+        if not _case.startswith("mqueue-") and _case not in {
+            "ipc-handoff",
+            "ipc-supervision",
+            *synthetic_ui.CASES,
+        }:
             receipt["execution"] = {
                 "exit_code": result.returncode,
                 "duration_seconds": elapsed,
@@ -1394,6 +1441,11 @@ def acceptance(inputs: Path, evidence: dict[str, Any], store: Path) -> dict[str,
     mqueue_receipt = posix_mqueue_acceptance(inputs, evidence, store)
     handoff_receipt = ipc_handoff.acceptance(inputs, evidence, store)
     supervision_receipt = ipc_supervision.acceptance(inputs, evidence, store)
+    ui_receipt = (
+        synthetic_ui.acceptance(inputs, evidence, store)
+        if "synthetic_ui_guest" in evidence
+        else None
+    )
     return {
         "schema_version": "firmware-free-synthetic-runtime-acceptance/v1",
         "status": "passed",
@@ -1423,5 +1475,6 @@ def acceptance(inputs: Path, evidence: dict[str, Any], store: Path) -> dict[str,
         "posix_mqueue": mqueue_receipt,
         "synthetic_ipc_handoff": handoff_receipt,
         "synthetic_ipc_supervision": supervision_receipt,
+        "synthetic_ui": ui_receipt,
         "unsupported_or_unverified": first["unsupported_or_unverified"],
     }
