@@ -12,6 +12,7 @@ from rich.table import Table
 from rich.text import Text
 
 from snowsky_disc_lab.compat_compare import CompatibilityComparisonError, compare_reports
+from snowsky_disc_lab.compat_diagnostics import diagnose_regressions
 from snowsky_disc_lab.compat_evidence import (
     MAX_RECEIPT_BYTES,
     CompatibilityEvidenceError,
@@ -448,7 +449,9 @@ def _compat_markdown_text(value: str) -> str:
     return rendered
 
 
-def _render_compat_comparison_markdown(comparison: dict, earlier: dict, later: dict) -> str:
+def _render_compat_comparison_markdown(
+    comparison: dict, earlier: dict, later: dict, diagnostics: dict | None = None
+) -> str:
     lines = [
         "# Compatibility comparison",
         "",
@@ -512,6 +515,35 @@ def _render_compat_comparison_markdown(comparison: dict, earlier: dict, later: d
             rendered = json.dumps(value, ensure_ascii=True, sort_keys=True, separators=(",", ":"))
             lines.append(f"- `{_compat_markdown_text(name)}`: `{_compat_markdown_text(rendered)}`")
         lines.append("")
+    if diagnostics is not None:
+        lines.extend(
+            [
+                "Regression diagnostics (v1):",
+                "",
+                f"- Status: {diagnostics['status']}",
+                f"- Conditions match: {'yes' if diagnostics['conditions_match'] else 'no'}",
+                "",
+                "| Scenario | Earlier | Later | Domain | Reason |",
+                "| --- | --- | --- | --- | --- |",
+            ]
+        )
+        if diagnostics["regressions"]:
+            for item in diagnostics["regressions"]:
+                lines.append(
+                    "| {} | {} | {} | {} | {} |".format(
+                        _compat_markdown_text(item["scenario"]),
+                        item["before"],
+                        item["after"],
+                        item["domain"],
+                        _compat_markdown_text(item["reason"]),
+                    )
+                )
+        else:
+            lines.append("| — | — | — | — | No comparable PASS-to-FAIL regressions |")
+        if "reason" in diagnostics:
+            lines.append("")
+            lines.append(f"- Diagnostic limit: {_compat_markdown_text(diagnostics['reason'])}")
+        lines.append("")
     lines.extend(
         [
             "Limitations:",
@@ -530,12 +562,16 @@ def compatibility_compare(
     earlier_path: Annotated[Path, typer.Argument(help="Earlier sanitized receipt JSON file.")],
     later_path: Annotated[Path, typer.Argument(help="Later sanitized receipt JSON file.")],
     output_format: Annotated[Literal["json", "markdown"], typer.Option("--format")] = "markdown",
+    with_diagnostics: Annotated[
+        bool, typer.Option("--diagnostics", help="Include versioned regression domain diagnostics.")
+    ] = False,
 ) -> None:
     """Compare exactly two local sanitized receipts without promoting support."""
     try:
         earlier = _read_comparison_receipt(earlier_path, "earlier")
         later = _read_comparison_receipt(later_path, "later")
         comparison = compare_reports(earlier, later)
+        diagnostics = diagnose_regressions(earlier, later) if with_diagnostics else None
     except (ValueError, CompatibilityComparisonError) as error:
         # Input paths and parser details can contain untrusted or private text.
         errors.print(f"Compatibility comparison refused: {error}.", markup=False, highlight=False)
@@ -545,7 +581,11 @@ def compatibility_compare(
         "earlier": earlier["artifacts"],
         "later": later["artifacts"],
     }
+    if diagnostics is not None:
+        comparison["diagnostics"] = diagnostics
     if output_format == "json":
         typer.echo(json.dumps(comparison, ensure_ascii=True, sort_keys=True, indent=2))
         return
-    typer.echo(_render_compat_comparison_markdown(comparison, earlier, later), nl=False)
+    typer.echo(
+        _render_compat_comparison_markdown(comparison, earlier, later, diagnostics), nl=False
+    )
