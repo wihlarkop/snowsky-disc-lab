@@ -1,0 +1,256 @@
+{
+  "$defs": {
+    "BuildInput": {
+      "additionalProperties": false,
+      "properties": {
+        "name": {
+          "maxLength": 64,
+          "minLength": 1,
+          "title": "Name",
+          "type": "string"
+        },
+        "sha256": {
+          "pattern": "^[0-9a-f]{64}$",
+          "title": "Sha256",
+          "type": "string"
+        },
+        "version": {
+          "maxLength": 64,
+          "minLength": 1,
+          "title": "Version",
+          "type": "string"
+        }
+      },
+      "required": [
+        "name",
+        "version",
+        "sha256"
+      ],
+      "title": "BuildInput",
+      "type": "object"
+    },
+    "BuildRecipe": {
+      "additionalProperties": false,
+      "properties": {
+        "recipeId": {
+          "pattern": "^[a-z][a-z0-9-]{0,47}$",
+          "title": "Recipeid",
+          "type": "string"
+        },
+        "reviewReference": {
+          "maxLength": 256,
+          "minLength": 1,
+          "title": "Reviewreference",
+          "type": "string"
+        },
+        "reviewStatus": {
+          "enum": [
+            "reviewed",
+            "unreviewed"
+          ],
+          "title": "Reviewstatus",
+          "type": "string"
+        },
+        "revision": {
+          "pattern": "^[0-9a-f]{40}$",
+          "title": "Revision",
+          "type": "string"
+        }
+      },
+      "required": [
+        "recipeId",
+        "revision",
+        "reviewReference",
+        "reviewStatus"
+      ],
+      "title": "BuildRecipe",
+      "type": "object"
+    },
+    "ExpectedOutput": {
+      "additionalProperties": false,
+      "properties": {
+        "path": {
+          "maxLength": 512,
+          "minLength": 1,
+          "title": "Path",
+          "type": "string"
+        },
+        "sha256": {
+          "pattern": "^[0-9a-f]{64}$",
+          "title": "Sha256",
+          "type": "string"
+        }
+      },
+      "required": [
+        "path",
+        "sha256"
+      ],
+      "title": "ExpectedOutput",
+      "type": "object"
+    },
+    "GitSource": {
+      "additionalProperties": false,
+      "properties": {
+        "commit": {
+          "pattern": "^[0-9a-f]{40}$",
+          "title": "Commit",
+          "type": "string"
+        },
+        "manifestSha256": {
+          "pattern": "^[0-9a-f]{64}$",
+          "title": "Manifestsha256",
+          "type": "string"
+        },
+        "mode": {
+          "const": "git",
+          "title": "Mode",
+          "type": "string"
+        },
+        "provenance": {
+          "$ref": "#/$defs/SourceProvenance"
+        },
+        "repository": {
+          "maxLength": 256,
+          "title": "Repository",
+          "type": "string"
+        },
+        "sourceId": {
+          "pattern": "^[a-z][a-z0-9-]{0,47}$",
+          "title": "Sourceid",
+          "type": "string"
+        }
+      },
+      "required": [
+        "mode",
+        "sourceId",
+        "repository",
+        "commit",
+        "provenance",
+        "manifestSha256"
+      ],
+      "title": "GitSource",
+      "type": "object"
+    },
+    "LocalSource": {
+      "additionalProperties": false,
+      "properties": {
+        "manifestSha256": {
+          "pattern": "^[0-9a-f]{64}$",
+          "title": "Manifestsha256",
+          "type": "string"
+        },
+        "mode": {
+          "const": "local",
+          "title": "Mode",
+          "type": "string"
+        },
+        "projection": {
+          "items": {
+            "maxLength": 512,
+            "minLength": 1,
+            "type": "string"
+          },
+          "maxItems": 128,
+          "minItems": 1,
+          "title": "Projection",
+          "type": "array"
+        },
+        "provenance": {
+          "$ref": "#/$defs/SourceProvenance"
+        },
+        "sourceId": {
+          "pattern": "^[a-z][a-z0-9-]{0,47}$",
+          "title": "Sourceid",
+          "type": "string"
+        }
+      },
+      "required": [
+        "mode",
+        "sourceId",
+        "provenance",
+        "projection",
+        "manifestSha256"
+      ],
+      "title": "LocalSource",
+      "type": "object"
+    },
+    "SourceProvenance": {
+      "additionalProperties": false,
+      "properties": {
+        "reference": {
+          "maxLength": 256,
+          "minLength": 1,
+          "title": "Reference",
+          "type": "string"
+        },
+        "reviewedOn": {
+          "pattern": "^\\d{4}-\\d{2}-\\d{2}$",
+          "title": "Reviewedon",
+          "type": "string"
+        }
+      },
+      "required": [
+        "reference",
+        "reviewedOn"
+      ],
+      "title": "SourceProvenance",
+      "type": "object"
+    }
+  },
+  "additionalProperties": false,
+  "properties": {
+    "apiVersion": {
+      "const": "lab-ui-source-mode/v1",
+      "title": "Apiversion",
+      "type": "string"
+    },
+    "inputs": {
+      "items": {
+        "$ref": "#/$defs/BuildInput"
+      },
+      "maxItems": 64,
+      "minItems": 1,
+      "title": "Inputs",
+      "type": "array"
+    },
+    "kind": {
+      "const": "UISourceModePlan",
+      "title": "Kind",
+      "type": "string"
+    },
+    "output": {
+      "$ref": "#/$defs/ExpectedOutput"
+    },
+    "recipe": {
+      "$ref": "#/$defs/BuildRecipe"
+    },
+    "source": {
+      "discriminator": {
+        "mapping": {
+          "git": "#/$defs/GitSource",
+          "local": "#/$defs/LocalSource"
+        },
+        "propertyName": "mode"
+      },
+      "oneOf": [
+        {
+          "$ref": "#/$defs/LocalSource"
+        },
+        {
+          "$ref": "#/$defs/GitSource"
+        }
+      ],
+      "title": "Source"
+    }
+  },
+  "required": [
+    "apiVersion",
+    "kind",
+    "source",
+    "recipe",
+    "inputs",
+    "output"
+  ],
+  "title": "SourceModePlan",
+  "type": "object"
+}

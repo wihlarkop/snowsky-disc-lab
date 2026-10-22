@@ -1,0 +1,69 @@
+{
+  "additionalProperties": false,
+  "properties": {
+    "apiVersion": {
+      "const": "lab-ui-build-record/v1",
+      "title": "Apiversion",
+      "type": "string"
+    },
+    "authentication": {
+      "const": "NOT RUN",
+      "title": "Authentication",
+      "type": "string"
+    },
+    "execution": {
+      "const": "NOT RUN",
+      "title": "Execution",
+      "type": "string"
+    },
+    "kind": {
+      "const": "UIBuildRecord",
+      "title": "Kind",
+      "type": "string"
+    },
+    "launchAuthorized": {
+      "const": false,
+      "title": "Launchauthorized",
+      "type": "boolean"
+    },
+    "outputSha256": {
+      "pattern": "^[0-9a-f]{64}$",
+      "title": "Outputsha256",
+      "type": "string"
+    },
+    "planSha256": {
+      "pattern": "^[0-9a-f]{64}$",
+      "title": "Plansha256",
+      "type": "string"
+    },
+    "recipeRevision": {
+      "pattern": "^[0-9a-f]{40}$",
+      "title": "Reciperevision",
+      "type": "string"
+    },
+    "reproducibility": {
+      "const": "NOT MEASURED",
+      "title": "Reproducibility",
+      "type": "string"
+    },
+    "sourceManifestSha256": {
+      "pattern": "^[0-9a-f]{64}$",
+      "title": "Sourcemanifestsha256",
+      "type": "string"
+    }
+  },
+  "required": [
+    "apiVersion",
+    "kind",
+    "planSha256",
+    "sourceManifestSha256",
+    "recipeRevision",
+    "outputSha256",
+    "execution",
+    "reproducibility",
+    "authentication",
+    "launchAuthorized"
+  ],
+  "title": "BuildRecord",
+  "type": "object"
+}
