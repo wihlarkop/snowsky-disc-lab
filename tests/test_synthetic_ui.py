@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import copy
 import hashlib
+import json
 import subprocess
 from pathlib import Path
 
@@ -180,3 +181,39 @@ def test_ui_guest_missing_or_source_mismatch_refuses_before_container_start(inpu
 def test_portable_receipt_rejects_duplicate_malformed_missing_and_oversized_data(data):
     with pytest.raises(ValueError):
         ui.parse_receipt(data)
+
+
+def test_complete_cleanup_contract_rejects_extra_missing_contradictory_and_wrong_types(
+    inputs, tmp_path, monkeypatch
+):
+    directory, evidence = stage_ui(inputs)
+    monkeypatch.setattr(runtime, "_docker", UIDocker())
+    receipt = ui.acceptance(directory, evidence, tmp_path / "store")
+    cleanup = receipt["sessions"][0]["cleanup"]
+    assert cleanup == {
+        "container_removed": True,
+        "container_stopped": True,
+        "ownership_verified_before_removal": True,
+        "container_stop_command": "not-needed",
+        "private_tmpfs_released": True,
+        "host_metadata": "retained; no recursive cleanup",
+    }
+    assert ui.parse_receipt(json.dumps(receipt).encode()) == receipt
+    invalid_cleanups = [{**cleanup, "unknown": True}, None, [], "removed", True, 1]
+    for key, expected in cleanup.items():
+        missing = dict(cleanup)
+        missing.pop(key)
+        invalid_cleanups.append(missing)
+        wrong_values = (
+            [False, 1, 1.0, "true", None, [], {}]
+            if type(expected) is bool
+            else ["unexpected", "", False, 0, None, [], {}]
+        )
+        invalid_cleanups.extend({**cleanup, key: value} for value in wrong_values)
+    for invalid_cleanup in invalid_cleanups:
+        invalid = copy.deepcopy(receipt)
+        invalid["sessions"][0]["cleanup"] = invalid_cleanup
+        with pytest.raises(ValueError, match="cleanup"):
+            ui.validate_receipt(invalid)
+        with pytest.raises(ValueError, match="invalid synthetic UI evidence"):
+            ui.parse_receipt(json.dumps(invalid).encode())

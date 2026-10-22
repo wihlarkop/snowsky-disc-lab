@@ -191,20 +191,23 @@ def validate_receipt(receipt: Any) -> None:
         ):
             raise ValueError("unsafe or contradictory synthetic UI isolation")
         cleanup = session["cleanup"]
+        expected_cleanup = {
+            "container_removed": True,
+            "container_stopped": True,
+            "ownership_verified_before_removal": True,
+            "container_stop_command": "not-needed",
+            "private_tmpfs_released": True,
+            "host_metadata": "retained; no recursive cleanup",
+        }
         if (
             not isinstance(cleanup, dict)
-            or cleanup.get("container_stop_command") != "not-needed"
+            or set(cleanup) != set(expected_cleanup)
             or any(
-                cleanup.get(key) is not True
-                for key in (
-                    "container_removed",
-                    "container_stopped",
-                    "ownership_verified_before_removal",
-                    "private_tmpfs_released",
-                )
+                type(cleanup[key]) is not type(expected) or cleanup[key] != expected
+                for key, expected in expected_cleanup.items()
             )
         ):
-            raise ValueError("partial synthetic UI cleanup")
+            raise ValueError("invalid or contradictory synthetic UI cleanup")
 
 
 def acceptance(inputs: Path, evidence: dict[str, Any], store: Path) -> dict[str, Any]:
