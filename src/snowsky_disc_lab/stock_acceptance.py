@@ -67,7 +67,7 @@ class Identities(Contract):
     """Exact tuple, with unknowns explicit and no aliases across original/overlay."""
 
     firmware_version: Literal["2.57"]
-    package: ArtifactIdentity
+    package: ArtifactIdentity  # Complete original ZIP bytes, never an intake inventory digest.
     rootfs_image: ArtifactIdentity
     rootfs_overlay: ArtifactIdentity
     original_mq_ui: ArtifactIdentity

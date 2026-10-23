@@ -89,7 +89,10 @@ model/parser. JSON Schema validation alone does not accept an evidence report.
 The exact identity tuple has explicit package, original rootfs image, runtime
 rootfs overlay inventory, original stock UI/player, runtime player, runner source,
 runner binary/patch, shim inventory, runtime image and sanitized host/toolchain
-inventory SHA-256 fields. Inventory digests must identify complete canonical
+inventory SHA-256 fields. `package` means the SHA-256 of the complete original
+owner-supplied ZIP bytes. It is not the intake receipt's sorted-inventory
+`package_sha256`; those two identities must never be substituted.
+Inventory digests must identify complete canonical
 inventories; they must not be substituted with one unspecified shim or a mutable
 tag. Unknowns are null with `unmeasured` provenance. Supplied values remain
 `declared-unverified`; a digest establishes identity, not vendor authenticity.
