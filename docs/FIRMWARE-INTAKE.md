@@ -84,6 +84,8 @@ The upstream profile declares product `SNOWSKY_DISC`, main/recovery 257/18, 77 r
 | `rootfs_reference_*` | Upstream reference only, not a measured plaintext rootfs identity. |
 | `may_proceed` / authorization fields | Always false; future stage/compatibility approval is not implemented. |
 
+Receipt parsing also checks cross-field semantics. An `accepted` intake must include the complete V2.57 structure and ordered 77 chunk records, consistent manifest digests and counters, the exact bundled reference identity, fixed inspection limits, and the required condition states. A `refused` receipt may contain partial observations but must include a rejection and cannot claim verified structure. Revalidating an existing model instance catches mutation of its nested lists. Workspace staging and finalization compare the complete receipt from the candidate with a fresh inspection of the snapshot; matching only the package digest is insufficient. Workspace receipt JSON rejects duplicate object keys. These checks bind reported observations to the local bytes; they do not authenticate the vendor or grant authority.
+
 ## M1-03 — private workspace preparation
 
 The separate `disc-lab firmware workspace` group creates a bounded, ignored local snapshot after a fresh M1-02 inspection. It keeps inspection separate from extraction:
@@ -148,4 +150,28 @@ On Windows/Python 3.14, the final firmware-free suite passed **195 tests, with 3
 
 Actual CLI process checks accepted generated directory/ZIP samples with 77 chunks and false authority fields, and refused a missing synthetic path with exit 2/valid JSON. A built first-party wheel loaded the pinned reference through package resources and exercised the refusal CLI. All three existing upstream projections passed offline source verification; source locks/manager, manifest models/schemas, dependencies and existing CI definitions were preserved. Hosted Linux/Windows PR checks provide separate exact-head evidence; these local results do not claim Linux runtime, firmware or hardware acceptance.
 
-No actual firmware was acquired or inspected, no proprietary payload was extracted/decrypted/modified/executed, and no upstream setup, QEMU, Docker runtime, USB, flashing or external UI was invoked. No package was published; Lab licensing and build reproducibility remain unresolved release gates.
+During the original foundation verification, no actual firmware was acquired or inspected, no proprietary payload was extracted/decrypted/modified/executed, and no upstream setup, QEMU, Docker runtime, USB, flashing or external UI was invoked. The later read-only candidate inspection recorded below did not extract or execute firmware. No package was published; Lab licensing and build reproducibility remain unresolved release gates.
+
+## M1-02/M1-03 intake and M1-04 admission follow-up (2026-10-24)
+
+The owner-supplied V2.57 candidate was present and its filename, byte length and SHA-256 were recorded in a private local observation file. The existing `disc-lab firmware inspect --format json` workflow ran against it without modifying the candidate. It exited 2 with `status: refused`, `inspection_complete: false`, and the fixed code `zip_extra_fields_unsupported`. The inspector did not establish package versions, manifest membership or ciphertext chunk hashes. The full receipt and identity remain private. The unsupported ZIP metadata was not parsed or trusted, and the accepted ZIP subset was not widened.
+
+The intake boundary now validates accepted receipts against their measured structure, fixed M1-02 limits and pinned data-only V2.57 reference. Snapshot stage/finalize/verify require equality with the complete fresh intake receipt, including condition states, counters, limits and metadata/chunk identities. Workspace JSON also rejects duplicate keys. The workspace execution condition retains its v1 creation-state code as a historical diagnostic; the current workspace lifecycle state is validated separately. This closes a receipt consistency gap; it does not change the trust meaning of a structurally accepted package.
+
+### M1-04 admission checklist
+
+| Gate | Status | Supporting observation / remaining work |
+| --- | --- | --- |
+| Owner V2.57 ZIP present and privately identified | PASS | Candidate present; identity retained locally and omitted from shared output. |
+| Read-only bounded inspection executed | PASS | Existing inspector ran and left the candidate unchanged. |
+| Structural package acceptance | FAIL | Inspector refused admission under the reviewed subset with `zip_extra_fields_unsupported`; this does not establish that the package is malformed. No parser relaxation was made. |
+| Declared ciphertext/chunk hashes | NOT RUN | Inspection stopped before package structure and manifest checks. |
+| Vendor provenance/authenticity | BLOCKED | No reviewed vendor trust anchor, signed-byte scope or authenticated checksum policy. |
+| Extraction permission and reproducible extractor | BLOCKED | The five upstream extractor/profile/inventory source and data files are identified at a pinned commit but remain outside the managed source projection and need license review. OpenSSL and `squashfs-tools` package versions and `.deb` hashes are null; exact binaries are unmeasured. The Lab root license is unset and firmware-tool licensing is not cleared. See [M1 extraction toolchain readiness](M1-EXTRACTION-TOOLCHAIN-READINESS.md); bounded output/process controls and separate authorization also remain open. |
+| Rootfs and stock binary identities | NOT RUN | No decryption, extraction or binary measurement occurred. |
+| Firmware-free QEMU build and patch identities | PASS | Existing hosted Linux build/repeat evidence recorded in [M1-07](M1-07-WINDOWS-WSL2-VALIDATION.md) measured QEMU and shim identities and an identical clean repeat. |
+| Trusted isolated stock runtime | BLOCKED | The firmware-free build evidence does not establish a dedicated isolated runtime or stock boot; selected artifacts still need local rehash/review before any separately authorized stock run. |
+| Windows/WSL2 isolation | NOT RUN | No Windows/WSL2 extraction or stock runtime was attempted. |
+| Stock boot, input, PCM and lifecycle acceptance | NOT RUN | No stock firmware session was executed; synthetic evidence does not satisfy this gate. |
+
+M1-02 remains open because the candidate was refused by the reviewed subset and authenticity is unresolved. M1-03 remains open because no real firmware workspace was prepared and no extraction output exists. M1-04 remains **NOT RUN / UNVERIFIED**. The candidate result does not establish that the package is malformed; it establishes only that this inspector does not support its ZIP extra fields.

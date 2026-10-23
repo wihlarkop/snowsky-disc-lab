@@ -16,7 +16,7 @@ from contextlib import contextmanager
 from pathlib import Path
 from typing import IO, Literal
 
-from pydantic import BaseModel, ConfigDict, Field
+from pydantic import BaseModel, ConfigDict, Field, model_validator
 
 # M1-02/V2.57 policy, not universal vendor limits. No user-controlled overrides.
 MAX_ARCHIVE_BYTES = 1024**3
@@ -31,6 +31,7 @@ MAX_DEPTH = 12
 MAX_PATH_BYTES = 512
 MAX_SECONDS = 60
 BLOCK_BYTES = 64 * 1024
+_SHA256 = re.compile(r"^[0-9a-f]{64}$")
 
 CHUNK = re.compile(r"rootfs\.squashfs\.(\d{4})\.([a-f0-9]{64})\.enc")
 MANIFEST = re.compile(r"SHA256\(ota/(rootfs\.squashfs\.\d{4}\.[a-f0-9]{64}\.enc)\)= ([a-f0-9]{64})")
@@ -47,7 +48,9 @@ ARCHIVE_SUFFIXES = {".zip", ".gz", ".bz2", ".xz", ".7z", ".rar", ".tar", ".tgz"}
 
 
 class _Model(BaseModel):
-    model_config = ConfigDict(extra="forbid", frozen=True, strict=True)
+    model_config = ConfigDict(
+        extra="forbid", frozen=True, strict=True, revalidate_instances="always"
+    )
 
 
 class Condition(_Model):
@@ -112,6 +115,109 @@ class IntakeReceipt(_Model):
     execution_authorized: Literal[False] = False
     compatibility: Literal["unverified"] = "unverified"
     vendor_authenticity: Literal["unverified"] = "unverified"
+
+    @model_validator(mode="after")
+    def validate_receipt_semantics(self) -> IntakeReceipt:
+        """Keep the receipt's summary status bound to its measured evidence."""
+        conditions = {item.check: item for item in self.conditions}
+        if len(conditions) != len(self.conditions):
+            raise ValueError("duplicate intake condition")
+
+        if self.status == "refused":
+            if conditions.get("intake") is None or conditions["intake"].status != "rejected":
+                raise ValueError("refused intake lacks a rejection condition")
+            structure = conditions.get("structure_and_integrity")
+            if structure is None or structure.status != "unverified":
+                raise ValueError("refused intake claims structural acceptance")
+            return self
+
+        expected_conditions = {
+            "vendor_authenticity": ("unverified", "no_reviewed_trust_chain"),
+            "product": ("unverified", "not_observable_at_intake"),
+            "plaintext_rootfs": ("unverified", "decryption_not_performed"),
+            "stock_binaries": ("unverified", "extraction_not_performed"),
+            "chunk_length_consistency": ("unverified", "vendor_length_rule_unestablished"),
+            "signature_verification": ("unsupported", "trust_anchor_unresolved"),
+            "recovery_payload": ("unverified", "inventory_only"),
+            "md5_metadata": ("unsupported", "not_used_as_authenticity"),
+            "filename_hash_meaning": ("unverified", "not_ciphertext_assertion"),
+            "execution": ("unsupported", "outside_intake_scope"),
+            "input_safety": ("verified", "bounded_inventory"),
+            "structure_and_integrity": ("verified", "v257_indices_and_manifest_hashes"),
+        }
+        for name, (status, code) in expected_conditions.items():
+            condition = conditions.get(name)
+            if condition is None or (condition.status, condition.code) != (status, code):
+                raise ValueError("accepted intake has inconsistent conditions")
+        if set(conditions) != set(expected_conditions):
+            raise ValueError("accepted intake has unexpected conditions")
+        if not self.inspection_complete:
+            raise ValueError("accepted intake is incomplete")
+        if self.input_format not in {"zip", "directory"}:
+            raise ValueError("accepted intake has an unsupported input format")
+        if self.package_sha256 is None or _SHA256.fullmatch(self.package_sha256) is None:
+            raise ValueError("accepted intake has no package digest")
+        if self.input_format == "zip":
+            if self.archive_sha256 is None or _SHA256.fullmatch(self.archive_sha256) is None:
+                raise ValueError("accepted ZIP intake has no archive digest")
+        elif self.archive_sha256 is not None:
+            raise ValueError("accepted directory intake has an archive digest")
+        from snowsky_disc_lab.firmware_reference import load_reference
+
+        reference = load_reference()
+        expected_limits = {
+            "archive_bytes": MAX_ARCHIVE_BYTES,
+            "total_uncompressed_bytes": MAX_TOTAL_BYTES,
+            "entries": MAX_ENTRIES,
+            "member_bytes": MAX_MEMBER_BYTES,
+            "rootfs_chunk_bytes": MAX_CHUNK_BYTES,
+            "metadata_bytes": MAX_METADATA_BYTES,
+            "compression_ratio": MAX_COMPRESSION_RATIO,
+            "central_directory_bytes": MAX_DIRECTORY_BYTES,
+            "path_bytes": MAX_PATH_BYTES,
+            "path_depth": MAX_DEPTH,
+            "cooperative_seconds": MAX_SECONDS,
+        }
+        if (
+            self.package_digest_algorithm != "sha256-lab-sorted-file-inventory-v1"
+            or self.reference_product != reference.metadata.product
+            or self.reference_id != "v257-upstream-metadata"
+            or self.reference_source_commit != reference.metadata.upstream.commit
+            or self.reference_sha256 != reference.sha256
+            or self.rootfs_reference_sha256 != reference.metadata.rootfs_sha256
+            or self.rootfs_reference_bytes != reference.metadata.rootfs_size
+            or self.expected_chunk_count != reference.metadata.rootfs_chunks
+            or self.limits != expected_limits
+        ):
+            raise ValueError("accepted intake differs from the pinned V2.57 reference")
+        if set(self.metadata_hashes) not in (
+            {"ota_config", "main_manifest"},
+            {"ota_config", "main_manifest", "main_signature"},
+        ) or any(_SHA256.fullmatch(value) is None for value in self.metadata_hashes.values()):
+            raise ValueError("accepted intake has inconsistent metadata hashes")
+        if (
+            self.observed_main != self.expected_main
+            or self.observed_recovery != self.expected_recovery
+            or self.expected_chunk_count != 77
+            or self.chunk_count != 77
+            or len(self.chunks) != 77
+            or self.inspected_files < 79
+            or self.inspected_files > self.limits["entries"]
+            or self.inspected_bytes < sum(chunk.size for chunk in self.chunks)
+            or self.inspected_bytes > self.limits["total_uncompressed_bytes"]
+        ):
+            raise ValueError("accepted intake has incomplete V2.57 identity evidence")
+        for index, chunk in enumerate(self.chunks):
+            if (
+                chunk.index != index
+                or not 0 < chunk.size <= MAX_CHUNK_BYTES
+                or _SHA256.fullmatch(chunk.sha256) is None
+                or _SHA256.fullmatch(chunk.manifest_sha256) is None
+                or chunk.sha256 != chunk.manifest_sha256
+                or _SHA256.fullmatch(chunk.filename_hash) is None
+            ):
+                raise ValueError("accepted intake has inconsistent chunk evidence")
+        return self
 
 
 class Refusal(ValueError):

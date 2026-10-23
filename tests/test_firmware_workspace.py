@@ -119,6 +119,70 @@ def test_snapshot_mismatch_is_quarantined_and_retained(tmp_path: Path) -> None:
     assert manager.list()[0].state == "quarantined"
 
 
+def test_finalize_refuses_a_semantically_valid_but_rebound_intake_receipt(
+    tmp_path: Path,
+) -> None:
+    candidate = _package(tmp_path / "synthetic-package")
+    manager = FirmwareWorkspaceManager(tmp_path / "private-store")
+    staged = manager.stage(candidate)
+    assert staged.operation_status == "accepted"
+    workspace = manager.root / "staging" / str(staged.workspace_id)
+    receipt_path = workspace / "workspace.json"
+    payload = json.loads(receipt_path.read_text(encoding="utf-8"))
+    payload["intake"]["metadata_hashes"]["ota_config"] = "0" * 64
+    canonical_intake = json.dumps(
+        payload["intake"], ensure_ascii=True, sort_keys=True, separators=(",", ":")
+    ).encode("ascii")
+    payload["intake_receipt_sha256"] = hashlib.sha256(canonical_intake).hexdigest()
+    receipt_path.chmod(0o600)
+    receipt_path.write_text(json.dumps(payload), encoding="utf-8")
+
+    result = manager.finalize(staged.workspace_id or "")
+
+    assert result.operation_status == "refused"
+    assert result.state == "quarantined"
+    assert any(condition.code == "workspace_snapshot_mismatch" for condition in result.conditions)
+    assert (manager.root / "quarantine" / str(staged.workspace_id)).is_dir()
+
+
+def test_workspace_loader_refuses_duplicate_json_receipt_keys(tmp_path: Path) -> None:
+    candidate = _package(tmp_path / "synthetic-package")
+    manager = FirmwareWorkspaceManager(tmp_path / "private-store")
+    staged = manager.stage(candidate)
+    workspace = manager.root / "staging" / str(staged.workspace_id)
+    receipt_path = workspace / "workspace.json"
+    raw = receipt_path.read_text(encoding="utf-8")
+    raw = raw.replace(
+        '"operation_status": "accepted"',
+        '"operation_status": "accepted", "operation_status": "refused"',
+        1,
+    )
+    receipt_path.chmod(0o600)
+    receipt_path.write_text(raw, encoding="utf-8")
+
+    result = manager.finalize(staged.workspace_id or "")
+
+    assert result.operation_status == "refused"
+    assert result.state == "quarantined"
+    assert any(condition.code == "workspace_receipt_invalid" for condition in result.conditions)
+
+
+def test_workspace_loader_refuses_deeply_nested_receipt_json(tmp_path: Path) -> None:
+    candidate = _package(tmp_path / "synthetic-package")
+    manager = FirmwareWorkspaceManager(tmp_path / "private-store")
+    staged = manager.stage(candidate)
+    workspace = manager.root / "staging" / str(staged.workspace_id)
+    receipt_path = workspace / "workspace.json"
+    receipt_path.chmod(0o600)
+    receipt_path.write_text('{"payload":' + "[" * 1100 + "0" + "]" * 1100 + "}")
+
+    result = manager.finalize(staged.workspace_id or "")
+
+    assert result.operation_status == "refused"
+    assert result.state == "quarantined"
+    assert any(condition.code == "workspace_receipt_invalid" for condition in result.conditions)
+
+
 def test_cleanup_refuses_to_remove_retained_input_or_finalized_workspace(tmp_path: Path) -> None:
     candidate = _package(tmp_path / "synthetic-package")
     manager = FirmwareWorkspaceManager(tmp_path / "private-store")

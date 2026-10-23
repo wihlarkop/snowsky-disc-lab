@@ -24,7 +24,14 @@ from datetime import UTC, datetime
 from pathlib import Path
 from typing import Annotated, Literal
 
-from pydantic import BaseModel, ConfigDict, Field, StringConstraints, ValidationError
+from pydantic import (
+    BaseModel,
+    ConfigDict,
+    Field,
+    StringConstraints,
+    ValidationError,
+    model_validator,
+)
 
 from snowsky_disc_lab.firmware_intake import (
     MAX_ARCHIVE_BYTES,
@@ -88,8 +95,19 @@ _ROOT_LAYOUT = ("staging", "workspaces", "quarantine")
 _SAFE_WORKSPACE_COMPONENTS = re.compile(r"^[A-Za-z0-9_-][A-Za-z0-9_.-]*$")
 
 
+def _unique_json_object(pairs: list[tuple[str, object]]) -> dict[str, object]:
+    result: dict[str, object] = {}
+    for key, value in pairs:
+        if key in result:
+            raise ValueError("duplicate JSON key")
+        result[key] = value
+    return result
+
+
 class _FrozenModel(BaseModel):
-    model_config = ConfigDict(extra="forbid", strict=True, frozen=True)
+    model_config = ConfigDict(
+        extra="forbid", strict=True, frozen=True, revalidate_instances="always"
+    )
 
 
 class WorkspaceReceipt(_FrozenModel):
@@ -116,6 +134,48 @@ class WorkspaceReceipt(_FrozenModel):
     execution_authorized: Literal[False] = False
     compatibility: Literal["unverified"] = "unverified"
     vendor_authenticity: Literal["unverified"] = "unverified"
+
+    @model_validator(mode="after")
+    def validate_accepted_binding(self) -> WorkspaceReceipt:
+        if self.operation_status != "accepted":
+            return self
+        if (
+            self.state not in {"staging", "publishing", "finalized"}
+            or self.workspace_id is None
+            or self.intake is None
+            or self.intake.status != "accepted"
+            or self.input_format != self.intake.input_format
+            or self.input_digest != self.intake.package_sha256
+            or self.input_digest is None
+            or self.firmware_id != f"sha256-{self.input_digest}"
+            or self.intake_receipt_sha256 != _canonical_receipt_digest(self.intake)
+        ):
+            raise ValueError("accepted workspace receipt is not bound to its intake receipt")
+        condition_map = {condition.check: condition for condition in self.conditions}
+        if len(condition_map) != len(self.conditions):
+            raise ValueError("accepted workspace receipt has duplicate conditions")
+        fixed_conditions = {
+            "vendor_authenticity": ("unverified", "no_reviewed_trust_chain"),
+            "compatibility": ("unverified", "runtime_not_tested"),
+            "extraction": ("unsupported", "outside_workspace_scope"),
+        }
+        for name, expected in fixed_conditions.items():
+            condition = condition_map.get(name)
+            if condition is None or (condition.status, condition.code) != expected:
+                raise ValueError("accepted workspace receipt contradicts its fixed trust gates")
+        execution = condition_map.get("execution")
+        if (
+            execution is None
+            or execution.status != "unsupported"
+            or execution.code
+            not in {
+                "workspace_state_staging",
+                "workspace_state_publishing",
+                "workspace_state_finalized",
+            }
+        ):
+            raise ValueError("accepted workspace receipt contradicts its fixed trust gates")
+        return self
 
 
 class SyntheticOutputIdentity(_FrozenModel):
@@ -609,15 +669,7 @@ def _accepted_receipt(
 
 
 def _same_intake(left: IntakeReceipt, right: IntakeReceipt) -> bool:
-    return (
-        left.status == "accepted"
-        and right.status == "accepted"
-        and left.input_format == right.input_format
-        and left.package_sha256 == right.package_sha256
-        and left.archive_sha256 == right.archive_sha256
-        and left.reference_sha256 == right.reference_sha256
-        and left.reference_source_commit == right.reference_source_commit
-    )
+    return left.status == "accepted" and right.status == "accepted" and left == right
 
 
 def _check_id(session_id: str) -> str:
@@ -934,8 +986,9 @@ def _parse_owner(
 ) -> _OwnerMarker:
     raw = _read_regular(path / "owner.json", maximum=MAX_METADATA_BYTES)
     try:
+        json.loads(raw, object_pairs_hook=_unique_json_object)
         marker = _OwnerMarker.model_validate_json(raw)
-    except ValidationError:
+    except (ValidationError, ValueError, RecursionError):
         raise WorkspaceError("workspace_owner_invalid") from None
     if (
         marker.root_device != root_info.st_dev
@@ -950,8 +1003,9 @@ def _parse_owner(
 def _load_receipt(path: Path) -> WorkspaceReceipt:
     raw = _read_regular(path / "workspace.json", maximum=MAX_METADATA_BYTES)
     try:
+        json.loads(raw, object_pairs_hook=_unique_json_object)
         return WorkspaceReceipt.model_validate_json(raw)
-    except ValidationError:
+    except (ValidationError, ValueError, RecursionError):
         raise WorkspaceError("workspace_receipt_invalid") from None
 
 
@@ -1049,14 +1103,7 @@ def _owned_workspace(
 
 
 def _copy_identity_matches(receipt: IntakeReceipt, snapshot: IntakeReceipt) -> bool:
-    return (
-        snapshot.status == "accepted"
-        and snapshot.package_sha256 == receipt.package_sha256
-        and snapshot.archive_sha256 == receipt.archive_sha256
-        and snapshot.input_format == receipt.input_format
-        and snapshot.reference_sha256 == receipt.reference_sha256
-        and snapshot.reference_source_commit == receipt.reference_source_commit
-    )
+    return snapshot.status == "accepted" and receipt == snapshot
 
 
 def _workspace_snapshot_path(workspace: Path, receipt: WorkspaceReceipt) -> Path:
