@@ -84,6 +84,44 @@ def _add_manifested_main_member(package: Path, name: str, data: bytes) -> None:
         output.write(f"SHA256(ota/{name})= {hashlib.sha256(data).hexdigest()}\n")
 
 
+def _add_synthetic_ancillary_records(
+    package: Path, *, encrypted_count: int = 8, sidecar: bool = True
+) -> list[str]:
+    names: list[str] = []
+    ancillary = [
+        (
+            f"xImage.{index:04d}."
+            f"{hashlib.sha256(f'synthetic-ximage-name-{index}'.encode()).hexdigest()}.enc",
+            f"opaque synthetic xImage payload {index}".encode(),
+        )
+        for index in range(5)
+    ]
+    ancillary.extend(
+        [
+            ("ota_update.in.enc", b"opaque synthetic update payload"),
+            (
+                "ota_sha256_rootfs.squashfs."
+                f"{hashlib.sha256(b'synthetic-rootfs-sha-name').hexdigest()}.enc",
+                b"opaque synthetic rootfs checksum payload",
+            ),
+            (
+                f"ota_sha256_xImage.{hashlib.sha256(b'synthetic-ximage-sha-name').hexdigest()}.enc",
+                b"opaque synthetic xImage checksum payload",
+            ),
+        ]
+    )
+    for name, data in ancillary[:encrypted_count]:
+        _add_manifested_main_member(package, name, data)
+        names.append(name)
+    if sidecar:
+        name = "manifest.sha256"
+        manifest = package / "main_os" / "ota_v257" / name
+        with manifest.open("a", encoding="utf-8", newline="\n") as output:
+            output.write(f"SHA256(ota/{name})= {'0' * 64}\n")
+        names.append(name)
+    return names
+
+
 def _zip_package(
     directory: Path,
     archive: Path,
@@ -544,11 +582,130 @@ def test_firmware_inspect_refuses_valid_manifest_extra_rootfs_index(tmp_path: Pa
     )
 
 
+def test_firmware_inspect_refuses_duplicate_rootfs_index_identity(tmp_path: Path) -> None:
+    package, _ = _make_package(tmp_path / "synthetic-package")
+    duplicate = f"rootfs.squashfs.0000.{'f' * 64}.enc"
+    _add_manifested_main_member(package, duplicate, b"duplicate synthetic rootfs index")
+
+    _assert_refused_code(_inspect(package), "duplicate_chunk_index", input_format="directory")
+
+
 def test_firmware_inspect_refuses_nonrootfs_manifest_record(tmp_path: Path) -> None:
     package, _ = _make_package(tmp_path / "synthetic-package")
     _add_manifested_main_member(package, "ancillary-player.enc", b"synthetic ancillary bytes")
 
-    _assert_refused_code(_inspect(package), "malformed_manifest", input_format="directory")
+    _assert_refused_code(_inspect(package), "unsupported_ota_member", input_format="directory")
+
+
+def test_firmware_inspect_refuses_self_referential_synthetic_ancillary_manifest_records(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    package, _ = _make_package(tmp_path / "synthetic-package")
+    _add_synthetic_ancillary_records(package)
+    archive = _zip_package(package, tmp_path / "synthetic-package.zip")
+    package_before = _snapshot(package)
+    archive_before = _snapshot(archive)
+    children_before = {path.name for path in tmp_path.iterdir()}
+
+    def forbidden(*args: Any, **kwargs: Any) -> None:
+        pytest.fail("firmware inspection must not start processes or contact the network")
+
+    monkeypatch.setattr(subprocess, "run", forbidden)
+    monkeypatch.setattr(subprocess, "Popen", forbidden)
+    monkeypatch.setattr(socket, "create_connection", forbidden)
+    monkeypatch.setattr(zipfile.ZipFile, "extract", forbidden)
+    monkeypatch.setattr(zipfile.ZipFile, "extractall", forbidden)
+
+    result = _inspect(archive)
+
+    receipt = _assert_refused_code(
+        result, "manifest_self_reference_unverifiable", input_format="zip"
+    )
+    assert receipt["observed_main"] == 257
+    assert receipt["observed_recovery"] == 18
+    assert receipt["chunk_count"] == CHUNK_COUNT
+    assert receipt["may_proceed"] is False
+    assert receipt["extraction_authorized"] is False
+    assert receipt["execution_authorized"] is False
+    assert _snapshot(package) == package_before
+    assert _snapshot(archive) == archive_before
+    assert not (tmp_path / "extracted").exists()
+    assert {path.name for path in tmp_path.iterdir()} == children_before
+
+
+def test_firmware_inspect_refuses_missing_or_unmanifested_ancillary_members(
+    tmp_path: Path,
+) -> None:
+    missing_package, _ = _make_package(tmp_path / "missing-package")
+    names = _add_synthetic_ancillary_records(missing_package)
+    missing_ota = missing_package / "main_os" / "ota_v257"
+    (missing_ota / names[0]).unlink()
+    _assert_refused_code(
+        _inspect(missing_package), "manifest_membership_mismatch", input_format="directory"
+    )
+
+    extra_package, _ = _make_package(tmp_path / "extra-package")
+    _add_synthetic_ancillary_records(extra_package)
+    extra_ota = extra_package / "main_os" / "ota_v257"
+    (extra_ota / "unmanifested-extra.enc").write_bytes(b"unmanifested synthetic payload")
+    _assert_refused_code(
+        _inspect(extra_package), "unsupported_ota_member", input_format="directory"
+    )
+
+
+@pytest.mark.parametrize(
+    ("mutation", "refusal_code"),
+    [
+        ("wrong_ancillary_digest", "ancillary_checksum_mismatch"),
+        ("wrong_self_reference_digest", "manifest_self_reference_unverifiable"),
+        ("incomplete_ancillary_set", "unsupported_main_payload_set"),
+        ("unsupported_extension", "unsupported_ota_member"),
+        ("unsafe_manifest_path", "unsafe_member_path"),
+    ],
+    ids=[
+        "encrypted-digest-mismatch",
+        "self-reference-unverifiable",
+        "incomplete-set",
+        "unsupported-extension",
+        "unsafe-path",
+    ],
+)
+def test_firmware_inspect_refuses_invalid_ancillary_records(
+    tmp_path: Path, mutation: str, refusal_code: str
+) -> None:
+    package, _ = _make_package(tmp_path / "synthetic-package")
+    names = _add_synthetic_ancillary_records(
+        package,
+        encrypted_count=7 if mutation == "incomplete_ancillary_set" else 8,
+        sidecar=True,
+    )
+    ota = package / "main_os" / "ota_v257"
+    if mutation == "wrong_ancillary_digest":
+        (ota / names[0]).write_bytes(b"different opaque payload")
+    elif mutation == "wrong_self_reference_digest":
+        manifest_path = ota / "manifest.sha256"
+        contents = manifest_path.read_text(encoding="utf-8")
+        manifest_path.write_text(contents.replace("0" * 64, "1" * 64), encoding="utf-8")
+    elif mutation == "unsupported_extension":
+        _add_manifested_main_member(package, "unsupported-payload.bin", b"synthetic payload")
+    elif mutation == "unsafe_manifest_path":
+        manifest_path = ota / "manifest.sha256"
+        with manifest_path.open("a", encoding="utf-8", newline="\n") as output:
+            output.write(f"SHA256(ota/../unsafe.enc)= {'0' * 64}\n")
+
+    _assert_refused_code(_inspect(package), refusal_code, input_format="directory")
+
+
+def test_firmware_inspect_refuses_duplicate_ancillary_identity(tmp_path: Path) -> None:
+    package, _ = _make_package(tmp_path / "synthetic-package")
+    _add_synthetic_ancillary_records(package, sidecar=False)
+    duplicate = f"xImage.0000.{'f' * 64}.enc"
+    _add_manifested_main_member(package, duplicate, b"duplicate synthetic xImage identity")
+    _add_synthetic_ancillary_records(package, encrypted_count=0, sidecar=True)
+
+    _assert_refused_code(
+        _inspect(package), "duplicate_ancillary_identity", input_format="directory"
+    )
 
 
 def test_firmware_inspect_refuses_a_bare_ota_directory(tmp_path: Path) -> None:
