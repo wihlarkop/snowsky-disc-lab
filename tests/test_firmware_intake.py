@@ -668,6 +668,90 @@ def test_firmware_inspect_refuses_inconsistent_eocd_entry_counts(tmp_path: Path)
     _assert_refused_code(_inspect(archive), "multipart_zip_unsupported", input_format="zip")
 
 
+def test_zip_extra_field_parsers_accept_bounded_timestamp_and_unix_ids() -> None:
+    from snowsky_disc_lab.firmware_intake import (
+        _parse_extra_fields,
+        _timestamp_values,
+        _unix_ids,
+    )
+
+    central = struct.pack("<B I", 1, 1_700_000_000)
+    local = struct.pack("<B I I", 3, 1_700_000_000, 1_700_000_001)
+    uid_gid = bytes([1, 2, 0x34, 0x12, 2, 0x78, 0x56])
+    timestamp_field = struct.pack("<HH", 0x5455, len(central)) + central
+    ids_field = struct.pack("<HH", 0x7875, len(uid_gid)) + uid_gid
+    assert _timestamp_values(_parse_extra_fields(timestamp_field)[0x5455], central=True) == {
+        "mtime": 1_700_000_000
+    }
+    assert _timestamp_values(local) == {"mtime": 1_700_000_000, "atime": 1_700_000_001}
+    assert _unix_ids(_parse_extra_fields(ids_field)[0x7875]) == (0x1234, 0x5678)
+
+
+def test_zip_extra_fields_allow_header_timestamp_layout_difference_and_match_mtime() -> None:
+    from snowsky_disc_lab.firmware_intake import _validate_extra_pair
+
+    central_payload = struct.pack("<B I", 3, 1_700_000_000)
+    local_payload = struct.pack("<B I I", 3, 1_700_000_000, 1_700_000_001)
+    central = struct.pack("<HH", 0x5455, len(central_payload)) + central_payload
+    local = struct.pack("<HH", 0x5455, len(local_payload)) + local_payload
+    _validate_extra_pair(central, local)
+
+    conflicting = struct.pack("<B I I", 3, 1_700_000_002, 1_700_000_001)
+    with pytest.raises(ValueError, match="zip_timestamp_conflict"):
+        _validate_extra_pair(
+            central,
+            struct.pack("<HH", 0x5455, len(conflicting)) + conflicting,
+        )
+
+
+@pytest.mark.parametrize(
+    "payload",
+    [b"\x02\x01\x01\x01\x01", b"\x01\x00\x01\x01", b"\x01\x05\x01\x02\x01\x01"],
+    ids=["unknown-version", "zero-width", "width-over-four"],
+)
+def test_zip_unix_ids_reject_unknown_version_and_invalid_widths(payload: bytes) -> None:
+    from snowsky_disc_lab.firmware_intake import Refusal, _unix_ids
+
+    with pytest.raises(Refusal, match="zip_unix_ids_malformed"):
+        _unix_ids(payload)
+
+
+def test_zip_extra_fields_reject_duplicates_and_unknown_ids() -> None:
+    from snowsky_disc_lab.firmware_intake import Refusal, _parse_extra_fields
+
+    timestamp = struct.pack("<HHB I", 0x5455, 5, 1, 1)
+    with pytest.raises(Refusal, match="zip_extra_field_duplicate"):
+        _parse_extra_fields(timestamp + timestamp)
+    with pytest.raises(Refusal, match="zip_extra_field_unsupported"):
+        _parse_extra_fields(struct.pack("<HH", 0x9999, 0))
+
+
+@pytest.mark.parametrize(
+    ("field", "code"),
+    [
+        (b"\x55\x54\x01", "zip_extra_field_malformed"),
+        (struct.pack("<HH", 0x1234, 0), "zip_extra_field_unsupported"),
+        (struct.pack("<HH", 0x5455, 5) + b"\x09xxxx", "zip_timestamp_malformed"),
+        (struct.pack("<HH", 0x7875, 3) + b"\x02\x01\x00", "zip_unix_ids_malformed"),
+    ],
+)
+def test_zip_extra_field_parsers_reject_malformed_or_unknown_fields(
+    field: bytes, code: str
+) -> None:
+    from snowsky_disc_lab.firmware_intake import Refusal, _parse_extra_fields
+
+    with pytest.raises(Refusal, match=code):
+        parsed = _parse_extra_fields(field)
+        if 0x5455 in parsed:
+            from snowsky_disc_lab.firmware_intake import _timestamp_values
+
+            _timestamp_values(parsed[0x5455])
+        if 0x7875 in parsed:
+            from snowsky_disc_lab.firmware_intake import _unix_ids
+
+            _unix_ids(parsed[0x7875])
+
+
 def test_firmware_inspect_crosschecks_eocd_count_against_central_directory(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:

@@ -416,6 +416,73 @@ def _zip_preflight(stream: IO[bytes], size: int) -> tuple[int, int]:
     return entries, cd_offset
 
 
+def _parse_extra_fields(data: bytes) -> dict[int, bytes]:
+    """Parse only the two bounded metadata fields seen in V2.57 ZIPs."""
+    fields: dict[int, bytes] = {}
+    offset = 0
+    while offset < len(data):
+        _require(len(data) - offset >= 4, "zip_extra_field_malformed")
+        field_id, length = struct.unpack_from("<HH", data, offset)
+        offset += 4
+        _require(field_id in {0x5455, 0x7875}, "zip_extra_field_unsupported")
+        _require(field_id not in fields, "zip_extra_field_duplicate")
+        _require(offset + length <= len(data), "zip_extra_field_malformed")
+        payload = data[offset : offset + length]
+        offset += length
+        fields[field_id] = payload
+    _require(offset == len(data), "zip_extra_field_malformed")
+    return fields
+
+
+def _timestamp_values(payload: bytes, *, central: bool = False) -> dict[str, int]:
+    _require(bool(payload), "zip_timestamp_malformed")
+    flags = payload[0]
+    _require(flags & ~0x07 == 0, "zip_timestamp_malformed")
+    _require(not central or bool(flags & 0x01), "zip_timestamp_malformed")
+    names = ("mtime", "atime", "ctime")
+    # The central form stores only mtime even when the flags advertise local
+    # atime/ctime values. Those additional values exist only in the local header.
+    expected = 5 if central else 1 + 4 * flags.bit_count()
+    _require(len(payload) == expected, "zip_timestamp_malformed")
+    values: dict[str, int] = {}
+    offset = 1
+    for bit, name in enumerate(names[:1] if central else names):
+        if flags & (1 << bit):
+            values[name] = struct.unpack_from("<I", payload, offset)[0]
+            offset += 4
+    return values
+
+
+def _unix_ids(payload: bytes) -> tuple[int, int]:
+    _require(len(payload) >= 3 and payload[0] == 1, "zip_unix_ids_malformed")
+    offset = 1
+    uid_size = payload[offset]
+    offset += 1
+    _require(1 <= uid_size <= 4 and offset + uid_size + 1 <= len(payload), "zip_unix_ids_malformed")
+    uid = int.from_bytes(payload[offset : offset + uid_size], "little")
+    offset += uid_size
+    gid_size = payload[offset]
+    offset += 1
+    _require(1 <= gid_size <= 4 and offset + gid_size == len(payload), "zip_unix_ids_malformed")
+    gid = int.from_bytes(payload[offset : offset + gid_size], "little")
+    return uid, gid
+
+
+def _validate_extra_pair(central: bytes, local: bytes) -> None:
+    central_fields = _parse_extra_fields(central)
+    local_fields = _parse_extra_fields(local)
+    central_times = (
+        _timestamp_values(central_fields[0x5455], central=True) if 0x5455 in central_fields else {}
+    )
+    local_times = _timestamp_values(local_fields[0x5455]) if 0x5455 in local_fields else {}
+    if "mtime" in central_times and "mtime" in local_times:
+        _require(central_times["mtime"] == local_times["mtime"], "zip_timestamp_conflict")
+    central_ids = _unix_ids(central_fields[0x7875]) if 0x7875 in central_fields else None
+    local_ids = _unix_ids(local_fields[0x7875]) if 0x7875 in local_fields else None
+    if central_ids is not None and local_ids is not None:
+        _require(central_ids == local_ids, "zip_unix_ids_conflict")
+
+
 def _inspect_zip(path: Path, info: os.stat_result, work: _Inspection) -> str:
     with _open_regular(path, info) as stream:
         entry_count, central_offset = _zip_preflight(stream, info.st_size)
@@ -451,8 +518,7 @@ def _inspect_zip(path: Path, info: os.stat_result, work: _Inspection) -> str:
                     member.compress_type in {zipfile.ZIP_STORED, zipfile.ZIP_DEFLATED},
                     "zip_compression_unsupported",
                 )
-                # Extra fields can encode links/ZIP64 or alternate platform metadata.
-                _require(not member.extra, "zip_extra_fields_unsupported")
+                _validate_extra_pair(member.extra, b"")
                 name = work.register(member.filename, directory)
                 _require(member.file_size <= _limit(name), "member_size_limit")
                 declared += member.file_size
@@ -481,11 +547,8 @@ def _inspect_zip(path: Path, info: os.stat_result, work: _Inspection) -> str:
                     flags == member.flag_bits and method == member.compress_type,
                     "inconsistent_local_header",
                 )
-                _require(
-                    name_bytes <= MAX_PATH_BYTES and extra_bytes == 0,
-                    "zip_extra_fields_unsupported",
-                )
-                end = member.header_offset + 30 + name_bytes + member.compress_size
+                _require(name_bytes <= MAX_PATH_BYTES, "inconsistent_local_header")
+                end = member.header_offset + 30 + name_bytes + extra_bytes + member.compress_size
                 _require(0 <= member.header_offset < end <= central_offset, "unindexed_zip_bytes")
                 spans.append((member.header_offset, end))
                 encoding = "utf-8" if flags & 0x800 else "cp437"
@@ -493,6 +556,9 @@ def _inspect_zip(path: Path, info: os.stat_result, work: _Inspection) -> str:
                     stream.read(name_bytes).decode(encoding) == member.filename,
                     "inconsistent_local_header",
                 )
+                local_extra = stream.read(extra_bytes)
+                _require(len(local_extra) == extra_bytes, "invalid_local_header")
+                _validate_extra_pair(member.extra, local_extra)
                 if not flags & 8:
                     _require(
                         fields[6:9] == (member.CRC, member.compress_size, member.file_size),
