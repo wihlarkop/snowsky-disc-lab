@@ -1,6 +1,6 @@
 # Firmware, UI and Emulator Compatibility Policy
 
-**This is a proposed Lab policy, not a report of firmware tests completed in this repository.** Pinned handoff-source review: **2026-10-20**; see [ADR 0001](adr/0001-external-ui-handoff.md). Initial M2 custom UI execution is cold-session only after stock M1 acceptance; warm replacement requires separate exact-combination evidence and is deferred.
+**Status (2026-10-23):** These are the Lab's compatibility rules and upstream research references, **not evidence that stock firmware/third-party UIs have run**. The read-only M5 registry and CLI exist, while authenticated evidence promotion and stock acceptance remain open. Pinned handoff research: 2026-10-20 ([ADR 0001](adr/0001-external-ui-handoff.md)); Disco! release research updated 2026-10-23. Stock-backed external UI launch remains deferred until M1 acceptance.
 
 ## 1. What does "supported" mean?
 
@@ -37,19 +37,21 @@ Also report `PASS`, `FAIL`, `NOT RUN`, `UNSUPPORTED`, `BLOCKED` per test. These 
 
 **No automatic promotion:** manifest claims, semver ranges, release announcements, screenshot renders and reused offsets cannot set `verified-emulator` by themselves.
 
-## 2. Initial known upstream matrix
+## 2. Upstream references versus Lab firmware support
 
-The following is **documentation-derived** and has not been validated in our new Lab.
+The following is **documentation-derived** and has **not** been validated on stock firmware by this Lab. The [README firmware matrix](../README.md#firmware-version-support-matrix) distinguishes the four roadmap targets from additional unprofiled candidates.
 
-| Firmware | diskOS v1.2.1 installer base | Disco! v2.5.6 base | QEMU upstream | Lab status |
+| Firmware | diskOS v1.2.1 installer base | Disco! v2.7.0 first-install base | QEMU upstream | Lab stock status |
 | --- | --- | --- | --- | --- |
 | 2.09 | Listed supported | Not a declared supported base | No runtime profile | **NOT RUN** |
 | 2.28 | Listed supported | Not a declared supported base | No runtime profile | **NOT RUN** |
 | 2.40 | Listed supported | Not a declared supported base | Historical runtime/experimental old diskOS preview | **NOT RUN** |
-| 2.57 | Listed supported | Supported base | Active stock runtime | **NOT RUN** |
+| 2.57 | Listed supported | V2.57 required by upstream for first install | Active stock runtime | **NOT RUN** |
 | Future version | Unknown | Unknown | Must be ported | **UNKNOWN** |
 
-Source references: [diskOS install](https://github.com/b0hemia/diskos/blob/main/docs/INSTALL.md), [Disco! README](https://github.com/zmd22/diskos-disco), [QEMU status](https://github.com/eudj1n/snowsky-disc-qemu/blob/2.x/emulator/docs/status.md), [QEMU profile policy](https://github.com/eudj1n/snowsky-disc-qemu/blob/2.x/firmware/docs/firmware-profiles.md).
+Source references: [diskOS install](https://github.com/b0hemia/diskos/blob/main/docs/INSTALL.md), [Disco! v2.7.0 release](https://github.com/zmd22/diskos-disco/releases/tag/v2.7.0), [Disco! README](https://github.com/zmd22/diskos-disco), [QEMU status](https://github.com/eudj1n/snowsky-disc-qemu/blob/2.x/emulator/docs/status.md), [QEMU profile policy](https://github.com/eudj1n/snowsky-disc-qemu/blob/2.x/firmware/docs/firmware-profiles.md).
+
+**Disco! 2.7.0 is a custom UI version, not FiiO stock V2.70.** The [release notes](https://github.com/zmd22/diskos-disco/blob/main/docs/releases/v2.7.0.md) add built-in Disc Shelf (Navidrome / experimental SMB3), download-and-cancel behavior, Shuffle! hold gesture and temporary Wi-Fi power-save handling. Those are candidate M3-08 scenarios. Upstream network/physical observations are not Lab runs: no stock `mq_player`, network, user credentials, external Disco! ELF or device acceptance was executed here. The [Reddit announcement](https://www.reddit.com/r/snowsky/comments/1xcwvrt/disco_270_less_cable_more_music/) is a discussion reference, not a trust anchor. A release tag must be resolved to an exact reviewed commit and output fingerprint before testing.
 
 ## 3. Profile record and safeguards
 
