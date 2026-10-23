@@ -1,7 +1,7 @@
 # SNOWSKY DISC Lab — Detailed Roadmap
 
-**Status:** M0 integrated through [PR #6](https://github.com/wihlarkop/snowsky-disc-lab/pull/6) at `f6ab222dac3afdc3d67efbc031046d5ad2737897`; its [exact main CI](https://github.com/wihlarkop/snowsky-disc-lab/actions/runs/39299642208) passed all four jobs. [M1-01 preparation](M1-01-RUNTIME-PREPARATION.md) records evidence and remaining runtime-pin gates. No Lab-verified firmware/UI combination yet.
-**Last reviewed against pinned handoff sources/documentation:** 2026-10-20.
+**Status (2026-10-23):** M0 foundation integrated; subsequent PRs through [#33](https://github.com/wihlarkop/snowsky-disc-lab/pull/33) established pinned firmware-free QEMU execution, first-party synthetic UI input-to-frame acceptance, binary/source preflight and read-only compatibility registry tools. M1 stock V2.57, real firmware extraction, M2 stock player handoff and M3 custom UI acceptance remain open. **No stock firmware/UI combination is Lab-verified.**
+**Last upstream UI release review:** 2026-10-23 (Disco! [v2.7.0](https://github.com/zmd22/diskos-disco/releases/tag/v2.7.0)); announced versions are not pins or Lab tests.
 **Device scope:** FiiO / SNOWSKY **DISC** only.  
 **Companion UI:** **Sorane**, in a separate repository to be created later.  
 **Development baseline:** Windows 11 + WSL2/Docker as the primary *target* runtime host, with a Linux CI/native path. Windows/Linux firmware-free CLI evidence does not establish emulator runtime success.
@@ -30,11 +30,17 @@ SNOWSKY DISC Lab is an integration platform for official stock firmware, diskOS,
 | Component | Reviewed state | Boundary |
 | --- | --- | --- |
 | [diskOS](https://github.com/b0hemia/diskos) | v1.2.1 installer; official V2.09/V2.28/V2.40/V2.57 ZIPs listed | On-device custom LVGL UI and installer; supported install base is not proof of emulator compatibility |
-| [diskOS Disco!](https://github.com/zmd22/diskos-disco) | v2.5.6; FiiO V2.57 stock base only; Windows path explicitly unsupported | UI/theme framework; other FiiO bases are not claimed supported |
+| [diskOS Disco!](https://github.com/zmd22/diskos-disco) | [v2.7.0](https://github.com/zmd22/diskos-disco/releases/tag/v2.7.0) released 2026-10-22; first install still starts from FiiO V2.57 | Expanded UI/themes plus Disc Shelf (Navidrome + experimental SMB3), Shuffle! gesture and controlled on-demand downloads; **not Lab tested** |
 | [snowsky-disc-qemu](https://github.com/eudj1n/snowsky-disc-qemu) | `2.x` uses V2.57 as active stock runtime; V2.40 legacy/historical | QEMU user mode, not full-system or general firmware auto-compatibility |
-| [QEMU diskOS preview](https://github.com/eudj1n/snowsky-disc-qemu/blob/2.x/experiments/diskos/docs/preview.md) | Historical experimental custom diskOS `mq_ui` on V2.40 | Pinned old UI commit, warm-player adaptation, known playback limits; **not** a validated Disco! 2.5.6/V2.57 path |
+| [QEMU diskOS preview](https://github.com/eudj1n/snowsky-disc-qemu/blob/2.x/experiments/diskos/docs/preview.md) | Historical experimental custom diskOS `mq_ui` on V2.40 | Pinned old UI commit, warm-player adaptation, known playback limits; **not** a validated Disco! 2.7.0/V2.57 path |
 
 **Important:** retain *Lab's own* per-combination evidence; do not copy an upstream success badge into a Lab test result. Review newer upstream evidence before promoting an updated dependency.
+
+#### Disco! 2.7.0 candidate intake (upstream only)
+
+[Disco! 2.7.0 release notes](https://github.com/zmd22/diskos-disco/blob/main/docs/releases/v2.7.0.md) describe built-in **Disc Shelf** for Navidrome and SMB3, on-demand downloads to SD with cancellation/partial-file semantics, a new menu-hold **Shuffle!** action, SongSphere guard screen, temporary Wi-Fi power-save management and batched writes. [Release](https://github.com/zmd22/diskos-disco/releases/tag/v2.7.0) is the authoritative upstream source; the [Reddit announcement/discussion](https://www.reddit.com/r/snowsky/comments/1xcwvrt/disco_270_less_cable_more_music/) is a community reference, **not validation**. Upstream reports SMB3 as experimental and actual transfer-speed/power benefits as unmeasured. Navidrome/SMB3 network behavior requires separate isolation and credential handling; never run arbitrary network code or import real personal libraries into public CI.
+
+This is **Disco! UI version 2.7.0**, not FiiO stock firmware V2.70. A release tag/semver announcement alone is not an immutable Lab source lock; exact Git commit, assets, dependencies, binaries and rights require M3 review. No M1/M3 acceptance or support status is promoted by this entry.
 
 ### Initial firmware coverage targets
 
@@ -42,6 +48,7 @@ SNOWSKY DISC Lab is an integration platform for official stock firmware, diskOS,
 - **V2.40:** restore/retain legacy runtime in a version-scoped environment and retest with a pinned runner.
 - **V2.28:** new reviewed profile, read-only static analysis, porting, tests; no use of V2.57 offsets without verification.
 - **V2.09:** same separate review/porting process; use only legitimate firmware sources.
+- **Additional observed version candidates:** V2.21, V1.95, V1.86, V1.77, V1.76, V1.65 and V1.56 are backlog research inputs only. Their ZIPs/metadata have not been independently ingested or authenticated by the Lab, and there are no reviewed runnable Lab profiles for them. See the [README support matrix](../README.md#firmware-version-support-matrix).
 - **New versions:** detected as candidates; remain `unknown` until reviewed and tested. Supporting all *known verified* versions is the maintenance objective, not a promise of instant support for all future releases.
 
 ## 3. Dependency sequence (critical path)
@@ -130,10 +137,11 @@ Issue #1 delivers M0-01/M0-03 and the initial workflow. M0-02/M0-05 add immutabl
 - [ ] **M3-01** Define pinned **diskOS** build preset from its exact source commit and vendored LVGL/toolchain expectations; preserve original LICENSE/COPYING notices.
 - [ ] **M3-02** Build a reviewed diskOS `mq_ui`; obtain firmware-free host render/smoke artifacts before guest execution.
 - [ ] **M3-03** Adapt and test diskOS on **stock V2.57 `mq_player`** in QEMU; do not equate prior historical V2.40 proof with current compatibility.
-- [ ] **M3-04** Define pinned **Disco!** build preset with its theme framework, host renderer and output artifact verification.
-- [ ] **M3-05** Adapt and test Disco! on stock V2.57 player. Verify menu/touch, library, playback/queue, artwork/lyrics (where meaningful), settings, restart and state persistence.
+- [ ] **M3-04** Define pinned **Disco!** build preset from an independently resolved immutable upstream commit, starting with the [v2.7.0 candidate](https://github.com/zmd22/diskos-disco/releases/tag/v2.7.0); review theme assets, licensing, cross-toolchain, dependencies, host renderer and exact output artifact identity. Do not treat the release tag alone as a trusted pin.
+- [ ] **M3-05** Adapt and test a pinned Disco! build on the stock V2.57 player. Verify menu/touch, library, playback/queue, artwork/lyrics (where meaningful), settings, restart, state persistence and intentional differences across shipped themes. Do not infer compatibility from upstream's physical-device reports.
 - [ ] **M3-06** Compare stock/diskOS/Disco! against the same generated media fixtures and input scripts, recording expected intentional differences.
 - [ ] **M3-07** Detect upstream breakages by building a **candidate revision separately**, never replacing accepted pinned adapters until test evidence is reviewed.
+- [ ] **M3-08** Add **Disco! 2.7.0 Disc Shelf** acceptance scenarios: offline first-party mocks for Navidrome vs encrypted SMB3, original-file/collision/path policies, partial/cancel/retry behavior, no background sync, SD write bounds, menu-hold Shuffle!, and temporary Wi-Fi power-save restoration. Any real network server, credentials, trusted V2.57 guest execution or physical-device claims require their own explicit opt-in, isolated evidence and limitations; SMB3 is upstream-experimental, never silently PASS.
 
 **Exit gate:** both upstream UIs have their own repeatable V2.57 reports with actual evidence. If any combination remains partial, document precisely and retain M3 open rather than marking it fully supported.
 
@@ -181,7 +189,7 @@ Issue #1 delivers M0-01/M0-03 and the initial workflow. M0-02/M0-05 add immutabl
 ### M7 — Upstream updates and firmware discovery
 **Goal:** identify candidates promptly without destabilizing accepted releases.
 
-- [ ] **M7-01** Track diskOS, Disco!, QEMU GitHub releases/commits; produce issue/PR proposals instead of updating immutable locks in place.
+- [ ] **M7-01** Track diskOS, Disco!, QEMU GitHub releases/commits (including Disco! v2.7.0 feature/evidence changes); produce issue/PR proposals instead of updating immutable locks in place.
 - [ ] **M7-02** Integrate documented FiiO OTA *metadata-only* detection as an isolated monitor. Parse the source→target map; include main OS **and recovery** versions. A missing source route is not "up to date".
 - [ ] **M7-03** Deduplicate candidate notifications; record evidence of observation, provenance and changed metadata.
 - [ ] **M7-04** For **authorized** firmware downloads only: verify HTTPS/redirects, safe filenames, encrypted manifest/chunk hashes, assembled rootfs hash, and vendor signature when trust chain is established.
@@ -238,7 +246,7 @@ Issue #1 delivers M0-01/M0-03 and the initial workflow. M0-02/M0-05 add immutabl
 
 ## 5. Command direction (runtime commands remain design sketches)
 
-`doctor` and source commands are implemented in M0; the remaining commands below are future work. See [CONTRACTS.md](CONTRACTS.md) and [SOURCES.md](SOURCES.md) for current syntax and behavior.
+Current CLI includes `doctor`, source commands, `firmware inspect`/workspace operations, `ui inspect`, and `compat list|show|compare|report`; build/run/test/update orchestration remains future work. See [CONTRACTS.md](CONTRACTS.md), [FIRMWARE-INTAKE.md](FIRMWARE-INTAKE.md), [M5-COMPATIBILITY-REGISTRY.md](M5-COMPATIBILITY-REGISTRY.md) and [SOURCES.md](SOURCES.md) for implemented syntax and safety limits.
 
 ```sh
 disc-lab doctor
