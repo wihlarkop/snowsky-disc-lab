@@ -11,6 +11,7 @@ import stat
 import struct
 import subprocess
 import zipfile
+import zlib
 from pathlib import Path
 from typing import Any
 
@@ -104,6 +105,107 @@ def _zip_package(
             info.create_system = 3
             info.external_attr = (stat.S_IFLNK | 0o777) << 16
             output.writestr(info, b"synthetic-target")
+    return archive
+
+
+def _extra_field(field_id: int, payload: bytes) -> bytes:
+    return struct.pack("<HH", field_id, len(payload)) + payload
+
+
+def _zip_metadata(*, central: bool, mtime: int = 100, uid: int = 1000, gid: int = 1000) -> bytes:
+    timestamp = struct.pack("<BI", 3, mtime)
+    if not central:
+        timestamp += struct.pack("<I", 200)  # Local atime; central stores only mtime.
+    unix_ids = struct.pack("<BBIBI", 1, 4, uid, 4, gid)
+    return _extra_field(0x5455, timestamp) + _extra_field(0x7875, unix_ids)
+
+
+def _zip_with_header_metadata(
+    package: Path,
+    archive: Path,
+    *,
+    first_local: bytes | None = None,
+    first_central: bytes | None = None,
+    gap: bytes = b"",
+) -> Path:
+    """Write stored ZIP records independently of the intake parser and ZipFile writer.
+
+    ZipFile's writer copies one extra blob into both headers. Constructing records
+    here lets fixtures represent the distinct Info-ZIP central/local forms.
+    Only the first record is mutated; sizes, CRCs and offsets stay consistent.
+    """
+    records = bytearray()
+    directory = bytearray()
+    sources = sorted(path for path in package.rglob("*") if path.is_file())
+    for index, source in enumerate(sources):
+        name = source.relative_to(package).as_posix().encode("ascii")
+        content = source.read_bytes()
+        local_extra = _zip_metadata(central=False)
+        central_extra = _zip_metadata(central=True)
+        if index == 0:
+            if first_local is not None:
+                local_extra = first_local
+            if first_central is not None:
+                central_extra = first_central
+        crc = zlib.crc32(content)
+        offset = len(records)
+        records.extend(
+            struct.pack(
+                "<4s5H3I2H",
+                b"PK\x03\x04",
+                20,
+                0,
+                0,
+                0,
+                33,
+                crc,
+                len(content),
+                len(content),
+                len(name),
+                len(local_extra),
+            )
+            + name
+            + local_extra
+            + content
+        )
+        directory.extend(
+            struct.pack(
+                "<4s6H3I5H2I",
+                b"PK\x01\x02",
+                20,
+                20,
+                0,
+                0,
+                0,
+                33,
+                crc,
+                len(content),
+                len(content),
+                len(name),
+                len(central_extra),
+                0,
+                0,
+                0,
+                0,
+                offset,
+            )
+            + name
+            + central_extra
+        )
+        if index == 0:
+            records.extend(gap)
+    end = struct.pack(
+        "<4s4H2IH",
+        b"PK\x05\x06",
+        0,
+        0,
+        len(sources),
+        len(sources),
+        len(directory),
+        len(records),
+        0,
+    )
+    archive.write_bytes(records + directory + end)
     return archive
 
 
@@ -666,6 +768,186 @@ def test_firmware_inspect_refuses_inconsistent_eocd_entry_counts(tmp_path: Path)
     _patch_eocd_counts(archive, total_delta=1)
 
     _assert_refused_code(_inspect(archive), "multipart_zip_unsupported", input_format="zip")
+
+
+@pytest.mark.parametrize(
+    ("mutation", "refusal_code"),
+    [
+        ("none", None),
+        ("mtime", "zip_timestamp_conflict"),
+        ("uid", "zip_unix_ids_conflict"),
+        ("gid", "zip_unix_ids_conflict"),
+        ("truncated-local-payload", "zip_extra_field_malformed"),
+        ("truncated-local-header", "zip_extra_field_malformed"),
+        ("malformed-local-timestamp", "zip_timestamp_malformed"),
+        ("duplicate-local-timestamp", "zip_extra_field_duplicate"),
+        ("duplicate-local-unix", "zip_extra_field_duplicate"),
+        ("unknown-local-id", "zip_extra_field_unsupported"),
+        ("duplicate-central-timestamp", "zip_extra_field_duplicate"),
+        ("unknown-central-id", "zip_extra_field_unsupported"),
+        ("hidden-padding", "unindexed_zip_bytes"),
+    ],
+)
+def test_firmware_inspect_zip_header_metadata_end_to_end(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, mutation: str, refusal_code: str | None
+) -> None:
+    package, chunks = _make_package(tmp_path / "synthetic-package")
+    local = _zip_metadata(central=False)
+    central = _zip_metadata(central=True)
+    if mutation == "mtime":
+        local = _zip_metadata(central=False, mtime=101)
+    elif mutation == "uid":
+        local = _zip_metadata(central=False, uid=1001)
+    elif mutation == "gid":
+        local = _zip_metadata(central=False, gid=1001)
+    elif mutation == "truncated-local-payload":
+        local = local[:-1]  # Keep TLV length but omit its final byte.
+    elif mutation == "truncated-local-header":
+        local += b"\x55\x54\x05"  # Incomplete four-byte TLV header.
+    elif mutation == "malformed-local-timestamp":
+        local = _extra_field(0x5455, struct.pack("<BI", 3, 100))
+    elif mutation == "duplicate-local-timestamp":
+        local += _extra_field(0x5455, struct.pack("<BII", 3, 100, 200))
+    elif mutation == "duplicate-local-unix":
+        local += _extra_field(0x7875, struct.pack("<BBIBI", 1, 4, 1000, 4, 1000))
+    elif mutation == "unknown-local-id":
+        local += _extra_field(0x9999, b"")
+    elif mutation == "duplicate-central-timestamp":
+        central += _extra_field(0x5455, struct.pack("<BI", 3, 100))
+    elif mutation == "unknown-central-id":
+        central += _extra_field(0x9999, b"")
+    archive = _zip_with_header_metadata(
+        package,
+        tmp_path / "synthetic-extra-fields.zip",
+        first_local=local,
+        first_central=central,
+        gap=b"hidden padding" if mutation == "hidden-padding" else b"",
+    )
+    if mutation == "none":
+        # Check the fixture's byte geometry independently, including nonzero extras.
+        raw = archive.read_bytes()
+        offset = 0
+        with zipfile.ZipFile(archive) as indexed:
+            assert len(indexed.infolist()) == 79
+            for member in indexed.infolist():
+                assert member.header_offset == offset
+                name_bytes, extra_bytes = struct.unpack_from("<HH", raw, offset + 26)
+                assert extra_bytes == 28
+                extra_start = offset + 30 + name_bytes
+                assert raw[extra_start : extra_start + extra_bytes] == local
+                assert member.extra == central
+                offset = extra_start + extra_bytes + member.compress_size
+        assert offset == struct.unpack_from("<I", raw, len(raw) - 6)[0]
+
+    def forbidden(*args: Any, **kwargs: Any) -> None:
+        pytest.fail("intake must not extract, execute processes, or contact the network")
+
+    monkeypatch.setattr(zipfile.ZipFile, "extract", forbidden)
+    monkeypatch.setattr(zipfile.ZipFile, "extractall", forbidden)
+    monkeypatch.setattr(subprocess, "run", forbidden)
+    monkeypatch.setattr(subprocess, "Popen", forbidden)
+    monkeypatch.setattr(socket, "create_connection", forbidden)
+    before = _snapshot(tmp_path)
+    result = _inspect(archive)
+    if refusal_code is None:
+        receipt = _receipt(result, expected_status="accepted")
+        _assert_accepted(receipt, input_format="zip", chunks=chunks)
+        assert receipt["inspection_complete"] is True
+        assert (receipt["observed_main"], receipt["observed_recovery"]) == (257, 18)
+        assert receipt["archive_sha256"] == hashlib.sha256(archive.read_bytes()).hexdigest()
+    else:
+        receipt = _assert_refused_code(result, refusal_code, input_format="zip")
+        assert receipt["inspection_complete"] is False
+        assert [c["code"] for c in receipt["conditions"] if c["status"] == "rejected"] == [
+            refusal_code
+        ]
+    assert receipt["vendor_authenticity"] == "unverified"
+    assert receipt["compatibility"] == "unverified"
+    assert _snapshot(tmp_path) == before
+
+
+def test_zip_extra_field_parsers_accept_bounded_timestamp_and_unix_ids() -> None:
+    from snowsky_disc_lab.firmware_intake import (
+        _parse_extra_fields,
+        _timestamp_values,
+        _unix_ids,
+    )
+
+    central = struct.pack("<B I", 1, 1_700_000_000)
+    local = struct.pack("<B I I", 3, 1_700_000_000, 1_700_000_001)
+    uid_gid = bytes([1, 2, 0x34, 0x12, 2, 0x78, 0x56])
+    timestamp_field = struct.pack("<HH", 0x5455, len(central)) + central
+    ids_field = struct.pack("<HH", 0x7875, len(uid_gid)) + uid_gid
+    assert _timestamp_values(_parse_extra_fields(timestamp_field)[0x5455], central=True) == {
+        "mtime": 1_700_000_000
+    }
+    assert _timestamp_values(local) == {"mtime": 1_700_000_000, "atime": 1_700_000_001}
+    assert _unix_ids(_parse_extra_fields(ids_field)[0x7875]) == (0x1234, 0x5678)
+
+
+def test_zip_extra_fields_allow_header_timestamp_layout_difference_and_match_mtime() -> None:
+    from snowsky_disc_lab.firmware_intake import _validate_extra_pair
+
+    central_payload = struct.pack("<B I", 3, 1_700_000_000)
+    local_payload = struct.pack("<B I I", 3, 1_700_000_000, 1_700_000_001)
+    central = struct.pack("<HH", 0x5455, len(central_payload)) + central_payload
+    local = struct.pack("<HH", 0x5455, len(local_payload)) + local_payload
+    _validate_extra_pair(central, local)
+
+    conflicting = struct.pack("<B I I", 3, 1_700_000_002, 1_700_000_001)
+    with pytest.raises(ValueError, match="zip_timestamp_conflict"):
+        _validate_extra_pair(
+            central,
+            struct.pack("<HH", 0x5455, len(conflicting)) + conflicting,
+        )
+
+
+@pytest.mark.parametrize(
+    "payload",
+    [b"\x02\x01\x01\x01\x01", b"\x01\x00\x01\x01", b"\x01\x05\x01\x02\x01\x01"],
+    ids=["unknown-version", "zero-width", "width-over-four"],
+)
+def test_zip_unix_ids_reject_unknown_version_and_invalid_widths(payload: bytes) -> None:
+    from snowsky_disc_lab.firmware_intake import Refusal, _unix_ids
+
+    with pytest.raises(Refusal, match="zip_unix_ids_malformed"):
+        _unix_ids(payload)
+
+
+def test_zip_extra_fields_reject_duplicates_and_unknown_ids() -> None:
+    from snowsky_disc_lab.firmware_intake import Refusal, _parse_extra_fields
+
+    timestamp = struct.pack("<HHB I", 0x5455, 5, 1, 1)
+    with pytest.raises(Refusal, match="zip_extra_field_duplicate"):
+        _parse_extra_fields(timestamp + timestamp)
+    with pytest.raises(Refusal, match="zip_extra_field_unsupported"):
+        _parse_extra_fields(struct.pack("<HH", 0x9999, 0))
+
+
+@pytest.mark.parametrize(
+    ("field", "code"),
+    [
+        (b"\x55\x54\x01", "zip_extra_field_malformed"),
+        (struct.pack("<HH", 0x1234, 0), "zip_extra_field_unsupported"),
+        (struct.pack("<HH", 0x5455, 5) + b"\x09xxxx", "zip_timestamp_malformed"),
+        (struct.pack("<HH", 0x7875, 3) + b"\x02\x01\x00", "zip_unix_ids_malformed"),
+    ],
+)
+def test_zip_extra_field_parsers_reject_malformed_or_unknown_fields(
+    field: bytes, code: str
+) -> None:
+    from snowsky_disc_lab.firmware_intake import Refusal, _parse_extra_fields
+
+    with pytest.raises(Refusal, match=code):
+        parsed = _parse_extra_fields(field)
+        if 0x5455 in parsed:
+            from snowsky_disc_lab.firmware_intake import _timestamp_values
+
+            _timestamp_values(parsed[0x5455])
+        if 0x7875 in parsed:
+            from snowsky_disc_lab.firmware_intake import _unix_ids
+
+            _unix_ids(parsed[0x7875])
 
 
 def test_firmware_inspect_crosschecks_eocd_count_against_central_directory(
