@@ -131,8 +131,16 @@ class IntakeReceipt(_Model):
                 raise ValueError("refused intake claims structural acceptance")
             return self
 
+        authenticity_condition = Condition(
+            check="vendor_authenticity",
+            status="unverified",
+            code="no_reviewed_trust_chain",
+        )
         expected_conditions = {
-            "vendor_authenticity": ("unverified", "no_reviewed_trust_chain"),
+            authenticity_condition.check: (
+                authenticity_condition.status,
+                authenticity_condition.code,
+            ),
             "product": ("unverified", "not_observable_at_intake"),
             "plaintext_rootfs": ("unverified", "decryption_not_performed"),
             "stock_binaries": ("unverified", "extraction_not_performed"),

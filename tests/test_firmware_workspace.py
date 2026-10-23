@@ -119,6 +119,24 @@ def test_snapshot_mismatch_is_quarantined_and_retained(tmp_path: Path) -> None:
     assert manager.list()[0].state == "quarantined"
 
 
+@pytest.mark.parametrize("field", ["status", "code"])
+def test_workspace_receipt_rejects_changed_authenticity_condition(
+    tmp_path: Path, field: str
+) -> None:
+    candidate = _package(tmp_path / "synthetic-package")
+    manager = FirmwareWorkspaceManager(tmp_path / "private-store")
+    receipt = manager.stage(candidate)
+    assert receipt.operation_status == "accepted"
+    payload = json.loads(receipt.model_dump_json())
+    condition = next(
+        item for item in payload["conditions"] if item["check"] == "vendor_authenticity"
+    )
+    condition[field] = "verified" if field == "status" else "invented_trust_code"
+
+    with pytest.raises(ValueError, match="fixed trust gates"):
+        firmware_workspace.WorkspaceReceipt.model_validate_json(json.dumps(payload))
+
+
 def test_finalize_refuses_a_semantically_valid_but_rebound_intake_receipt(
     tmp_path: Path,
 ) -> None:

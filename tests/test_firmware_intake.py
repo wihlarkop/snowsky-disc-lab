@@ -272,6 +272,8 @@ def test_firmware_inspect_accepts_synthetic_directory_as_data_only(tmp_path: Pat
         "reordered_chunks",
         "incomplete_scan",
         "contradictory_condition",
+        "authenticity_status",
+        "authenticity_code",
         "unexpected_condition",
     ],
 )
@@ -291,6 +293,12 @@ def test_accepted_intake_receipt_rejects_inconsistent_semantic_evidence(
             item for item in raw["conditions"] if item["check"] == "structure_and_integrity"
         )
         condition["status"] = "unverified"
+    elif mutation in {"authenticity_status", "authenticity_code"}:
+        condition = next(
+            item for item in raw["conditions"] if item["check"] == "vendor_authenticity"
+        )
+        field = "status" if mutation == "authenticity_status" else "code"
+        condition[field] = "verified" if field == "status" else "invented_trust_code"
     else:
         raw["conditions"].append(
             {"check": "invented_gate", "status": "verified", "code": "owner_claim"}

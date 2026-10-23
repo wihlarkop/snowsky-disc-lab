@@ -154,8 +154,16 @@ class WorkspaceReceipt(_FrozenModel):
         condition_map = {condition.check: condition for condition in self.conditions}
         if len(condition_map) != len(self.conditions):
             raise ValueError("accepted workspace receipt has duplicate conditions")
+        authenticity_condition = Condition(
+            check="vendor_authenticity",
+            status="unverified",
+            code="no_reviewed_trust_chain",
+        )
         fixed_conditions = {
-            "vendor_authenticity": ("unverified", "no_reviewed_trust_chain"),
+            authenticity_condition.check: (
+                authenticity_condition.status,
+                authenticity_condition.code,
+            ),
             "compatibility": ("unverified", "runtime_not_tested"),
             "extraction": ("unsupported", "outside_workspace_scope"),
         }
