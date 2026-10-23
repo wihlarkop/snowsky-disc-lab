@@ -34,8 +34,15 @@ BLOCK_BYTES = 64 * 1024
 _SHA256 = re.compile(r"^[0-9a-f]{64}$")
 
 CHUNK = re.compile(r"rootfs\.squashfs\.(\d{4})\.([a-f0-9]{64})\.enc")
-MANIFEST = re.compile(r"SHA256\(ota/(rootfs\.squashfs\.\d{4}\.[a-f0-9]{64}\.enc)\)= ([a-f0-9]{64})")
+MANIFEST_RECORD = re.compile(r"SHA256\(ota/([^()]+)\)= ([a-f0-9]{64})")
 SAFE_COMPONENT = re.compile(r"[A-Za-z0-9_-][A-Za-z0-9_.-]*")
+XIMAGE_CHUNK = re.compile(r"xImage\.(\d{4})\.([a-f0-9]{64})\.enc")
+OTA_SHA256_ROOTFS = re.compile(r"ota_sha256_rootfs\.squashfs\.([a-f0-9]{64})\.enc")
+OTA_SHA256_XIMAGE = re.compile(r"ota_sha256_xImage\.([a-f0-9]{64})\.enc")
+ANCILLARY_FIXED_NAMES = {
+    "ota_update.in.enc": "ota_update",
+}
+SELF_REFERENCED_MANIFEST = "manifest.sha256"
 RESERVED = {
     "con",
     "prn",
@@ -293,6 +300,20 @@ def _safe_name(name: str, *, directory: bool = False) -> str:
         _require(part not in {".", ".."} and not part.endswith((".", " ")), "unsafe_member_path")
         _require(part.split(".")[0].casefold() not in RESERVED, "unsafe_member_path")
     return name
+
+
+def _ancillary_identity(name: str) -> tuple[str, int | None] | None:
+    """Classify only the sanitized V2.57 ancillary basename shapes."""
+    match = XIMAGE_CHUNK.fullmatch(name)
+    if match is not None:
+        return "ximage_chunk", int(match[1])
+    match = OTA_SHA256_ROOTFS.fullmatch(name)
+    if match is not None:
+        return "rootfs_sha256_payload", None
+    match = OTA_SHA256_XIMAGE.fullmatch(name)
+    if match is not None:
+        return "ximage_sha256_payload", None
+    return (ANCILLARY_FIXED_NAMES[name], None) if name in ANCILLARY_FIXED_NAMES else None
 
 
 def _metadata(name: str) -> bool:
@@ -666,15 +687,43 @@ def _structure(work: _Inspection, details: dict[str, object]) -> None:
         metadata_hashes["main_signature"] = work.files[signature][1]
     details["metadata_hashes"] = metadata_hashes
     expected: dict[str, str] = {}
+    expected_names: set[str] = set()
+    self_reference_digest: str | None = None
+    manifest_roles: dict[str, str] = {}
+    manifest_ximage_indices: set[int] = set()
     for line in _text(work.metadata[manifest_path]).splitlines():
         _require(bool(line), "malformed_manifest")
-        match = MANIFEST.fullmatch(line)
+        match = MANIFEST_RECORD.fullmatch(line)
         _require(match is not None, "malformed_manifest")
         assert match is not None
-        _safe_name(match[1])
-        _require(match[1] not in expected, "duplicate_manifest_entry")
-        expected[match[1]] = match[2]
+        name = _safe_name(match[1])
+        _require("/" not in name, "unsupported_package_layout")
+        _require(name not in expected_names, "duplicate_manifest_entry")
+        expected_names.add(name)
+        chunk_match = CHUNK.fullmatch(name)
+        if name.startswith("rootfs.squashfs."):
+            _require(chunk_match is not None, "malformed_chunk_name")
+            manifest_roles[name] = "rootfs_chunk"
+            expected[name] = match[2]
+        elif name == SELF_REFERENCED_MANIFEST:
+            # The record names the controlling manifest itself. A full-byte
+            # SHA-256 self-check has no ordinary satisfiable verification rule.
+            self_reference_digest = match[2]
+        else:
+            identity = _ancillary_identity(name)
+            _require(identity is not None, "unsupported_ota_member")
+            assert identity is not None
+            role, index = identity
+            if role == "ximage_chunk":
+                assert index is not None
+                _require(index not in manifest_ximage_indices, "duplicate_ancillary_identity")
+                manifest_ximage_indices.add(index)
+            else:
+                _require(role not in manifest_roles.values(), "duplicate_ancillary_identity")
+            manifest_roles[name] = role
+            expected[name] = match[2]
     chunks: dict[int, ChunkIdentity] = {}
+    ximage_indices: set[int] = set()
     actual_ota: set[str] = set()
     for path, (size, digest) in work.files.items():
         relative = path.removeprefix(prefix)
@@ -683,22 +732,34 @@ def _structure(work: _Inspection, details: dict[str, object]) -> None:
             _require("/" not in name, "unsupported_package_layout")
             if name in {"manifest.sha256", "manifest.sha256.sig"}:
                 continue
-            _require(CHUNK.fullmatch(name) is not None, "unsupported_ota_member")
-            _require(size > 0, "empty_rootfs_chunk")
-            actual_ota.add(name)
-            _require(expected.get(name) == digest, "chunk_checksum_mismatch")
-            match = CHUNK.fullmatch(name)
+            chunk_match = CHUNK.fullmatch(name)
             if name.startswith("rootfs.squashfs."):
-                _require(match is not None, "malformed_chunk_name")
-            if match:
-                index = int(match[1])
+                _require(chunk_match is not None, "malformed_chunk_name")
+            if chunk_match is None:
+                identity = _ancillary_identity(name)
+                _require(identity is not None, "unsupported_ota_member")
+                assert identity is not None
+                role, index = identity
+                _require(size > 0, "empty_ancillary_payload")
+                if role == "ximage_chunk":
+                    assert index is not None
+                    _require(index not in ximage_indices, "duplicate_ancillary_identity")
+                    ximage_indices.add(index)
+            else:
+                _require(size > 0, "empty_rootfs_chunk")
+            manifest_digest = expected.get(name)
+            _require(manifest_digest is not None, "manifest_membership_mismatch")
+            assert manifest_digest is not None
+            actual_ota.add(name)
+            if chunk_match:
+                index = int(chunk_match[1])
                 _require(index not in chunks, "duplicate_chunk_index")
                 chunks[index] = ChunkIdentity(
                     index=index,
                     size=size,
                     sha256=digest,
-                    manifest_sha256=expected[name],
-                    filename_hash=match[2],
+                    manifest_sha256=manifest_digest,
+                    filename_hash=chunk_match[2],
                 )
         elif relative not in {"ota_config.in", "md5_file_info.txt"}:
             # Recovery payload is inventoried only; it is not a verified recovery image.
@@ -709,7 +770,33 @@ def _structure(work: _Inspection, details: dict[str, object]) -> None:
             )
     details.update(chunk_count=len(chunks), chunks=[chunks[i] for i in sorted(chunks)])
     _require(set(expected) == actual_ota, "manifest_membership_mismatch")
+    for name, expected_digest in expected.items():
+        actual_digest = work.files[ota + name][1]
+        chunk = CHUNK.fullmatch(name)
+        _require(
+            actual_digest == expected_digest,
+            "chunk_checksum_mismatch" if chunk else "ancillary_checksum_mismatch",
+        )
     _require(set(chunks) == set(range(77)), "rootfs_chunk_structure_mismatch")
+
+    ancillary_roles = [role for role in manifest_roles.values() if role != "rootfs_chunk"]
+    if not ancillary_roles and self_reference_digest is None:
+        return
+
+    _require(
+        ancillary_roles.count("ximage_chunk") == 5
+        and manifest_ximage_indices == set(range(5))
+        and ximage_indices == set(range(5))
+        and ancillary_roles.count("ota_update") == 1
+        and ancillary_roles.count("rootfs_sha256_payload") == 1
+        and ancillary_roles.count("ximage_sha256_payload") == 1
+        and self_reference_digest is not None,
+        "unsupported_main_payload_set",
+    )
+    # A normal SHA-256 value cannot verify the manifest that contains that value.
+    # Keep every supported member digest-checked, then refuse the set until a
+    # reviewed vendor rule defines the self-reference semantics.
+    raise Refusal("manifest_self_reference_unverifiable")
 
 
 def inspect_firmware(path: Path) -> IntakeReceipt:

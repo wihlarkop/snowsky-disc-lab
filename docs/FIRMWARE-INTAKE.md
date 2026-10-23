@@ -42,18 +42,27 @@ The inspector assumes a trusted local filesystem owner is not maliciously racing
 
 The package root contains `ota_config.in`, with exactly one `current_version=257` and `recovery_version=18`, plus `main_os/ota_v257/manifest.sha256` and exactly 77 rootfs chunks at indices `0000..0076`. ZIPs may place this root directly at archive root or under one wrapper directory. Directory selection uses the package root; the selected tree is never searched upward or outside its boundary. A bare `ota_v257` chunk folder can be inspected for safety but is refused without its package config, rather than inferring versions from a folder name.
 
-The reviewed chunk-name grammar is:
+The main manifest row syntax is:
+
+```text
+SHA256(ota/<safe-basename>)= <64-lowercase-hex>
+```
+
+The rootfs-specific name grammar remains:
 
 ```text
 rootfs.squashfs.<four-digit-index>.<64-lowercase-hex>.enc
-SHA256(ota/<chunk-basename>)= <64-lowercase-hex>
 ```
 
-Rootfs names, indices and manifest membership must agree. Each encrypted chunk is SHA-256 checked against its manifest record. The filename's embedded hash is recorded separately as `filename_hash`: its meaning is not established as a ciphertext checksum by the reviewed upstream inventory source. It is not silently treated as the manifest hash or an independent trust anchor.
+Sanitized V2.57 inventory evidence identifies these eight ancillary encrypted basename shapes: `xImage.0000` through `xImage.0004`, each followed by a lowercase 64-hex filename field and `.enc`; `ota_update.in.enc`; `ota_sha256_rootfs.squashfs.<64-lowercase-hex>.enc`; and `ota_sha256_xImage.<64-lowercase-hex>.enc`. The ninth record names `manifest.sha256`, which is the controlling manifest itself. The inspector recognizes only these exact ancillary shapes, checks their direct-child paths, exact membership, role counts, unique `xImage` indices, and streamed member digests. Arbitrary `.enc` or `.sha256` names are not accepted.
 
-The accepted main manifest is limited to the pinned rootfs-record grammar above. Other main payload records (including kernel/update payloads) require further reviewed format evidence and are conservatively refused; the inspector does not invent a generic vendor manifest format. Root `md5_file_info.txt`, optional `manifest.sha256.sig`, and opaque recovery payload/manifest files under `recovery/ota_v18/` can be inventoried but are not independently authenticated or semantically validated. Receipts explicitly identify recovery validation and MD5/signature verification limits. Nonempty rootfs chunk sizes are individually measured/capped; no evidence establishes a vendor equal-length relation, so `chunk_length_consistency` stays unverified rather than imposing an invented padding rule.
+The controlling manifest's `SHA256(ota/manifest.sha256)` row is self-referential. No reviewed vendor rule defines a normalization, exclusion, or other digest meaning for that row. A normal full-file SHA-256 comparison cannot verify a manifest containing its own expected digest, so the inspector validates the other records and then refuses this ancillary set with `manifest_self_reference_unverifiable`. Rootfs-only inputs retain their existing behavior. Full ancillary admission remains blocked until a reviewed checksum rule is available; the inspector does not skip the row or invent a special self-hash convention.
 
-This is a conservative reviewed subset, **not a claim that an actual vendor ZIP was accepted**. Unrecognized config keys, malformed lines, duplicate fields, ambiguous roots, unknown versions/recovery pairs, malformed manifest records, duplicate entries, missing/extra chunks and digest mismatches are refused. Blank config lines and CRLF/LF line endings are permitted; metadata must be UTF-8 without BOM/NUL. Unknown metadata is never executed or printed. Missing product identity is reported unverified, not invented as another config field. Unknown future firmware requires a new reviewed reference/policy rather than fallback to V2.57.
+Rootfs names, indices and manifest membership must agree. Each encrypted chunk is SHA-256 checked against its manifest record. The filename's embedded hash is recorded separately as `filename_hash`: its meaning is not established as a ciphertext checksum by the reviewed upstream inventory source. It is not silently treated as the manifest hash or an independent trust anchor. Ancillary filename classes are recognized only for bounded inventory; their contents remain opaque, and their inclusion does not establish vendor authenticity, payload semantics, decryption safety, or execution authority.
+
+The pinned upstream inventory script validates only rootfs records and does not establish ancillary checksum semantics. Root `md5_file_info.txt`, optional `manifest.sha256.sig`, and opaque recovery payload/manifest files under `recovery/ota_v18/` can be inventoried but are not independently authenticated or semantically validated. Receipts explicitly identify recovery validation and MD5/signature verification limits. Nonempty rootfs chunk sizes are individually measured/capped; no evidence establishes a vendor equal-length relation, so `chunk_length_consistency` stays unverified rather than imposing an invented padding rule.
+
+This is a conservative reviewed subset, **not a claim that an actual vendor ZIP was accepted**. Unrecognized config keys, malformed lines, duplicate fields, ambiguous roots, unknown versions/recovery pairs, malformed manifest records, duplicate entries, missing/extra chunks and digest mismatches are refused. Blank config lines and CRLF/LF line endings are permitted; metadata must be UTF-8 without BOM/NUL. Unknown metadata is never executed or printed. Missing product identity is reported unverified, not invented as another config field. Unknown future firmware requires a new reviewed reference/policy rather than fallback to V2.57. The sanitized V2.57 self-reference evidence does not authorize a second ZIP inspection; new inspection requires separate owner authorization.
 
 ## Reference and source boundary
 
