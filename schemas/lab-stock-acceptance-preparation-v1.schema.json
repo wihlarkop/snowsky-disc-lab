@@ -1,0 +1,1014 @@
+{
+  "$defs": {
+    "ArtifactIdentity": {
+      "additionalProperties": false,
+      "properties": {
+        "sha256": {
+          "anyOf": [
+            {
+              "pattern": "^[0-9a-f]{64}$",
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Sha256"
+        },
+        "provenance": {
+          "enum": [
+            "unmeasured",
+            "declared-unverified"
+          ],
+          "title": "Provenance",
+          "type": "string"
+        }
+      },
+      "required": [
+        "sha256",
+        "provenance"
+      ],
+      "title": "ArtifactIdentity",
+      "type": "object"
+    },
+    "Context": {
+      "additionalProperties": false,
+      "properties": {
+        "run_id": {
+          "pattern": "^[0-9a-f]{32}$",
+          "title": "Run Id",
+          "type": "string"
+        },
+        "identities": {
+          "$ref": "#/$defs/Identities"
+        }
+      },
+      "required": [
+        "run_id",
+        "identities"
+      ],
+      "title": "Context",
+      "type": "object"
+    },
+    "Expected": {
+      "additionalProperties": false,
+      "properties": {
+        "media": {
+          "$ref": "#/$defs/MediaIdentity"
+        },
+        "media_deadline_ms": {
+          "maximum": 60000,
+          "minimum": 1,
+          "title": "Media Deadline Ms",
+          "type": "integer"
+        },
+        "inputs": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/InputPlan"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "lifecycle": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/LifecycleExpectation"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        }
+      },
+      "required": [
+        "media",
+        "media_deadline_ms",
+        "inputs",
+        "lifecycle"
+      ],
+      "title": "Expected",
+      "type": "object"
+    },
+    "Frame": {
+      "additionalProperties": false,
+      "properties": {
+        "width": {
+          "const": 360,
+          "title": "Width",
+          "type": "integer"
+        },
+        "height": {
+          "const": 360,
+          "title": "Height",
+          "type": "integer"
+        },
+        "stride_bytes": {
+          "const": 1440,
+          "title": "Stride Bytes",
+          "type": "integer"
+        },
+        "pixel_format": {
+          "const": "RGBA8888",
+          "title": "Pixel Format",
+          "type": "string"
+        },
+        "bytes": {
+          "const": 518400,
+          "title": "Bytes",
+          "type": "integer"
+        },
+        "sha256": {
+          "pattern": "^[0-9a-f]{64}$",
+          "title": "Sha256",
+          "type": "string"
+        }
+      },
+      "required": [
+        "width",
+        "height",
+        "stride_bytes",
+        "pixel_format",
+        "bytes",
+        "sha256"
+      ],
+      "title": "Frame",
+      "type": "object"
+    },
+    "Identities": {
+      "additionalProperties": false,
+      "description": "Exact tuple, with unknowns explicit and no aliases across original/overlay.",
+      "properties": {
+        "firmware_version": {
+          "const": "2.57",
+          "title": "Firmware Version",
+          "type": "string"
+        },
+        "package": {
+          "$ref": "#/$defs/ArtifactIdentity"
+        },
+        "rootfs_image": {
+          "$ref": "#/$defs/ArtifactIdentity"
+        },
+        "rootfs_overlay": {
+          "$ref": "#/$defs/ArtifactIdentity"
+        },
+        "original_mq_ui": {
+          "$ref": "#/$defs/ArtifactIdentity"
+        },
+        "original_mq_player": {
+          "$ref": "#/$defs/ArtifactIdentity"
+        },
+        "runtime_mq_player": {
+          "$ref": "#/$defs/ArtifactIdentity"
+        },
+        "runner_source": {
+          "$ref": "#/$defs/ArtifactIdentity"
+        },
+        "runner_binary": {
+          "$ref": "#/$defs/ArtifactIdentity"
+        },
+        "runner_patch": {
+          "$ref": "#/$defs/ArtifactIdentity"
+        },
+        "shims": {
+          "$ref": "#/$defs/ArtifactIdentity"
+        },
+        "runtime_image": {
+          "$ref": "#/$defs/ArtifactIdentity"
+        },
+        "host": {
+          "$ref": "#/$defs/ArtifactIdentity"
+        }
+      },
+      "required": [
+        "firmware_version",
+        "package",
+        "rootfs_image",
+        "rootfs_overlay",
+        "original_mq_ui",
+        "original_mq_player",
+        "runtime_mq_player",
+        "runner_source",
+        "runner_binary",
+        "runner_patch",
+        "shims",
+        "runtime_image",
+        "host"
+      ],
+      "title": "Identities",
+      "type": "object"
+    },
+    "InputExpectation": {
+      "additionalProperties": false,
+      "properties": {
+        "step_id": {
+          "pattern": "^[a-z0-9][a-z0-9-]{0,63}$",
+          "title": "Step Id",
+          "type": "string"
+        },
+        "sequence": {
+          "maximum": 4,
+          "minimum": 1,
+          "title": "Sequence",
+          "type": "integer"
+        },
+        "payload_sha256": {
+          "pattern": "^[0-9a-f]{64}$",
+          "title": "Payload Sha256",
+          "type": "string"
+        },
+        "response": {
+          "pattern": "^[a-z0-9][a-z0-9-]{0,63}$",
+          "title": "Response",
+          "type": "string"
+        },
+        "deadline_ms": {
+          "maximum": 60000,
+          "minimum": 1,
+          "title": "Deadline Ms",
+          "type": "integer"
+        },
+        "frame": {
+          "$ref": "#/$defs/Frame"
+        }
+      },
+      "required": [
+        "step_id",
+        "sequence",
+        "payload_sha256",
+        "response",
+        "deadline_ms",
+        "frame"
+      ],
+      "title": "InputExpectation",
+      "type": "object"
+    },
+    "InputObservation": {
+      "additionalProperties": false,
+      "properties": {
+        "context": {
+          "$ref": "#/$defs/Context"
+        },
+        "session_id": {
+          "pattern": "^[0-9a-f]{32}$",
+          "title": "Session Id",
+          "type": "string"
+        },
+        "step_id": {
+          "pattern": "^[a-z0-9][a-z0-9-]{0,63}$",
+          "title": "Step Id",
+          "type": "string"
+        },
+        "sequence": {
+          "maximum": 9007199254740991,
+          "minimum": 0,
+          "title": "Sequence",
+          "type": "integer"
+        },
+        "payload_sha256": {
+          "pattern": "^[0-9a-f]{64}$",
+          "title": "Payload Sha256",
+          "type": "string"
+        },
+        "response": {
+          "pattern": "^[a-z0-9][a-z0-9-]{0,63}$",
+          "title": "Response",
+          "type": "string"
+        },
+        "sent_ms": {
+          "maximum": 9007199254740991,
+          "minimum": 0,
+          "title": "Sent Ms",
+          "type": "integer"
+        },
+        "observed_ms": {
+          "maximum": 9007199254740991,
+          "minimum": 0,
+          "title": "Observed Ms",
+          "type": "integer"
+        },
+        "generation": {
+          "maximum": 9007199254740991,
+          "minimum": 0,
+          "title": "Generation",
+          "type": "integer"
+        },
+        "frame": {
+          "$ref": "#/$defs/Frame"
+        }
+      },
+      "required": [
+        "context",
+        "session_id",
+        "step_id",
+        "sequence",
+        "payload_sha256",
+        "response",
+        "sent_ms",
+        "observed_ms",
+        "generation",
+        "frame"
+      ],
+      "title": "InputObservation",
+      "type": "object"
+    },
+    "InputPlan": {
+      "additionalProperties": false,
+      "properties": {
+        "steps": {
+          "items": {
+            "$ref": "#/$defs/InputExpectation"
+          },
+          "maxItems": 4,
+          "minItems": 4,
+          "title": "Steps",
+          "type": "array"
+        }
+      },
+      "required": [
+        "steps"
+      ],
+      "title": "InputPlan",
+      "type": "object"
+    },
+    "LifecycleExpectation": {
+      "additionalProperties": false,
+      "properties": {
+        "ownership": {
+          "items": {
+            "$ref": "#/$defs/SessionOwner"
+          },
+          "maxItems": 3,
+          "minItems": 3,
+          "title": "Ownership",
+          "type": "array"
+        },
+        "readiness_frame": {
+          "$ref": "#/$defs/Frame"
+        },
+        "readiness_player_ack_sha256": {
+          "pattern": "^[0-9a-f]{64}$",
+          "title": "Readiness Player Ack Sha256",
+          "type": "string"
+        },
+        "boot_deadline_ms": {
+          "maximum": 60000,
+          "minimum": 1,
+          "title": "Boot Deadline Ms",
+          "type": "integer"
+        },
+        "stop_deadline_ms": {
+          "maximum": 60000,
+          "minimum": 1,
+          "title": "Stop Deadline Ms",
+          "type": "integer"
+        },
+        "restart_deadline_ms": {
+          "maximum": 60000,
+          "minimum": 1,
+          "title": "Restart Deadline Ms",
+          "type": "integer"
+        },
+        "initial_state_sha256": {
+          "pattern": "^[0-9a-f]{64}$",
+          "title": "Initial State Sha256",
+          "type": "string"
+        },
+        "persistent_state_sha256": {
+          "pattern": "^[0-9a-f]{64}$",
+          "title": "Persistent State Sha256",
+          "type": "string"
+        }
+      },
+      "required": [
+        "ownership",
+        "readiness_frame",
+        "readiness_player_ack_sha256",
+        "boot_deadline_ms",
+        "stop_deadline_ms",
+        "restart_deadline_ms",
+        "initial_state_sha256",
+        "persistent_state_sha256"
+      ],
+      "title": "LifecycleExpectation",
+      "type": "object"
+    },
+    "LifecycleObservation": {
+      "additionalProperties": false,
+      "properties": {
+        "sessions": {
+          "items": {
+            "$ref": "#/$defs/Session"
+          },
+          "maxItems": 3,
+          "minItems": 3,
+          "title": "Sessions",
+          "type": "array"
+        }
+      },
+      "required": [
+        "sessions"
+      ],
+      "title": "LifecycleObservation",
+      "type": "object"
+    },
+    "MediaIdentity": {
+      "additionalProperties": false,
+      "properties": {
+        "fixture_id": {
+          "const": "lab-stereo-ramp-v1",
+          "title": "Fixture Id",
+          "type": "string"
+        },
+        "format": {
+          "$ref": "#/$defs/PCMFormat"
+        },
+        "frame_count": {
+          "maximum": 9007199254740991,
+          "minimum": 0,
+          "title": "Frame Count",
+          "type": "integer"
+        },
+        "sample_count": {
+          "maximum": 9007199254740991,
+          "minimum": 0,
+          "title": "Sample Count",
+          "type": "integer"
+        },
+        "pcm_bytes": {
+          "maximum": 9007199254740991,
+          "minimum": 0,
+          "title": "Pcm Bytes",
+          "type": "integer"
+        },
+        "pcm_sha256": {
+          "pattern": "^[0-9a-f]{64}$",
+          "title": "Pcm Sha256",
+          "type": "string"
+        },
+        "wav_sha256": {
+          "pattern": "^[0-9a-f]{64}$",
+          "title": "Wav Sha256",
+          "type": "string"
+        }
+      },
+      "required": [
+        "fixture_id",
+        "format",
+        "frame_count",
+        "sample_count",
+        "pcm_bytes",
+        "pcm_sha256",
+        "wav_sha256"
+      ],
+      "title": "MediaIdentity",
+      "type": "object"
+    },
+    "MediaObservation": {
+      "additionalProperties": false,
+      "properties": {
+        "context": {
+          "$ref": "#/$defs/Context"
+        },
+        "session_id": {
+          "pattern": "^[0-9a-f]{32}$",
+          "title": "Session Id",
+          "type": "string"
+        },
+        "imported_ms": {
+          "maximum": 9007199254740991,
+          "minimum": 0,
+          "title": "Imported Ms",
+          "type": "integer"
+        },
+        "indexed_ms": {
+          "maximum": 9007199254740991,
+          "minimum": 0,
+          "title": "Indexed Ms",
+          "type": "integer"
+        },
+        "capture_started_ms": {
+          "maximum": 9007199254740991,
+          "minimum": 0,
+          "title": "Capture Started Ms",
+          "type": "integer"
+        },
+        "capture_ended_ms": {
+          "maximum": 9007199254740991,
+          "minimum": 0,
+          "title": "Capture Ended Ms",
+          "type": "integer"
+        },
+        "imported_wav_sha256": {
+          "pattern": "^[0-9a-f]{64}$",
+          "title": "Imported Wav Sha256",
+          "type": "string"
+        },
+        "indexed_media_sha256": {
+          "items": {
+            "pattern": "^[0-9a-f]{64}$",
+            "type": "string"
+          },
+          "maxItems": 1,
+          "minItems": 1,
+          "title": "Indexed Media Sha256",
+          "type": "array"
+        },
+        "pcm": {
+          "$ref": "#/$defs/PCMObservation"
+        }
+      },
+      "required": [
+        "context",
+        "session_id",
+        "imported_ms",
+        "indexed_ms",
+        "capture_started_ms",
+        "capture_ended_ms",
+        "imported_wav_sha256",
+        "indexed_media_sha256",
+        "pcm"
+      ],
+      "title": "MediaObservation",
+      "type": "object"
+    },
+    "Observed": {
+      "additionalProperties": false,
+      "properties": {
+        "context": {
+          "$ref": "#/$defs/Context"
+        },
+        "input_session_id": {
+          "pattern": "^[0-9a-f]{32}$",
+          "title": "Input Session Id",
+          "type": "string"
+        },
+        "inputs": {
+          "items": {
+            "$ref": "#/$defs/InputObservation"
+          },
+          "maxItems": 4,
+          "minItems": 4,
+          "title": "Inputs",
+          "type": "array"
+        },
+        "media": {
+          "$ref": "#/$defs/MediaObservation"
+        },
+        "lifecycle": {
+          "$ref": "#/$defs/LifecycleObservation"
+        },
+        "basis": {
+          "enum": [
+            "simulated-contract-test",
+            "operator-declared-unverified"
+          ],
+          "title": "Basis",
+          "type": "string"
+        }
+      },
+      "required": [
+        "context",
+        "input_session_id",
+        "inputs",
+        "media",
+        "lifecycle",
+        "basis"
+      ],
+      "title": "Observed",
+      "type": "object"
+    },
+    "PCMFormat": {
+      "additionalProperties": false,
+      "properties": {
+        "encoding": {
+          "const": "signed-integer-little-endian",
+          "title": "Encoding",
+          "type": "string"
+        },
+        "sample_rate": {
+          "maximum": 192000,
+          "minimum": 1,
+          "title": "Sample Rate",
+          "type": "integer"
+        },
+        "channels": {
+          "maximum": 8,
+          "minimum": 1,
+          "title": "Channels",
+          "type": "integer"
+        },
+        "sample_width_bytes": {
+          "const": 2,
+          "title": "Sample Width Bytes",
+          "type": "integer"
+        }
+      },
+      "required": [
+        "encoding",
+        "sample_rate",
+        "channels",
+        "sample_width_bytes"
+      ],
+      "title": "PCMFormat",
+      "type": "object"
+    },
+    "PCMObservation": {
+      "additionalProperties": false,
+      "description": "A comparison receipt is a declaration until the actual capture is reviewed.",
+      "properties": {
+        "media": {
+          "$ref": "#/$defs/MediaIdentity"
+        },
+        "captured_format": {
+          "$ref": "#/$defs/PCMFormat"
+        },
+        "frame_count": {
+          "maximum": 9007199254740991,
+          "minimum": 0,
+          "title": "Frame Count",
+          "type": "integer"
+        },
+        "sample_count": {
+          "maximum": 9007199254740991,
+          "minimum": 0,
+          "title": "Sample Count",
+          "type": "integer"
+        },
+        "pcm_bytes": {
+          "maximum": 9007199254740991,
+          "minimum": 0,
+          "title": "Pcm Bytes",
+          "type": "integer"
+        },
+        "pcm_sha256": {
+          "pattern": "^[0-9a-f]{64}$",
+          "title": "Pcm Sha256",
+          "type": "string"
+        },
+        "all_channels_non_silent": {
+          "const": true,
+          "title": "All Channels Non Silent",
+          "type": "boolean"
+        },
+        "comparison": {
+          "const": "exact-full-track-bytes",
+          "title": "Comparison",
+          "type": "string"
+        }
+      },
+      "required": [
+        "media",
+        "captured_format",
+        "frame_count",
+        "sample_count",
+        "pcm_bytes",
+        "pcm_sha256",
+        "all_channels_non_silent",
+        "comparison"
+      ],
+      "title": "PCMObservation",
+      "type": "object"
+    },
+    "Process": {
+      "additionalProperties": false,
+      "properties": {
+        "role": {
+          "enum": [
+            "mq_ui",
+            "mq_player"
+          ],
+          "title": "Role",
+          "type": "string"
+        },
+        "pid": {
+          "maximum": 2147483647,
+          "minimum": 1,
+          "title": "Pid",
+          "type": "integer"
+        },
+        "start_identity": {
+          "pattern": "^[0-9a-f]{32}$",
+          "title": "Start Identity",
+          "type": "string"
+        },
+        "session_id": {
+          "pattern": "^[0-9a-f]{32}$",
+          "title": "Session Id",
+          "type": "string"
+        },
+        "owner_run_id": {
+          "pattern": "^[0-9a-f]{32}$",
+          "title": "Owner Run Id",
+          "type": "string"
+        },
+        "exit_code": {
+          "maximum": 255,
+          "minimum": -255,
+          "title": "Exit Code",
+          "type": "integer"
+        },
+        "reaped": {
+          "title": "Reaped",
+          "type": "boolean"
+        }
+      },
+      "required": [
+        "role",
+        "pid",
+        "start_identity",
+        "session_id",
+        "owner_run_id",
+        "exit_code",
+        "reaped"
+      ],
+      "title": "Process",
+      "type": "object"
+    },
+    "ProcessOwner": {
+      "additionalProperties": false,
+      "properties": {
+        "role": {
+          "enum": [
+            "mq_ui",
+            "mq_player"
+          ],
+          "title": "Role",
+          "type": "string"
+        },
+        "pid": {
+          "maximum": 2147483647,
+          "minimum": 1,
+          "title": "Pid",
+          "type": "integer"
+        },
+        "start_identity": {
+          "pattern": "^[0-9a-f]{32}$",
+          "title": "Start Identity",
+          "type": "string"
+        }
+      },
+      "required": [
+        "role",
+        "pid",
+        "start_identity"
+      ],
+      "title": "ProcessOwner",
+      "type": "object"
+    },
+    "Session": {
+      "additionalProperties": false,
+      "properties": {
+        "context": {
+          "$ref": "#/$defs/Context"
+        },
+        "session_id": {
+          "pattern": "^[0-9a-f]{32}$",
+          "title": "Session Id",
+          "type": "string"
+        },
+        "mode": {
+          "enum": [
+            "cold-clean",
+            "restart-persistent",
+            "restart-clean"
+          ],
+          "title": "Mode",
+          "type": "string"
+        },
+        "previous_session_id": {
+          "anyOf": [
+            {
+              "pattern": "^[0-9a-f]{32}$",
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Previous Session Id"
+        },
+        "started_ms": {
+          "maximum": 9007199254740991,
+          "minimum": 0,
+          "title": "Started Ms",
+          "type": "integer"
+        },
+        "player_ready_ms": {
+          "maximum": 9007199254740991,
+          "minimum": 0,
+          "title": "Player Ready Ms",
+          "type": "integer"
+        },
+        "ui_ready_ms": {
+          "maximum": 9007199254740991,
+          "minimum": 0,
+          "title": "Ui Ready Ms",
+          "type": "integer"
+        },
+        "stop_requested_ms": {
+          "maximum": 9007199254740991,
+          "minimum": 0,
+          "title": "Stop Requested Ms",
+          "type": "integer"
+        },
+        "stopped_ms": {
+          "maximum": 9007199254740991,
+          "minimum": 0,
+          "title": "Stopped Ms",
+          "type": "integer"
+        },
+        "readiness_session_id": {
+          "pattern": "^[0-9a-f]{32}$",
+          "title": "Readiness Session Id",
+          "type": "string"
+        },
+        "readiness_frame": {
+          "$ref": "#/$defs/Frame"
+        },
+        "readiness_player_ack_sha256": {
+          "pattern": "^[0-9a-f]{64}$",
+          "title": "Readiness Player Ack Sha256",
+          "type": "string"
+        },
+        "initial_state_sha256": {
+          "pattern": "^[0-9a-f]{64}$",
+          "title": "Initial State Sha256",
+          "type": "string"
+        },
+        "final_state_sha256": {
+          "pattern": "^[0-9a-f]{64}$",
+          "title": "Final State Sha256",
+          "type": "string"
+        },
+        "processes": {
+          "items": {
+            "$ref": "#/$defs/Process"
+          },
+          "maxItems": 2,
+          "minItems": 2,
+          "title": "Processes",
+          "type": "array"
+        },
+        "ownership_checked": {
+          "title": "Ownership Checked",
+          "type": "boolean"
+        },
+        "ipc_removed": {
+          "title": "Ipc Removed",
+          "type": "boolean"
+        },
+        "volatile_state_removed": {
+          "title": "Volatile State Removed",
+          "type": "boolean"
+        },
+        "resources_released": {
+          "title": "Resources Released",
+          "type": "boolean"
+        }
+      },
+      "required": [
+        "context",
+        "session_id",
+        "mode",
+        "previous_session_id",
+        "started_ms",
+        "player_ready_ms",
+        "ui_ready_ms",
+        "stop_requested_ms",
+        "stopped_ms",
+        "readiness_session_id",
+        "readiness_frame",
+        "readiness_player_ack_sha256",
+        "initial_state_sha256",
+        "final_state_sha256",
+        "processes",
+        "ownership_checked",
+        "ipc_removed",
+        "volatile_state_removed",
+        "resources_released"
+      ],
+      "title": "Session",
+      "type": "object"
+    },
+    "SessionOwner": {
+      "additionalProperties": false,
+      "properties": {
+        "session_id": {
+          "pattern": "^[0-9a-f]{32}$",
+          "title": "Session Id",
+          "type": "string"
+        },
+        "processes": {
+          "items": {
+            "$ref": "#/$defs/ProcessOwner"
+          },
+          "maxItems": 2,
+          "minItems": 2,
+          "title": "Processes",
+          "type": "array"
+        }
+      },
+      "required": [
+        "session_id",
+        "processes"
+      ],
+      "title": "SessionOwner",
+      "type": "object"
+    }
+  },
+  "additionalProperties": false,
+  "description": "A preparation report can never establish stock PASS or compatibility.",
+  "properties": {
+    "schema_version": {
+      "const": "lab-stock-acceptance-preparation/v1",
+      "title": "Schema Version",
+      "type": "string"
+    },
+    "status": {
+      "enum": [
+        "NOT RUN",
+        "BLOCKED",
+        "UNVERIFIED"
+      ],
+      "title": "Status",
+      "type": "string"
+    },
+    "stock_execution": {
+      "const": "NOT RUN",
+      "title": "Stock Execution",
+      "type": "string"
+    },
+    "support_status": {
+      "const": "unknown",
+      "title": "Support Status",
+      "type": "string"
+    },
+    "verified": {
+      "const": false,
+      "title": "Verified",
+      "type": "boolean"
+    },
+    "authenticated": {
+      "const": false,
+      "title": "Authenticated",
+      "type": "boolean"
+    },
+    "launch_authorized": {
+      "const": false,
+      "title": "Launch Authorized",
+      "type": "boolean"
+    },
+    "vendor_authenticity": {
+      "const": "UNVERIFIED",
+      "title": "Vendor Authenticity",
+      "type": "string"
+    },
+    "context": {
+      "$ref": "#/$defs/Context"
+    },
+    "scenario_sha256": {
+      "pattern": "^[0-9a-f]{64}$",
+      "title": "Scenario Sha256",
+      "type": "string"
+    },
+    "expected": {
+      "$ref": "#/$defs/Expected"
+    },
+    "observed": {
+      "anyOf": [
+        {
+          "$ref": "#/$defs/Observed"
+        },
+        {
+          "type": "null"
+        }
+      ]
+    },
+    "limitations": {
+      "const": "Preparation only; declarations are unauthenticated. No stock execution, hardware framebuffer/audio fidelity, vendor authenticity or compatibility is established.",
+      "title": "Limitations",
+      "type": "string"
+    }
+  },
+  "required": [
+    "schema_version",
+    "status",
+    "stock_execution",
+    "support_status",
+    "verified",
+    "authenticated",
+    "launch_authorized",
+    "vendor_authenticity",
+    "context",
+    "scenario_sha256",
+    "expected",
+    "observed",
+    "limitations"
+  ],
+  "title": "StockReport",
+  "type": "object"
+}
