@@ -105,3 +105,119 @@ execution gap in addition to sandbox restrictions, not a guest test failure.
 Docker Desktop metadata does not establish a dedicated trusted VM boundary for
 stock firmware. M1-07 remains open; M1-04 remains NOT RUN / UNVERIFIED. Hosted
 Linux execution is reported separately in the M2-06 evidence document.
+
+## M1-07 operator diagnostic (2026-10-24 Jakarta)
+
+Baseline: `15277ad12f85e6d297d93261d23d20d6055f3a64`. This preparation adds
+`python -m snowsky_disc_lab.windows_readiness`; it complements `disc-lab doctor`
+with failure classification and host/Engine resource observations. Doctor's
+default behavior and CLI remain unchanged. This internal diagnostic JSON is an
+observation, not a versioned acceptance receipt or an execution authorization.
+
+From an ordinary Windows PowerShell in the reviewed checkout:
+
+```powershell
+uv run --locked python -m snowsky_disc_lab.windows_readiness
+uv run --locked python -m snowsky_disc_lab.windows_readiness --wsl --docker-daemon
+```
+
+The first command reads only CIM logical CPU count, visible physical memory and
+free physical memory. The second explicitly opts into `wsl --list --verbose`
+(without launching a distribution) and a selected-field `docker info` query.
+Docker uses the configured context, which **may be remote**; Engine resource
+values must not be attributed to the Windows host without independent endpoint
+review. No container, build, distribution start, filesystem write probe, mount,
+firmware input, service configuration or device access is performed by the tool.
+`uv` can create its normal development environment/cache; use an already prepared
+environment's `python` directly when only diagnostic reads are wanted.
+
+Each subprocess has a ten-second timeout. Output includes numeric resource
+observations and distribution generation counts; distribution names, endpoint
+paths, usernames and raw failure diagnostics are omitted. Raw localized messages
+that cannot be recognized remain `query-failed`; do not infer a stopped daemon
+or configuration error from that state. The fixed categories mean:
+
+| Observation | Interpretation and next operator check |
+| --- | --- |
+| `access-denied` | This caller lacks access. Compare the same read-only command independently in the owner's ordinary shell; do not change ACLs, elevate Codex or disable its sandbox. This alone cannot identify which access policy denied the call. |
+| `daemon-unavailable` | The configured Docker endpoint could not be reached. Check Docker Desktop/Engine status and the intended context manually; stopped Engine is one possibility, not a proven cause. |
+| WSL `configuration-error` | A recognized optional-component, kernel, virtualization or missing-default-distro error was returned. Review the owner's WSL installation; the tool performs no repair. |
+| `missing-tool`, `timed-out`, `unavailable`, `query-failed` | Observation could not finish; no resource or runtime inference is valid. |
+| `invalid-observation` / WSL `unparsed` | Response cannot establish the expected resource values or distribution generations. Keep the gate open. |
+| Host `insufficient` | Observed CPU/free-memory snapshot is below the build minimum. |
+| Engine `insufficient` | Engine CPU count or **total** RAM is already below the build minimum. Available RAM cannot exceed total RAM. |
+| Engine `available-memory-not-measured` | Total RAM clears the ceiling check; Linux `MemAvailable`, disk capacity and all other actual build guards still require measurement. |
+
+Exit zero means the diagnostic finished reporting, including denied or unknown
+observations. It never means readiness passed. `build_admitted` is false even
+when the host's resource snapshot meets the minimum. Engine platform must be
+`linux/amd64` for this existing build candidate. The unchanged build guard in
+`scripts/ci/qemu_runtime_build.py` requires at least two CPUs and **8,589,934,592
+bytes available RAM**, plus its disk/time/capacity checks. A regression binds
+the diagnostic thresholds to that guard; this tool does not bypass or replace it.
+
+### Fresh restricted-context result
+
+The tool ran directly through the prepared Python environment in the default
+Codex sandbox at **2026-10-23 17:32:15 UTC** (2026-10-24 00:32:15 Jakarta):
+
+| Probe | Actual result |
+| --- | --- |
+| CIM host CPU/memory | `access-denied`; current numeric host resources unavailable |
+| WSL distribution list | `access-denied`; current generation/state unavailable |
+| Configured Docker Engine info | `access-denied`; current Engine CPU/memory unavailable |
+| Trusted execution isolation | `unverified` |
+| Windows runtime and stock execution | `not-run` |
+
+No unrestricted or privileged diagnostic was requested or used in this wave.
+The earlier independently observed **12 Engine CPUs / 8,242,479,104 bytes total
+RAM** and host **16,614,580 KiB visible / 3,053,684 KiB free** above remain dated
+observations, not refreshed measurements. That Engine total is approximately
+7.68 GiB, below the 8 GiB **available** threshold even before any memory use.
+No local rebuild was attempted. Keep the guard's refusal; changing memory
+allocation or daemon configuration is outside this work.
+
+For checks inaccessible here, the owner can run the two commands above
+independently and review their sanitized output. To inspect failure details
+privately, the equivalent read-only queries are:
+
+```powershell
+Get-CimInstance Win32_OperatingSystem | Select-Object TotalVisibleMemorySize, FreePhysicalMemory
+Get-CimInstance Win32_ComputerSystem | Select-Object NumberOfLogicalProcessors
+wsl --status
+wsl --list --verbose
+docker info --format '{"cpus":{{json .NCPU}},"total_bytes":{{json .MemTotal}},"os":{{json .OSType}},"architecture":{{json .Architecture}}}'
+```
+
+The manual WSL commands expose distribution names; keep their output private.
+Do not run setup, Compose up, QEMU, a WSL shell, a container memory probe or a
+firmware extractor as a diagnostic substitute. This slice does not require a
+QEMU rebuild to validate the diagnostic itself.
+
+### Acceptance gate assessment
+
+| Gate | State |
+| --- | --- |
+| Fixed read-only probes and sanitized classification | Implemented; firmware-free regressions cover denied/unavailable/configuration errors, UTF-16 WSL output, malformed data and resource refusal |
+| Fresh Windows/WSL2/Engine resources | BLOCKED from this sandbox; owner commands provided |
+| Existing local build memory guard | REFUSAL retained; earlier Engine total cannot satisfy its available-memory minimum |
+| Windows firmware-free QEMU/input/IPC/cleanup acceptance | NOT RUN |
+| Dedicated trusted VM, actual mount/network/process isolation | UNVERIFIED; Docker Desktop metadata cannot establish these properties |
+| Stock V2.57 admission and M1-04 | BLOCKED / NOT RUN; firmware trust, extraction, identities and explicit later runtime authorization remain separate gates |
+| M1-07 closure | OPEN; diagnostic preparation is not Windows runtime acceptance |
+
+Hosted Linux build/synthetic results in the preceding sections remain historical
+evidence for their exact code heads. The new PR's M0 Linux/Windows checks exercise
+only firmware-free Python behavior; QEMU workflow branch guards may skip this
+branch. Neither a skipped workflow nor synthetic comparator tests establish new
+Windows QEMU or stock firmware acceptance.
+
+Local validation for this slice used Windows Python 3.14.0 with locked project
+dependencies: Ruff lint and formatting, locked `ty check`, and `git diff --check`
+passed. The final full firmware-free suite passed **754 tests, 4 skipped** in
+147.09 seconds; the skipped cases retain the existing platform/filesystem guards.
+The new diagnostic's **24 regressions passed** separately. Existing warnings were
+235 `PurePath.is_reserved` deprecations and one deliberate duplicate-ZIP-member
+fixture warning. No schema/model contract changed; existing contract/parity
+checks ran in the full suite. This verifies the tool and preserved regressions,
+with live Windows probes limited to the denied observations recorded above.
