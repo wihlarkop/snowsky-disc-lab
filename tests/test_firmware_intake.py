@@ -15,9 +15,11 @@ from pathlib import Path
 from typing import Any
 
 import pytest
+from pydantic import ValidationError
 from typer.testing import CliRunner
 
 from snowsky_disc_lab.cli import app
+from snowsky_disc_lab.firmware_intake import IntakeReceipt
 
 runner = CliRunner()
 CHUNK_COUNT = 77
@@ -261,6 +263,59 @@ def test_firmware_inspect_accepts_synthetic_directory_as_data_only(tmp_path: Pat
     )
     assert signature_condition["status"] == "unsupported"
     assert "opaque synthetic signature bytes" not in result.output
+
+
+@pytest.mark.parametrize(
+    "mutation",
+    [
+        "missing_chunk",
+        "reordered_chunks",
+        "incomplete_scan",
+        "contradictory_condition",
+        "authenticity_status",
+        "authenticity_code",
+        "unexpected_condition",
+    ],
+)
+def test_accepted_intake_receipt_rejects_inconsistent_semantic_evidence(
+    tmp_path: Path, mutation: str
+) -> None:
+    package, _chunks = _make_package(tmp_path / "synthetic-package")
+    raw = _receipt(_inspect(package), expected_status="accepted")
+    if mutation == "missing_chunk":
+        raw["chunks"].pop()
+    elif mutation == "reordered_chunks":
+        raw["chunks"][0], raw["chunks"][1] = raw["chunks"][1], raw["chunks"][0]
+    elif mutation == "incomplete_scan":
+        raw["inspection_complete"] = False
+    elif mutation == "contradictory_condition":
+        condition = next(
+            item for item in raw["conditions"] if item["check"] == "structure_and_integrity"
+        )
+        condition["status"] = "unverified"
+    elif mutation in {"authenticity_status", "authenticity_code"}:
+        condition = next(
+            item for item in raw["conditions"] if item["check"] == "vendor_authenticity"
+        )
+        field = "status" if mutation == "authenticity_status" else "code"
+        condition[field] = "verified" if field == "status" else "invented_trust_code"
+    else:
+        raw["conditions"].append(
+            {"check": "invented_gate", "status": "verified", "code": "owner_claim"}
+        )
+
+    with pytest.raises(ValidationError):
+        IntakeReceipt.model_validate(raw)
+
+
+def test_refused_intake_receipt_remains_parseable_without_authority(tmp_path: Path) -> None:
+    package, _chunks = _make_package(tmp_path / "synthetic-package", main_version=258)
+
+    receipt = IntakeReceipt.model_validate(_receipt(_inspect(package), expected_status="refused"))
+
+    assert receipt.status == "refused"
+    assert receipt.may_proceed is False
+    assert receipt.extraction_authorized is False
 
 
 @pytest.mark.parametrize("wrapper", [None, "single-wrapper"])
