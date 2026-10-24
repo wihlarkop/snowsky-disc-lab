@@ -23,6 +23,8 @@ SNOWSKY DISC Lab is an integration platform for official stock firmware, diskOS,
 9. **No automatic physical flashing.** Initial device install/recovery/SD signing are separate opt-in operations after backups, suitability checks and manual approval.
 10. **Small independently shippable PRs.** Each phase has an acceptance gate based on executable behavior. **No TDD, no required unit tests, no coverage targets**: use focused CLI/contract integration checks and later QEMU/regression tests. No frontend is needed to test a CLI.
 
+**Long-term community product direction:** [community development, extension/service experimentation and integrated Update Center](COMMUNITY-PLATFORM-VISION.md). This is future scope, not a new M1 prerequisite or an implemented capability.
+
 ## 2. Upstream baseline and support semantics
 
 ### Observed upstream state — NOT Lab-tested
@@ -41,6 +43,12 @@ SNOWSKY DISC Lab is an integration platform for official stock firmware, diskOS,
 [Disco! 2.7.0 release notes](https://github.com/zmd22/diskos-disco/blob/main/docs/releases/v2.7.0.md) describe built-in **Disc Shelf** for Navidrome and SMB3, on-demand downloads to SD with cancellation/partial-file semantics, a new menu-hold **Shuffle!** action, SongSphere guard screen, temporary Wi-Fi power-save management and batched writes. [Release](https://github.com/zmd22/diskos-disco/releases/tag/v2.7.0) is the authoritative upstream source; the [Reddit announcement/discussion](https://www.reddit.com/r/snowsky/comments/1xcwvrt/disco_270_less_cable_more_music/) is a community reference, **not validation**. Upstream reports SMB3 as experimental and actual transfer-speed/power benefits as unmeasured. Navidrome/SMB3 network behavior requires separate isolation and credential handling; never run arbitrary network code or import real personal libraries into public CI.
 
 This is **Disco! UI version 2.7.0**, not FiiO stock firmware V2.70. A release tag/semver announcement alone is not an immutable Lab source lock; exact Git commit, assets, dependencies, binaries and rights require M3 review. No M1/M3 acceptance or support status is promoted by this entry.
+
+#### New upstream UI candidates (observed 2026-10-25; NOT RUN)
+
+- [diskOS v1.2.2](https://github.com/b0hemia/diskos/releases/tag/v1.2.2) → exact annotated tag commit `66af1f639fd7c4adbb15f5b605100c3fd5733b8a`.
+- [Disco! v3.0.0](https://github.com/zmd22/diskos-disco/releases/tag/v3.0.0) → exact annotated tag commit `721e07ee2266466888d84b92e756fd3a4fc778b1`.
+- Candidate inventory only: build, licensing, binary, emulator/device compatibility and update package support are NOT RUN/UNVERIFIED. Preserve current `upstreams.lock.yaml` until independent review; see [community vision](COMMUNITY-PLATFORM-VISION.md).
 
 ### Initial firmware coverage targets
 
@@ -169,6 +177,7 @@ Issue #1 delivers M0-01/M0-03 and the initial workflow. M0-02/M0-05 add immutabl
 - [ ] **M5-05** Implement regression diff against last accepted combination and classify failures by build, ABI, input, framebuffer, IPC, audio, power or environment.
 - [ ] **M5-06** Add optional performance observations: frame cadence, command latency, CPU throttling experiments and guest memory *trends*, always distinguished from physical device FPS/RSS.
 - [ ] **M5-07** Version the evidence schema and make report generation deterministic for the same source results.
+- [ ] **M5-08** Extend candidate compatibility to UI-host extension API/ABI, source-integrated module/service artifact identities, required capabilities/permissions and firmware-specific feature test coverage; never infer plug-and-play support for an unmodified UI.
 
 **Exit gate:** `compat report` cannot label an untested, outdated or mismatched artifact Verified; trace from a visible result back to exact hashes and scenario evidence works.
 
@@ -183,6 +192,9 @@ Issue #1 delivers M0-01/M0-03 and the initial workflow. M0-02/M0-05 add immutabl
 - [ ] **M6-06** Add at least one **external** example UI and run exactly the same documented public commands against it. It cannot import private lab internals.
 - [ ] **M6-07** Create **Sorane** as a separate repository once the SDK boundary is usable. Sorane's unique design, themes, screens, branding and GPL-obligated derivative UI code belong there, not in the MIT-intended Lab core.
 - [ ] **M6-08** Verify plugin compatibility and manifest errors with intentionally malformed and breaking sample forks.
+- [ ] **M6-09** Design a distinct, versioned `ui-extension` contract for source-integrated modules and explicitly opted-in host extension points; document which UIs support it and refuse unsupported host/API versions.
+- [ ] **M6-10** Design a `service-app` contract for optional network/audio/metadata tools with declared filesystem, network, PCM, process, resource and lifecycle permissions; no privileged defaults or universal plugin ABI claims.
+- [ ] **M6-11** Provide firmware-free examples and mocks for a custom screen and an auxiliary service (e.g. radio or AirPlay-like test fixture), with reproducible UI-host integration instructions; external service licensing/hardware feasibility remain separate.
 
 **Exit gate:** a contributor without a real DISC or private FiiO firmware can compile/test/preview a synthetic UI; a trusted developer with locally supplied official firmware can opt into end-to-end QEMU validation.
 
@@ -200,6 +212,8 @@ Issue #1 delivers M0-01/M0-03 and the initial workflow. M0-02/M0-05 add immutabl
 - [ ] **M7-09** Add compatibility orchestration on new FiiO firmware: baseline new stock image on a reviewed runner, then run **opted-in registered** diskOS, Disco!, Sorane and community fork adapters against exact firmware/UI hashes. Unknown/NOT RUN is never compatible.
 - [ ] **M7-10** Present an evidence-backed matrix (emulator vs physical test distinctions), source/recovery update route, last test date and actionable blockers. Never auto-run arbitrary fork code with privileged firmware access.
 - [ ] **M7-11** Provide initial read-only `disc-lab update check` / `update candidates` workflow with no automatic firmware installation, no proprietary packages distributed, and no surprise upgrades.
+- [ ] **M7-12** Add opt-in registered community UI and extension release discovery; exact immutable source/assets, provenance, signing format, migration requirements and a compatibility-aware candidate update plan; no auto-promotion.
+- [ ] **M7-13** Design a single Community Update Center (CLI first, optional GUI later) showing installed/selected revisions, release changes, exact compatibility evidence, blockers, prerequisites and a safe action type per project (Lab-only, UI-only package, source-integrated rebuild, initial/full install or vendor firmware).
 
 **Exit gate:** a simulated new V2.xx release creates a clearly unknown candidate with no changes to accepted profiles and no unauthorized execution; a failure never masquerades as "fully compatible."
 
@@ -229,6 +243,8 @@ Issue #1 delivers M0-01/M0-03 and the initial workflow. M0-02/M0-05 add immutabl
 - [ ] **M9-06** Maintain hardware acceptance reports separate from emulator reports; record which features are not modeled.
 - [ ] **M9-07** Document abort/recovery steps before any write. Interrupted/unknown writes require following the installer's wait/recovery instructions; recovery is not guaranteed.
 - [ ] **M9-08** Research a separate, opt-in **custom UI update package** path using owner-signed SD updates after correct key enrollment and validation; never auto-install. Official FiiO main/recovery updates remain vendor-managed unless a distinct reviewed, explicitly approved device-update scope is opened.
+- [ ] **M9-09** Implement only independently reviewed project-specific signed UI-only package preparation/staging after explicit owner consent, compatible installed-base/public-key enrollment, manifest/epoch/hashes and backup checks; never assume diskOS, Disco!, Sorane and forks share signing or update formats.
+- [ ] **M9-10** Define a read-only installed-UI/device discovery path when authorized, per-project update/migration decision, post-install readback and mechanism-specific rollback/recovery disclosure. Switching UI families or initial/full flashing cannot masquerade as a UI-only update.
 
 **Exit gate:** separate hardware-specific outcomes recorded; no `verified-device` state from emulator-only evidence; no unattended firmware flash or device wipe.
 
@@ -241,6 +257,7 @@ Issue #1 delivers M0-01/M0-03 and the initial workflow. M0-02/M0-05 add immutabl
 - [ ] **M10-04** Security disclosure contact/process, maintenance ownership, code of conduct and governance appropriate for community scale.
 - [ ] **M10-05** Publish compatibility registry schema, supported matrix, contribution onboarding and a stable SDK release.
 - [ ] **M10-06** Track upstream patches and keep third-party author credits/licenses explicit.
+- [ ] **M10-07** Document author registration and host opt-in, user-facing community release/update review flows, capability/permission safety and the difference between emulator, device, upstream and untested claims.
 
 **Exit gate:** an unaffiliated contributor can add or update a UI adapter through a reviewable PR without private firmware or access to maintainer secrets.
 
