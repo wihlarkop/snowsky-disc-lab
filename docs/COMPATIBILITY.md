@@ -53,6 +53,15 @@ Source references: [diskOS install](https://github.com/b0hemia/diskos/blob/main/
 
 **Disco! 2.7.0 is a custom UI version, not FiiO stock V2.70.** The [release notes](https://github.com/zmd22/diskos-disco/blob/main/docs/releases/v2.7.0.md) add built-in Disc Shelf (Navidrome / experimental SMB3), download-and-cancel behavior, Shuffle! hold gesture and temporary Wi-Fi power-save handling. Those are candidate M3-08 scenarios. Upstream network/physical observations are not Lab runs: no stock `mq_player`, network, user credentials, external Disco! ELF or device acceptance was executed here. The [Reddit announcement](https://www.reddit.com/r/snowsky/comments/1xcwvrt/disco_270_less_cable_more_music/) is a discussion reference, not a trust anchor. A release tag must be resolved to an exact reviewed commit and output fingerprint before testing.
 
+### New source-only candidate inventory (observed 2026-10-25)
+
+| Community UI candidate | Upstream release | Resolved commit | Lab compatibility |
+| --- | --- | --- | --- |
+| diskOS | [v1.2.2](https://github.com/b0hemia/diskos/releases/tag/v1.2.2) | `66af1f639fd7c4adbb15f5b605100c3fd5733b8a` | **NOT RUN / candidate only** |
+| Disco! | [v3.0.0](https://github.com/zmd22/diskos-disco/releases/tag/v3.0.0) | `721e07ee2266466888d84b92e756fd3a4fc778b1` | **NOT RUN / candidate only** |
+
+These versions are newer than the existing reviewed baseline, **not replacements for immutable `upstreams.lock.yaml`**. Neither physical-device suitability nor emulator/SDK/update-package compatibility has been established by Lab. See [Community Platform Vision](COMMUNITY-PLATFORM-VISION.md).
+
 ## 3. Profile record and safeguards
 
 Each firmware profile must be **reviewed before executable use** and reference the original published source when possible, including:
@@ -108,6 +117,8 @@ Represent specific features per version instead of one `supports_all=true` flag.
 | `power-lifecycle` | Guest-side sleep/stop/restart, persistent state and no process leakage |
 | `radio-network` | Simulated network and protocol checks; **not** real Wi-Fi/BT hardware proof |
 | `signed-ui-update` | Device-only, separately approved and witnessed, with matching enrolled signing keys |
+
+Future feature/app compatibility must additionally bind the UI host/extension API or service contract, exact extension/build hashes, permissions, dependency graph and scenarios. A `full-ui`, statically integrated `ui-extension` and separately supervised `service-app` are not interchangeable; support is conditional on actual host integration rather than the module's self-declared compatibility.
 
 Use `unsupported` or `blocked` for missing emulator hardware, not artificial successes. Do not require vendor functions absent by design if a tested UI explicitly excludes them, but document that exclusion prominently.
 
