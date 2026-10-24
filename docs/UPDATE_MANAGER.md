@@ -4,6 +4,8 @@
 
 This document specifies a **first-class product feature**: when FiiO releases a new DISC firmware, identify it, investigate changes, assess registered community UIs (diskOS, Disco!, Sorane and other opt-in forks), and provide transparent **evidence-based compatibility results**. Safe update experiences are a distinct phase from merely discovering an OTA release.
 
+**Expanded future product intent (2026-10-25):** see [Community Platform Vision](COMMUNITY-PLATFORM-VISION.md) for the all-community Update Center, extension/service SDK, release inventory and project-specific update delivery contract. This extends discovery/packaging plans; it does not authorize device writes or change the current CLI.
+
 ## 1. Three very different meanings of "update"
 
 | Update channel | Target | Permitted behavior | Not permitted by default |
@@ -81,6 +83,19 @@ disc-lab update apply --target lab     # future opt-in; explicit user confirmati
 
 For custom UIs, prefer a **separate** `ui package` / `ui sign` workflow when M9 is reached. It must require owner-controlled private keys (never uploaded), matching enrolled public key and full manifest/epoch validation. An optional UI-only deployment workflow must follow the verified diskOS signing + SD-card updater documentation, not invent its own on-device privilege mechanism.
 
+### Community UI update plans and delivery boundaries (future)
+
+The eventual one-place experience must include diskOS, Disco!, Sorane and **opt-in registered community forks**, with extension/service candidates if the selected UI host supports them. A project selection and exact installed/base identity are required before saying an update is applicable.
+
+- **Check:** read-only upstream release metadata/changelogs and immutable commit/asset identity. Candidate detection is not acceptance.
+- **Assess:** compare firmware main/recovery/stock player, UI host, extension API/ABI, build dependencies, per-capability scenarios and explicitly separated hardware evidence. Unknown/unmeasured stays visible.
+- **Plan:** classify Lab environment upgrade, compatible full-UI release, source-integrated extension rebuild, service-app deployment, owner-signed UI-only SD update, initial/switch/full install, or vendor firmware update. Never pretend these are one universal installer.
+- **Prepare:** fetch and build only permitted and verified source/artifacts in the correct isolation; preserve accepted pins, stage package locally, verify project-specific signature/epoch/enrollment and keep private signing keys off services and CI.
+- **Deliver:** explicit owner consent and project-defined SD/update procedure only after required checks. No unattended writes, stock `mq_player` replacement or default USB access. Upstream installer is the appropriate first/full-flash path unless separately approved.
+- **Confirm:** optional authorized version/readback and real-device acceptance where feasible; show per-project recovery limitations, do not guarantee rollback or treat emulation as physical safety certification.
+
+Candidate release observations on 2026-10-25: [diskOS v1.2.2](https://github.com/b0hemia/diskos/releases/tag/v1.2.2) (`66af1f639fd7c4adbb15f5b605100c3fd5733b8a`) and [Disco! v3.0.0](https://github.com/zmd22/diskos-disco/releases/tag/v3.0.0) (`721e07ee2266466888d84b92e756fd3a4fc778b1`) are upstream-only candidates, **NOT RUN**, and are **not** new source-lock pins or update-ready packages.
+
 ### Notification categories
 
 - `firmware-released` — new main/recovery pair detected.
@@ -99,10 +114,10 @@ Avoid notification spam by hashing exact target pair, profile and candidate revi
 - **M1:** establish trusted stock V2.57 firmware baseline before testing arbitrary UI candidates.
 - **M2–M3:** build generic adapter contract and real diskOS/Disco! integration; no auto-promoted compatibility.
 - **M4–M5:** multi-firmware profiles + evidence-backed per-feature matrix.
-- **M6:** community fork registration; Sorane uses identical contract.
+- **M6:** community fork registration, UI-extension/service-app SDK proposals, host opt-in and firmware-free feature mocks; Sorane uses the same public rules.
 - **M7:** vendor OTA and upstream release detection; candidate static analysis and *controlled* compatibility orchestration, optional maintainer alerts.
 - **M8:** reviews, regression suite, safe Lab/runtime release/upgrade with rollback.
-- **M9:** optional physical-device validation, UI-only signed SD packages; official FiiO firmware update support only as a separately reviewed high-risk scope, not implicit device-flashing feature.
+- **M9:** optional physical-device validation and project-specific, owner-signed UI-only SD staging/delivery, plus separate installed-base/migration checks. Initial/full flash and official FiiO updates are distinct higher-risk scopes, not an implicit universal flasher.
 
 ## 7. Security and legal constraints
 
