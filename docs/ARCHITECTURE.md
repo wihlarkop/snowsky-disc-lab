@@ -38,6 +38,8 @@ The goal is one **DISC-focused** emulator/dev workflow that accepts third-party 
 
 The *separate Sorane repository* owns its UI source, screens, theme work, artwork rights, build recipe and release process. It must not have privileged imports or undocumented launch flags unavailable to other UI developers. Do not create/link a Sorane GitHub repo until one actually exists.
 
+**Future scope beyond the initial `full-ui` adapter:** the [Community Platform Vision](COMMUNITY-PLATFORM-VISION.md) records source-integrated UI extensions, optional supervised service apps and a compatibility-aware Community Update Center. These are proposed **separate contracts**, not existing universal hot-plug support. Upstream installers retain responsibility for reviewed first/full device installation; Lab can later prepare project-specific owner-signed UI-only packages only after separate device acceptance and authorization.
+
 ## 2. Ownership and upstream policy
 
 | Component | Home | Ownership / update policy |
